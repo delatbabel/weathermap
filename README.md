@@ -1,0 +1,232 @@
+# Weather Map
+
+Composites NOAA GRIB forecast fields over a base map drawn from OpenStreetMap
+data. A desktop application to choose the area and the data, and a command-line
+tool that repeats the last choice against the newest model run.
+
+**This is an outline.** The pipeline runs end to end against the live services —
+the screenshots below are real output — but several pieces are deliberately
+sketched rather than finished. [What is not done yet](#what-is-not-done-yet) is
+the honest list.
+
+```
+┌──────────────┐     ┌─────────────┐     ┌──────────────┐     ┌──────────┐
+│ Overpass API │────▶│             │     │              │     │          │
+│ (OSM vector) │     │ MapService  │────▶│  Compositor  │────▶│   PNG    │
+├──────────────┤     │             │     │  (Java2D)    │     │          │
+│ NOAA NOMADS  │────▶│             │     │              │     │          │
+│ (GRIB2)      │     └─────────────┘     └──────────────┘     └──────────┘
+└──────────────┘            ▲
+                            │
+                 ┌──────────┴──────────┐
+                 │                     │
+           MainWindow            WeatherMapCli
+            (Swing)                (headless)
+```
+
+## Build and run
+
+Java 21 or later. No third-party runtime dependencies — everything is in the
+JDK.
+
+```bash
+./mvnw package                                    # jar + tests
+java -jar target/weathermap-0.1.0-SNAPSHOT.jar    # the desktop application
+```
+
+The command-line tool is the same jar:
+
+```bash
+java -jar target/weathermap-0.1.0-SNAPSHOT.jar --cli --help
+```
+
+With no options it repeats the last area and GRIB selection the desktop
+application stored, against the latest published run — which is the point:
+
+```bash
+# in a crontab, ten minutes after each GFS cycle is published
+10 4,10,16,22 * * *  java -jar /opt/weathermap.jar --cli --quiet
+```
+
+Everything stored can still be overridden:
+
+```bash
+java -jar target/weathermap-0.1.0-SNAPSHOT.jar --cli \
+    --area "-6,53.5,0,57" --var TMP --level 2_m_above_ground \
+    --hours 0,6,12-24 --out ~/maps --size 1600x1200
+```
+
+## How it works
+
+### The rectangle is not just what gets drawn
+
+NOMADS publishes whole model output as single files — a GFS 0.25° forecast hour
+is around 500 MB. The `filter_*.pl` CGI in front of it cuts a file down to the
+requested variables, levels and geographic subregion **server-side**.
+
+Measured: 2m temperature over the UK, one forecast hour, is **2,359 bytes**.
+
+That is why `BoundingBox` threads through the whole application — the selected
+rectangle is what gets transferred, not only what gets rendered.
+
+### The base map is vector, not tiles
+
+Coastline, administrative boundaries and populated places are fetched from the
+Overpass API as OSM features and drawn as separate Java2D layers. Two reasons:
+
+- **Control.** The GRIB field is drawn translucently over the base map, so the
+  base map has to be styled to sit underneath it. Baked tiles cannot be.
+- **Policy.** The openstreetmap.org tile servers explicitly forbid automated
+  bulk downloading, so they are not a legal source for a
+  "download-a-region" feature. Overpass is designed for exactly this query.
+
+### One renderer, two front ends
+
+`MapService` is the whole job: fetch, download, decode, composite, write.
+`MainWindow` runs it on a `SwingWorker`; `WeatherMapCli` runs it and exits.
+There is no second renderer and no "preview quality", so what is displayed and
+what is saved cannot drift apart.
+
+### Persistence
+
+`~/.weathermap/preferences.properties` holds the last area, the GRIB selection
+and the render settings. The desktop application writes it **before** a download
+starts, not after — a run that was cancelled or that failed still represents
+what the user asked for, and that is what the CLI should repeat.
+
+All of it fails soft: a missing or unreadable file yields defaults, and one bad
+value is dropped individually rather than discarding the file.
+
+### Caching
+
+`~/.weathermap/cache` holds both sides, with different expiry policies because
+they differ in kind:
+
+| | Cached for | Why |
+|---|---|---|
+| OSM features | 28 days | Slow to fetch, rate-limited, and change slowly |
+| GRIB subsets | Until evicted | A published run is immutable — it will never change |
+
+## Things established by probing the live services
+
+Three assumptions turned out to be wrong, and the design changed because of it.
+
+### NOMADS filter output is simple-packed, not JPEG2000
+
+GRIB2 packs its data section with one of a dozen templates, and the raw
+published GFS files use JPEG2000 (template 5.40) — which is why decoding GRIB
+normally means taking a large dependency.
+
+But the filter endpoints **re-encode each subset**, and what comes back is
+template 5.0, simple packing, on a regular lat/lon grid (3.0). Verified against
+live GFS 0.25° responses for `TMP`, `PRMSL` and `APCP`.
+
+So `Grib2Scanner` decodes it directly in about 200 lines, with no dependency at
+all. NetCDF-Java became the *optional* path for everything else rather than the
+main one — see [Optional NetCDF-Java](#optional-netcdf-java).
+
+### GRIB2 angles are sign-magnitude
+
+Latitudes, longitudes and the binary/decimal scale factors are stored with the
+top bit as a sign flag, not in two's complement. Reading a southern latitude as
+a signed integer gives a number near −2 billion. `signedMicroDegrees` and
+`signedShort` exist for this.
+
+### Section 3's point count is at octet 7, not 6
+
+An off-by-one here reported "9 points" for a 2,491-point grid, because it read
+the last three bytes of the count plus the preceding source byte. It is the kind
+of error that produces plausible-looking nonsense rather than an exception, and
+it was only caught by checking the number against the arithmetic — 13° ÷ 0.25 +
+1 = 53 columns, 11.5° ÷ 0.25 + 1 = 47 rows.
+
+## Two rendering decisions worth knowing
+
+**Colour ramps are fitted to the data by default.** The temperature ramp spans
+233–318 K so that freezing always sits at the same colour — good for comparing
+maps. But a September field over Britain occupies 282–292 K and renders as a
+single flat orange. `RenderSpec.autoScaleRamp` fits the ramp to each field's own
+range instead; the legend always shows the range actually used, so a fitted map
+never misleads. Turn it off to compare maps against each other.
+
+**Place labels are thinned by importance before placement.** An Overpass query
+for a few degrees returns every hamlet — 14,889 features for northern Britain in
+one test. Collision detection alone does not help, because it keeps whichever
+labels are placed first and the cities get crowded out by villages. The cut is
+made by `place=` rank against the size of the area.
+
+## Layout
+
+```
+org.weathermap
+├── Main                 dispatches GUI or CLI
+├── MapService           the whole job, shared by both front ends
+├── model/               BoundingBox, projections, GRIB selection, Preferences
+├── osm/                 Overpass client, OSM XML parser, Feature
+├── grib/                NOMADS client, GRIB2 reader, Grid
+│   └── netcdf/          the optional NetCDF-Java decoder (profile: netcdf)
+├── render/              Layer stack, colour ramps, Compositor, PngWriter
+├── gui/                 MainWindow, MapPanel, AreaPanel, DataPanel
+├── cli/                 WeatherMapCli
+└── util/                Http, Cache
+```
+
+The layer stack, bottom to top: land/sea fill, coastline, boundaries, GRIB
+field, graticule, place labels, annotation. Labels sit **above** the field
+deliberately — a translucent ramp over a city name makes it unreadable, and the
+name is what tells the reader where they are looking.
+
+## Optional NetCDF-Java
+
+```bash
+./mvnw package -Pnetcdf
+```
+
+Compiles `grib/netcdf/NetcdfGribReader`, which is loaded reflectively so the
+application builds, ships and runs without it. Needed only for sources the
+built-in reader does not cover:
+
+- raw published files rather than filter output (JPEG2000, complex packing);
+- Lambert-conformal grids — NAM and HRRR, grid template 3.30;
+- the full WMO parameter table, rather than the nine variables catalogued here.
+
+**It is currently a stub** that reports itself unavailable. The class javadoc
+sets out the intended route.
+
+## What is not done yet
+
+Ordered by how much they matter.
+
+| Gap | Where | Notes |
+|---|---|---|
+| Land/sea fill is flat | `VectorLayers.LandSeaLayer` | Deriving land needs the OSM convention that land is left of a coastline way, plus stitching open segments into closed rings against the box edges. Today the coastline stroke does the work, which reads correctly for a coastal box and wrongly for an inland one. |
+| Isolines | `GribLayer.drawContours` | Marching squares plus contour-interval selection and label placement. This is what makes a synoptic chart look like one. |
+| Wind barbs | `GribLayer.drawBarbs` | Needs `UGRD` and `VGRD` paired before the layer is built — `Compositor` is the right seam, since it sees the whole set. |
+| `NetcdfGribReader` | `grib/netcdf/` | Stub. |
+| Accumulated fields are labelled with the start of their period | `Grib2Scanner.validTime` | Product template 4.8 stores the interval end further into the template; an `APCP` message for f006 currently reports 00Z. |
+| Overpass queries are not tiled | `OverpassClient` | A very large box exceeds the server limit. Splitting needs coastline segments stitched across tile seams. |
+| OSM relations are ignored | `OsmXmlParser` | Multipolygon boundaries render as their member ways — right for strokes, wrong for fills. |
+| Antimeridian | `BoundingBox` | Refused rather than split. Supporting it means two boxes and compositing the halves. |
+| Download progress is end-only | `Http.download` | `BodyHandlers.ofFile` gives no intermediate callbacks; needs a counting `BodySubscriber`. |
+| Variable/level availability is not validated | `GribCatalog` | Only discoverable from each model's filter form, so an impossible pair fails at download time with an empty result rather than being greyed out. |
+| Cache eviction is never called | `Cache.evictTo` | Implemented but unwired; needs a configured budget. |
+| Elevation | — | Left out by decision. OSM has `ele` tags on peaks but no terrain model; shaded relief needs SRTM or Copernicus DEM as a separate source. |
+
+## Before pointing this at the public services
+
+- **Set a real `Http.USER_AGENT`.** It currently names `example.invalid`. Both
+  the OSM Foundation's Overpass instances and NOMADS police the User-Agent, and
+  anonymous clients get blocked.
+- **Keep the attribution layer on.** OSM data is ODbL, which requires the source
+  to be credited on anything produced from it. `AnnotationLayer` draws
+  "© OpenStreetMap contributors" whenever the annotation layer is enabled.
+- **Be sparing.** Both services are shared capacity. The cache exists so that
+  re-rendering the same area costs nothing; requests are made in sequence, never
+  in parallel.
+
+## Licensing of the data
+
+| Source | Licence | Obligation |
+|---|---|---|
+| OpenStreetMap | ODbL 1.0 | Attribute; share alike if you publish derived data |
+| NOAA NOMADS | US Government public domain | None, but crediting NOAA is conventional |

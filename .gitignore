@@ -1,0 +1,20 @@
+target/
+*.class
+*.part
+
+# Downloaded and generated data. Composited maps normally go outside the repo
+# (~/.weathermap/maps by default), but not when --out points here.
+maps/
+*.grib2
+*.osm.xml
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Maven wrapper keeps its properties but not a downloaded distribution
+.mvn/wrapper/maven-wrapper.jar

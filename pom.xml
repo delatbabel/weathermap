@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.weathermap</groupId>
+    <artifactId>weathermap</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>Weather Map</name>
+    <description>Composites NOAA GRIB fields over an OpenStreetMap-derived base map</description>
+    <inceptionYear>2026</inceptionYear>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>21</maven.compiler.release>
+        <main.class>org.weathermap.Main</main.class>
+        <!--
+          The optional NetCDF-Java GRIB2 decoder lives in grib/netcdf/. It is
+          excluded unless the netcdf profile is active (-Pnetcdf), so the project
+          builds and runs with no third-party dependency at all. The built-in
+          reader covers what the NOMADS filter endpoints return; the profile is
+          for everything else. See README.md.
+        -->
+        <netcdf.exclude>org/weathermap/grib/netcdf/*.java</netcdf.exclude>
+    </properties>
+
+    <!--
+      No required runtime dependencies. Everything the application needs is in
+      the JDK: Swing and Java2D for the UI and the compositor, java.net.http for
+      the downloads, javax.xml.stream for the OSM XML, and ImageIO for the PNG.
+      This is deliberate - it keeps the build offline-capable and the jar small.
+      JUnit is test-scoped and never ships.
+    -->
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <profiles>
+        <!--
+          Enable with -Pnetcdf to compile the NetCDF-Java GRIB2 decoder. Needed
+          only for sources the built-in reader does not cover: raw published
+          files (JPEG2000, template 5.40), Lambert-conformal NAM and HRRR grids,
+          and complex packing. Requests made through a NOMADS filter endpoint
+          come back as lat/lon grids with simple packing and need none of it.
+        -->
+        <profile>
+            <id>netcdf</id>
+            <properties>
+                <netcdf.exclude>nothing-to-exclude</netcdf.exclude>
+            </properties>
+            <repositories>
+                <repository>
+                    <id>unidata-all</id>
+                    <name>Unidata All</name>
+                    <url>https://artifacts.unidata.ucar.edu/repository/unidata-all/</url>
+                </repository>
+            </repositories>
+            <dependencies>
+                <dependency>
+                    <groupId>edu.ucar</groupId>
+                    <artifactId>grib</artifactId>
+                    <version>5.6.0</version>
+                </dependency>
+                <dependency>
+                    <groupId>edu.ucar</groupId>
+                    <artifactId>cdm-core</artifactId>
+                    <version>5.6.0</version>
+                </dependency>
+            </dependencies>
+        </profile>
+    </profiles>
+
+    <build>
+        <finalName>weathermap-${project.version}</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <excludes>
+                        <exclude>${netcdf.exclude}</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.1</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>${main.class}</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-assembly-plugin</artifactId>
+                <version>3.7.1</version>
+                <configuration>
+                    <descriptorRefs>
+                        <descriptorRef>jar-with-dependencies</descriptorRef>
+                    </descriptorRefs>
+                    <archive>
+                        <manifest>
+                            <mainClass>${main.class}</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>make-assembly</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>single</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.2.0</version>
+                <configuration>
+                    <mainClass>${main.class}</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
