@@ -37,18 +37,34 @@ public final class GraticuleLayer implements Layer {
                                     10f, new float[]{3f, 5f}, 0f));
         g.setFont(g.getFont().deriveFont(Font.PLAIN, 9f));
 
-        for (double lat = Math.ceil(b.south() / latStep) * latStep; lat <= b.north(); lat += latStep) {
+        // Multiplying out from the first line rather than accumulating: adding
+        // the step repeatedly drifts, and a longitude that should be 0 arrives
+        // as -1.8e-15, which the hemisphere test then labels "0.00 W".
+        final double firstLat = Math.ceil(b.south() / latStep) * latStep;
+        for (int i = 0; ; i++) {
+            final double lat = snap(firstLat + i * latStep, latStep);
+            if (lat > b.north()) break;
             final Point2D.Double a = projection.toPixel(lat, b.west());
             final Point2D.Double c = projection.toPixel(lat, b.east());
             g.draw(new Line2D.Double(a.x, a.y, c.x, c.y));
             g.drawString(label(lat, 'N', 'S'), 3, (float) a.y - 2);
         }
-        for (double lon = Math.ceil(b.west() / lonStep) * lonStep; lon <= b.east(); lon += lonStep) {
+
+        final double firstLon = Math.ceil(b.west() / lonStep) * lonStep;
+        for (int i = 0; ; i++) {
+            final double lon = snap(firstLon + i * lonStep, lonStep);
+            if (lon > b.east()) break;
             final Point2D.Double a = projection.toPixel(b.north(), lon);
             final Point2D.Double c = projection.toPixel(b.south(), lon);
             g.draw(new Line2D.Double(a.x, a.y, c.x, c.y));
             g.drawString(label(lon, 'E', 'W'), (float) a.x + 2, projection.imageHeight() - 3);
         }
+    }
+
+    /** Rounds a gridline back onto its step, killing accumulated drift. */
+    private static double snap(double value, double step) {
+        final double snapped = Math.round(value / step) * step;
+        return Math.abs(snapped) < step * 1e-6 ? 0 : snapped;
     }
 
     private static double chooseStep(double span) {
@@ -59,11 +75,12 @@ public final class GraticuleLayer implements Layer {
     }
 
     private static String label(double value, char positive, char negative) {
-        final char hemisphere = value >= 0 ? positive : negative;
         final double magnitude = Math.abs(value);
-        return (magnitude == Math.floor(magnitude)
+        final String number = (magnitude == Math.floor(magnitude))
                 ? String.format(java.util.Locale.ROOT, "%.0f", magnitude)
-                : String.format(java.util.Locale.ROOT, "%.2f", magnitude)) + "°" + hemisphere;
+                : String.format(java.util.Locale.ROOT, "%.2f", magnitude);
+        // The equator and the prime meridian belong to neither hemisphere.
+        return value == 0 ? number + "°" : number + "°" + (value > 0 ? positive : negative);
     }
 
     @Override

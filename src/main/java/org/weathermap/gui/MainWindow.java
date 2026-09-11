@@ -22,6 +22,7 @@ import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
+import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
@@ -48,11 +49,15 @@ public final class MainWindow extends JFrame {
     private final Preferences preferences = new Preferences();
     private final MapService service = new MapService();
 
-    private final MapPanel mapPanel = new MapPanel();
+    private final MapPanel mapPanel;
+    private final BaseMapLoader baseMap = new BaseMapLoader(new org.weathermap.osm.OverpassClient());
     private final AreaPanel areaPanel = new AreaPanel();
     private final DataPanel dataPanel = new DataPanel();
     private final JLabel status = new JLabel(" ");
+    private final JLabel mapStatus = new JLabel(" ");
     private final JProgressBar progress = new JProgressBar();
+    private final JToggleButton selectMode = new JToggleButton("Select area");
+    private final JToggleButton showResult = new JToggleButton("Show weather map");
 
     private BoundingBox area;
     private RenderSpec renderSpec;
@@ -65,15 +70,27 @@ public final class MainWindow extends JFrame {
         area = preferences.area();
         renderSpec = preferences.renderSpec();
 
+        mapPanel = new MapPanel(renderSpec, area);
+        mapPanel.setSelection(area);
+        mapPanel.setFeatures(baseMap.features());
+
         areaPanel.setArea(area);
         dataPanel.setSelection(preferences.selection());
-        mapPanel.setProjectionOnly(renderSpec, area);
 
-        areaPanel.setListener(this::setArea);
+        areaPanel.setListener(bbox -> {
+            setArea(bbox);
+            mapPanel.setSelection(bbox);
+            mapPanel.showArea(bbox);
+        });
         mapPanel.setSelectionListener(bbox -> {
             setArea(bbox);
             areaPanel.setArea(bbox);
+            showResult.setSelected(false);
         });
+        mapPanel.setViewListener(baseMap::viewChanged);
+
+        baseMap.setOnLoaded(mapPanel::setFeatures);
+        baseMap.setOnStatus(mapStatus::setText);
 
         setJMenuBar(buildMenuBar());
         setContentPane(buildContent());
@@ -85,13 +102,16 @@ public final class MainWindow extends JFrame {
             @Override
             public void windowClosing(WindowEvent e) {
                 savePreferences();
+                baseMap.dispose();
                 dispose();
             }
         });
 
         setStatus(preferences.hasArea()
                 ? "Restored the last area: " + area
-                : "No stored area - showing the default. Drag on the map to choose one.");
+                : "No stored area - showing the default. Shift-drag on the map to choose one.");
+        // Deferred so the panel has a size, which is what decides the view.
+        SwingUtilities.invokeLater(() -> baseMap.viewChanged(mapPanel.viewBounds()));
     }
 
     // ---- layout ---------------------------------------------------------
@@ -121,6 +141,25 @@ public final class MainWindow extends JFrame {
         bar.setLayout(new BoxLayout(bar, BoxLayout.X_AXIS));
         bar.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
 
+        selectMode.setToolTipText("Drag on the map to choose the area "
+                + "(shift-drag does this in either mode)");
+        selectMode.addActionListener(e -> mapPanel.setMode(
+                selectMode.isSelected() ? MapPanel.Mode.SELECT : MapPanel.Mode.PAN));
+        bar.add(selectMode);
+
+        bar.add(Box.createHorizontalStrut(6));
+        final JButton zoomToArea = new JButton("Zoom to area");
+        zoomToArea.setToolTipText("Frame the selected rectangle");
+        zoomToArea.addActionListener(e -> mapPanel.showArea(mapPanel.selection()));
+        bar.add(zoomToArea);
+
+        bar.add(Box.createHorizontalStrut(6));
+        final JButton loadDetail = new JButton("Load detail");
+        loadDetail.setToolTipText("Fetch OSM coastline and place names for the visible area now");
+        loadDetail.addActionListener(e -> baseMap.loadNow(mapPanel.viewBounds()));
+        bar.add(loadDetail);
+
+        bar.add(Box.createHorizontalStrut(18));
         final JButton download = new JButton("Download and composite");
         download.addActionListener(e -> startDownload());
         bar.add(download);
@@ -132,6 +171,12 @@ public final class MainWindow extends JFrame {
         });
         bar.add(cancel);
 
+        bar.add(Box.createHorizontalStrut(8));
+        showResult.setEnabled(false);
+        showResult.setToolTipText("Flip between the base map and the last composited map");
+        showResult.addActionListener(e -> mapPanel.setShowingResult(showResult.isSelected()));
+        bar.add(showResult);
+
         bar.add(Box.createHorizontalGlue());
         return bar;
     }
@@ -141,8 +186,15 @@ public final class MainWindow extends JFrame {
         bar.setBorder(BorderFactory.createEmptyBorder(2, 6, 4, 6));
         progress.setVisible(false);
         progress.setPreferredSize(new Dimension(200, 16));
+        mapStatus.setForeground(new java.awt.Color(90, 90, 90));
         bar.add(status, BorderLayout.CENTER);
-        bar.add(progress, BorderLayout.EAST);
+
+        final JPanel right = new JPanel();
+        right.setLayout(new BoxLayout(right, BoxLayout.X_AXIS));
+        right.add(mapStatus);
+        right.add(Box.createHorizontalStrut(10));
+        right.add(progress);
+        bar.add(right, BorderLayout.EAST);
         return bar;
     }
 
@@ -157,6 +209,7 @@ public final class MainWindow extends JFrame {
         final JMenuItem quit = new JMenuItem("Quit");
         quit.addActionListener(e -> {
             savePreferences();
+            baseMap.dispose();
             dispose();
         });
         file.add(quit);
@@ -203,8 +256,8 @@ public final class MainWindow extends JFrame {
 
     private void setArea(BoundingBox bbox) {
         this.area = bbox;
-        mapPanel.setProjectionOnly(renderSpec, bbox);
-        setStatus("Area: " + bbox);
+        setStatus("Area: " + bbox + String.format("  (%.2f° × %.2f°)",
+                bbox.widthDegrees(), bbox.heightDegrees()));
     }
 
     private void chooseOutputDir() {
@@ -310,8 +363,11 @@ public final class MainWindow extends JFrame {
                     return;
                 }
                 final MapService.Result first = results.get(0);
-                mapPanel.setImage(first.image(), spec.projectionFor(bbox));
-                setStatus("Wrote " + results.size() + " map(s) to " + outputDir);
+                mapPanel.setResult(first.image(), spec.projectionFor(bbox));
+                showResult.setEnabled(true);
+                showResult.setSelected(true);
+                setStatus("Wrote " + results.size() + " map(s) to " + outputDir
+                        + " - pan or zoom to go back to the base map");
             }
             catch (java.util.concurrent.CancellationException e) {
                 setStatus("Cancelled");
