@@ -47,6 +47,9 @@ import java.util.List;
  */
 public final class IsolineLayer implements Layer {
 
+    private static final java.util.logging.Logger LOG =
+            java.util.logging.Logger.getLogger(IsolineLayer.class.getName());
+
     /** Lattice spacing in output pixels. */
     private static final int SAMPLE_STEP = 4;
 
@@ -426,6 +429,20 @@ public final class IsolineLayer implements Layer {
         final List<Centre> centres = centresOf(
                 field, cols, rows, SAMPLE_STEP,
                 style.interval() * MIN_PROMINENCE_FRACTION);
+
+        // An unmarked chart is ambiguous: it looks the same whether the
+        // machinery failed or the weather simply has no centre in view. Over a
+        // small area that is the usual case - the isobars run straight across
+        // and the high driving them is a thousand kilometres away - and saying
+        // so costs a log line and saves someone concluding the feature is
+        // broken.
+        if (centres.isEmpty()) {
+            LOG.info("No pressure centre lies inside this area, so no H or L is "
+                    + "marked. Centres outside the chart are not marked, because "
+                    + "putting one on the edge would claim to know where it is. "
+                    + "A wider area will find them.");
+            return;
+        }
 
         for (Centre centre : centres) {
             final Color colour = centre.high() ? highInk : lowInk;
