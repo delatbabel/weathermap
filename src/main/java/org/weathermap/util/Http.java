@@ -32,12 +32,52 @@ public final class Http {
     private static final Duration REQUEST_TIMEOUT = Duration.ofMinutes(5);
     private static final int MAX_ATTEMPTS = 3;
 
+    /** Connect timeout when there is somewhere else to try. */
+    private static final Duration FAILOVER_CONNECT_TIMEOUT = Duration.ofSeconds(8);
+
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .connectTimeout(CONNECT_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
 
+    /**
+     * A second client that gives up on a connection quickly.
+     *
+     * <p>For callers with a list of endpoints to work through. Java's
+     * {@code HttpClient} resolves a host to one address and <b>does not fall
+     * back to the others</b> - unlike curl, which tries them in turn. That is
+     * not a hypothetical: {@code overpass-api.de} publishes two A records and
+     * one of them was found black-holing connections from this machine, so the
+     * client failed roughly half the time with what looked exactly like a
+     * network outage. Waiting {@code CONNECT_TIMEOUT} for each of three retries
+     * before trying anywhere else turned that into a minute of nothing
+     * happening.</p>
+     */
+    private static final HttpClient FAILOVER_CLIENT = HttpClient.newBuilder()
+            .connectTimeout(FAILOVER_CONNECT_TIMEOUT)
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
+
     private Http() { }
+
+    /**
+     * The server is refusing because we have asked for too much, too often.
+     *
+     * <p>Its own type because the remedy is different from every other failure:
+     * not "try again" but "ask for less". Java's {@code HttpClient} can also
+     * surface a connection a rate-limiting server drops as a
+     * {@code HttpConnectTimeoutException}, which reads as a network fault and
+     * sends you looking in the wrong place entirely - that misdiagnosis is what
+     * this type exists to prevent.</p>
+     */
+    public static final class RateLimitedException extends IOException {
+        private static final long serialVersionUID = 1L;
+
+        public RateLimitedException(String host) {
+            super("rate limited by " + host + " - ask for a smaller area, "
+                    + "or wait a few minutes");
+        }
+    }
 
     /** Reports download progress; {@code total} is -1 when the server sends no length. */
     public interface ProgressListener {
@@ -61,6 +101,27 @@ public final class Http {
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return sendWithRetry(request, HttpResponse.BodyHandlers.ofString()).body();
+    }
+
+    /**
+     * POSTs a form body with no retries and a short connect timeout, for a
+     * caller that will try somewhere else on failure.
+     */
+    public static String postFormOnce(URI uri, String body)
+            throws IOException, InterruptedException {
+        final HttpRequest request = HttpRequest.newBuilder(uri)
+                .header("User-Agent", USER_AGENT)
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .timeout(REQUEST_TIMEOUT)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        final HttpResponse<String> response =
+                FAILOVER_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
+        final int status = response.statusCode();
+        if (status >= 200 && status < 300) return response.body();
+        if (status == 429) throw new RateLimitedException(uri.getHost());
+        throw new IOException("HTTP " + status + " from " + uri);
     }
 
     /**
@@ -117,6 +178,12 @@ public final class Http {
                 final HttpResponse<T> response = CLIENT.send(request, handler);
                 final int status = response.statusCode();
                 if (status >= 200 && status < 300) return response;
+                if (status == 429) {
+                    // Overpass answers 429 when the client is over its slot
+                    // allowance. Retrying is exactly the wrong response, and the
+                    // bare status is not a useful thing to show a user.
+                    throw new RateLimitedException(request.uri().getHost());
+                }
                 if (status < 500) {
                     throw new IOException("HTTP " + status + " from " + request.uri());
                 }

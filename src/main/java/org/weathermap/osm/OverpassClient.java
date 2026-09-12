@@ -46,30 +46,67 @@ public final class OverpassClient implements OsmSource {
 
     private static final Logger LOG = Logger.getLogger(OverpassClient.class.getName());
 
-    /** The main public instance. {@code overpass.kumi.systems} is a mirror. */
-    public static final String DEFAULT_ENDPOINT = "https://overpass-api.de/api/interpreter";
+    /**
+     * The public instances, tried in order until one answers.
+     *
+     * <p>Failover is not defensive padding, it is load-bearing. These are
+     * donated instances that time out, return 504 and go down for maintenance
+     * as a matter of routine - all three behaviours were seen within one hour
+     * of testing. And {@code overpass-api.de} publishes two A records, of which
+     * one was black-holing connections from the test machine; Java's
+     * {@code HttpClient} picks one address and does not fall back, so a single
+     * endpoint failed about half the time for a reason that had nothing to do
+     * with Overpass at all.</p>
+     *
+     * <p>Whichever endpoint answers is remembered and tried first next time.</p>
+     */
+    public static final List<String> DEFAULT_ENDPOINTS = List.of(
+            "https://overpass-api.de/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter",
+            "https://overpass.kumi.systems/api/interpreter");
+
+    /** @deprecated prefer {@link #DEFAULT_ENDPOINTS}; kept for single-endpoint callers. */
+    @Deprecated
+    public static final String DEFAULT_ENDPOINT = DEFAULT_ENDPOINTS.get(0);
 
     /** Server-side seconds before the query is abandoned. */
     private static final int QUERY_TIMEOUT_SECONDS = 180;
 
-    /** Server-side memory ceiling for one query, in bytes. */
-    private static final long MAX_QUERY_SIZE = 512L * 1024 * 1024;
+    /**
+     * Server-side memory ceiling for one query, in bytes.
+     *
+     * <p>Was 512 MB, which was simply asking for trouble: it invites the server
+     * to spend half a gigabyte on one client's request, and a coastline query
+     * for Scotland genuinely returned 70 MB of XML before the instance started
+     * answering 429 to everything. A ceiling this size makes an over-broad query
+     * fail fast and cheaply instead of succeeding expensively.</p>
+     */
+    private static final long MAX_QUERY_SIZE = 64L * 1024 * 1024;
 
-    private final URI endpoint;
+    private final List<URI> endpoints;
     private final Cache cache;
 
+    /** The endpoint that answered last, tried first next time. */
+    private volatile URI preferred;
+
     public OverpassClient() {
-        this(URI.create(DEFAULT_ENDPOINT), new Cache());
+        this(DEFAULT_ENDPOINTS.stream().map(URI::create).toList(), new Cache());
     }
 
     public OverpassClient(URI endpoint, Cache cache) {
-        this.endpoint = endpoint;
+        this(List.of(endpoint), cache);
+    }
+
+    public OverpassClient(List<URI> endpoints, Cache cache) {
+        if (endpoints.isEmpty()) throw new IllegalArgumentException("need an endpoint");
+        this.endpoints = List.copyOf(endpoints);
         this.cache = cache;
+        this.preferred = this.endpoints.get(0);
     }
 
     @Override
     public String description() {
-        return "Overpass API at " + endpoint.getHost();
+        return "Overpass at " + preferred.getHost();
     }
 
     @Override
@@ -78,14 +115,17 @@ public final class OverpassClient implements OsmSource {
         if (kinds.isEmpty()) return List.of();
 
         final String query = buildQuery(bbox, kinds);
-        final Path entry = cache.pathFor("osm", endpoint + "\n" + query, ".osm.xml");
+
+        // Keyed on the query alone, not the endpoint: every instance serves the
+        // same OSM database, so a result cached from one is valid for all, and
+        // keying on the endpoint would refetch whenever failover moved us.
+        final Path entry = cache.pathFor("osm", query, ".osm.xml");
 
         if (cache.isFresh(entry, Cache.OSM_TTL)) {
             LOG.fine(() -> "OSM cache hit: " + entry);
         }
         else {
-            LOG.info(() -> "Querying " + description() + " for " + bbox);
-            final String xml = Http.postForm(endpoint, "data=" + Http.encode(query));
+            final String xml = queryWithFailover(query, bbox);
             Files.createDirectories(entry.getParent());
             Files.writeString(entry, xml, StandardCharsets.UTF_8);
         }
@@ -93,6 +133,32 @@ public final class OverpassClient implements OsmSource {
         try (var in = Files.newInputStream(entry)) {
             return new OsmXmlParser().parse(in);
         }
+    }
+
+    /** Tries each endpoint once, preferred first, until one answers. */
+    private String queryWithFailover(String query, BoundingBox bbox) throws IOException,
+            InterruptedException {
+        final List<URI> order = new ArrayList<>();
+        order.add(preferred);
+        for (URI uri : endpoints) {
+            if (!uri.equals(preferred)) order.add(uri);
+        }
+
+        IOException last = null;
+        for (URI uri : order) {
+            try {
+                LOG.info(() -> "Querying Overpass at " + uri.getHost() + " for " + bbox);
+                final String xml = Http.postFormOnce(uri, "data=" + Http.encode(query));
+                preferred = uri;
+                return xml;
+            }
+            catch (IOException e) {
+                LOG.fine(() -> uri.getHost() + " did not answer: " + e);
+                last = e;
+            }
+        }
+        throw new IOException("no Overpass instance answered (last: "
+                + (last == null ? "unknown" : last.getMessage()) + ")", last);
     }
 
     /**
@@ -117,12 +183,38 @@ public final class OverpassClient implements OsmSource {
                             + bboxFilter + ";");
                 }
                 case PLACE -> clauses.add(
-                        "  node[\"place\"~\"^(city|town|village|hamlet)$\"]" + bboxFilter + ";");
+                        "  node[\"place\"~\"^(" + placeTypesFor(bbox) + ")$\"]"
+                                + bboxFilter + ";");
             }
         }
 
+        // The recursion is only needed when ways were asked for: it exists to
+        // turn node references into coordinates. A places-only query returns
+        // nodes that already carry their own, and asking for it anyway makes the
+        // server do real work for nothing.
+        final boolean needsWays = kinds.contains(FeatureKind.COASTLINE)
+                || kinds.contains(FeatureKind.BOUNDARY);
+
         return "[out:xml][timeout:" + QUERY_TIMEOUT_SECONDS + "][maxsize:" + MAX_QUERY_SIZE + "];\n"
                 + "(\n" + String.join("\n", clauses) + "\n);\n"
-                + "out body;\n>;\nout skel qt;\n";
+                + "out body;\n" + (needsWays ? ">;\nout skel qt;\n" : "");
+    }
+
+    /**
+     * Which {@code place=} values to ask for, given how much ground the query
+     * covers.
+     *
+     * <p>Hamlets over four degrees of Scotland are thousands of nodes that the
+     * renderer then throws away, because
+     * {@code VectorLayers.PlaceLabelLayer} thins labels by the same rule before
+     * drawing them. Matching the query to what will actually be drawn is the
+     * difference between half a megabyte and several.</p>
+     */
+    static String placeTypesFor(BoundingBox bbox) {
+        final double span = Math.max(bbox.widthDegrees(), bbox.heightDegrees());
+        if (span > 10) return "city";
+        if (span > 2) return "city|town";
+        if (span > 0.75) return "city|town|village";
+        return "city|town|village|hamlet";
     }
 }

@@ -57,8 +57,22 @@ public final class BaseMapLoader {
     /** How much larger than the view to fetch, so small pans need no refetch. */
     private static final double MARGIN_FACTOR = 0.35;
 
-    private static final List<FeatureKind> KINDS =
-            List.of(FeatureKind.COASTLINE, FeatureKind.BOUNDARY, FeatureKind.PLACE);
+    /**
+     * Place names only - <b>not</b> coastline or boundaries.
+     *
+     * <p>This is the change that makes the interactive map workable. A coastline
+     * query for four degrees of Scotland returns seventy megabytes, because the
+     * recursion that gives ways their coordinates pulls every node of every
+     * full-resolution coastline; asking for it repeatedly as the user pans is
+     * what got this client answered with 429s.</p>
+     *
+     * <p>And it buys nothing here. {@link WorldBaseMap} already supplies the
+     * shape of the land, which is what orients someone choosing a rectangle;
+     * what it lacks is names. Full-resolution coastline belongs to the
+     * composited output, where it is fetched once for a chosen area and cached
+     * for four weeks - see {@link org.weathermap.MapService}.</p>
+     */
+    private static final List<FeatureKind> KINDS = List.of(FeatureKind.PLACE);
 
     private final OsmSource source;
     private final Timer debounce;
@@ -117,8 +131,7 @@ public final class BaseMapLoader {
             debounce.stop();
             pending = null;
             onStatus.accept(String.format(
-                    "World outline - zoom in below %.0f° for coastline and place detail",
-                    MAX_DETAIL_SPAN));
+                    "World outline - zoom in below %.0f° for place names", MAX_DETAIL_SPAN));
             return;
         }
         if (covers(loadedFor, view)) return;          // already in hand
@@ -158,8 +171,8 @@ public final class BaseMapLoader {
                     detail = fetched;
                     loadedFor = target;
                     onStatus.accept(fetched.isEmpty()
-                            ? "No OSM detail here"
-                            : fetched.size() + " map features loaded");
+                            ? "No named places here"
+                            : fetched.size() + " place names loaded");
                     onLoaded.accept(features());
                 });
             }
@@ -167,21 +180,22 @@ public final class BaseMapLoader {
                 Thread.currentThread().interrupt();
             }
             catch (Exception e) {
-                LOG.log(Level.WARNING, "Map detail unavailable", e);
+                LOG.log(Level.FINE, "Place-name detail unavailable", e);
                 SwingUtilities.invokeLater(() -> {
                     if (mine != generation) return;
                     // Overpass rate-limits and times out routinely. The world
                     // outline is still on screen, so this is a note, not a
                     // failure - saying so keeps the user from waiting for
                     // something that is not coming.
-                    onStatus.accept("Map detail unavailable (" + shortReason(e)
-                            + ") - showing the world outline");
+                    onStatus.accept("Place names unavailable: " + shortReason(e)
+                            + " - showing the world outline");
                 });
             }
         });
     }
 
     private static String shortReason(Exception e) {
+        if (e instanceof org.weathermap.util.Http.RateLimitedException) return e.getMessage();
         final String name = e.getClass().getSimpleName();
         return name.contains("Timeout") ? "timed out" : name;
     }
