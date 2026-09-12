@@ -49,9 +49,13 @@ public final class WeatherMapCli {
               --var CODE[,CODE...]  NOMADS variable codes, e.g. TMP,APCP
               --level CODE[,...]    NOMADS level codes, e.g. 2_m_above_ground
               --hours H[,H-H...]    forecast hours, e.g. 0,6,12-24
-              --series STEP,SPAN    a chart every STEP hours covering SPAN hours
-                                    from now, e.g. 3,48 - repeats correctly on a
-                                    schedule, unlike a fixed list of hours
+              --series STEP,AHEAD   a chart every STEP hours covering AHEAD hours
+              --series STEP,BACK,AHEAD  from now, e.g. 3,48 or 3,24,48 to start
+                                    24 hours in the past. Past charts come from
+                                    the runs of the time, so their lead is short
+                                    and often zero - the model's own analysis.
+                                    Repeats correctly on a schedule, unlike a
+                                    fixed list of hours
               --run YYYYMMDD:HH     pin a model run instead of using the latest
               --out DIR             where to write the PNGs
               --size WxH            maximum output size (default 1600x1200)
@@ -90,11 +94,6 @@ public final class WeatherMapCli {
 
         final BoundingBox area = (options.area != null) ? options.area : prefs.area();
         final GribSelection selection = buildSelection(prefs, options);
-        // Resolved here so the printed selection is what will be fetched, and
-        // so a run that spans a step boundary cannot download one set of hours
-        // and label them with another.
-        selection.applySeries(java.time.ZonedDateTime.now());
-
         final RenderSpec spec = buildRenderSpec(prefs, options);
         final Path outputDir = (options.outputDir != null) ? options.outputDir : prefs.outputDir();
 
@@ -106,9 +105,15 @@ public final class WeatherMapCli {
         // is going to debug; quietly adding the level that was always meant is.
         final List<GribLevel> added = selection.addMissingLevels();
 
+        final List<org.weathermap.model.ChartRequest> requests =
+                selection.chartRequests(java.time.ZonedDateTime.now());
+
         if (!options.quiet) {
             System.out.println("area      " + area);
             System.out.println("selection " + selection);
+            if (selection.hasSeries()) {
+                System.out.println("series    " + describeSeries(requests));
+            }
             if (!added.isEmpty()) {
                 final List<String> names = new ArrayList<>();
                 for (GribLevel level : added) names.add(level.displayName());
@@ -162,6 +167,30 @@ public final class WeatherMapCli {
         }
     }
 
+    /**
+     * What a series actually resolved to.
+     *
+     * <p>A list of forecast hours no longer describes it: a series reaching into
+     * the past draws on several runs, and the same hour can appear more than
+     * once meaning different moments. The valid times and the worst lead are
+     * what a reader needs - the lead being how much of the series is analysis
+     * and how much is forecast.</p>
+     */
+    private static String describeSeries(List<org.weathermap.model.ChartRequest> requests) {
+        if (requests.isEmpty()) return "no run covers the requested times";
+
+        final org.weathermap.model.ChartRequest first = requests.get(0);
+        final org.weathermap.model.ChartRequest last = requests.get(requests.size() - 1);
+        int analyses = 0;
+        int worstLead = 0;
+        for (org.weathermap.model.ChartRequest r : requests) {
+            if (r.isAnalysis()) analyses++;
+            worstLead = Math.max(worstLead, r.leadHours());
+        }
+        return requests.size() + " charts, " + first.validTime() + " to " + last.validTime()
+                + " (" + analyses + " analyses, longest lead f" + worstLead + ")";
+    }
+
     private static GribSelection buildSelection(Preferences prefs, Options options) {
         final GribSelection selection = prefs.selection();
 
@@ -182,7 +211,9 @@ public final class WeatherMapCli {
             selection.clearSeries();
             selection.setForecastHours(options.hours);
         }
-        if (options.seriesStep > 0) selection.setSeries(options.seriesStep, options.seriesSpan);
+        if (options.seriesStep > 0) {
+            selection.setSeries(options.seriesStep, options.seriesBack, options.seriesSpan);
+        }
 
         if (options.runDate != null) selection.setRun(options.runDate, options.runCycle);
         else selection.useLatestRun();
@@ -216,6 +247,7 @@ public final class WeatherMapCli {
         boolean mercator;
         java.time.ZoneId zone;
         int seriesStep;
+        int seriesBack;
         int seriesSpan = org.weathermap.model.GribSelection.DEFAULT_SERIES_SPAN_HOURS;
         boolean save;
         boolean dryRun;
@@ -231,17 +263,20 @@ public final class WeatherMapCli {
                     case "--help", "-h" -> o.help = true;
                     case "--series" -> {
                         final String[] parts = next(args, ++i, a).split(",");
-                        if (parts.length != 2) {
+                        if (parts.length < 2 || parts.length > 3) {
                             throw new IllegalArgumentException(
-                                    "--series takes STEP,SPAN in hours, e.g. 3,48");
+                                    "--series takes STEP,AHEAD or STEP,BACK,AHEAD "
+                                    + "in hours, e.g. 3,48 or 3,24,48");
                         }
                         try {
                             o.seriesStep = Integer.parseInt(parts[0].trim());
-                            o.seriesSpan = Integer.parseInt(parts[1].trim());
+                            o.seriesBack = parts.length == 3
+                                    ? Integer.parseInt(parts[1].trim()) : 0;
+                            o.seriesSpan = Integer.parseInt(parts[parts.length - 1].trim());
                         }
                         catch (NumberFormatException e) {
                             throw new IllegalArgumentException(
-                                    "--series takes whole hours, e.g. 3,48");
+                                    "--series takes whole hours, e.g. 3,24,48");
                         }
                     }
                     case "--mercator" -> o.mercator = true;

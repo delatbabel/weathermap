@@ -359,7 +359,36 @@ default. `--series 3,48` on the command line, or the **Series from now** row in
 the window, which disables the explicit forecast-hours field because a series
 and a list of hours are two answers to the same question.
 
-The subtlety is that **"starting now" is not forecast hour 0**. Forecast hours
+It can start in the past: `--series 6,24,48` covers twenty-four hours back as
+well as forty-eight ahead, up to `MAX_SERIES_HOURS_BACK` (48). NOMADS keeps
+about ten days of runs — verified, `20260904` still served while `20260902` had
+gone — so the archive is comfortably deeper than the window.
+
+**Past charts are not forecasts re-run.** Each chart picks its own run by a
+single rule that covers both directions:
+
+```
+run  = the latest cycle at or before min(valid time, now - publication lag)
+lead = valid time - run
+```
+
+A chart of the future takes the newest run and a long lead, because that is the
+best forecast there is. A chart of last night takes *last night's run* at a lead
+of a few hours — often zero, the model's own analysis of that moment. A live
+run of `--series 6,24,12` produced six charts, three of them analyses, longest
+lead f018.
+
+The `min` is what keeps it honest near the present: a run exists on paper before
+NOMADS finishes publishing it, and asking for one that is not there yet gets a
+404 rather than a fallback. That is also why a chart of three hours ago can have
+a six-hour lead while one of thirty hours ago has none.
+
+**An analysis is not an observation.** It is the model's own best estimate of
+that moment, having assimilated observations into it. It is the closest this
+source comes to "what actually happened", and it is what synoptic charts of the
+past normally show, but it is not a measurement.
+
+The subtlety on the forward side is that **"starting now" is not forecast hour 0**. Forecast hours
 count from the model run, and the run in hand is always hours old — NOMADS
 publishes one about four hours after its nominal time. So the first chart is the
 first step at or after the gap between the run and the clock: for the 00Z run at

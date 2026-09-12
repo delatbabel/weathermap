@@ -43,6 +43,7 @@ public final class Preferences {
     private static final String KEY_FORECAST_HOURS = "grib.forecastHours";
     private static final String KEY_SERIES_STEP = "grib.series.stepHours";
     private static final String KEY_SERIES_SPAN = "grib.series.spanHours";
+    private static final String KEY_SERIES_BACK = "grib.series.hoursBack";
     private static final String KEY_RUN_DATE = "grib.runDate";
     private static final String KEY_RUN_CYCLE = "grib.runCycle";
     private static final String KEY_OUTPUT_DIR = "output.dir";
@@ -198,8 +199,10 @@ public final class Preferences {
         final int step = intProperty(KEY_SERIES_STEP, 0);
         if (step > 0) {
             try {
-                sel.setSeries(step, intProperty(KEY_SERIES_SPAN,
-                                                GribSelection.DEFAULT_SERIES_SPAN_HOURS));
+                sel.setSeries(step,
+                              intProperty(KEY_SERIES_BACK, 0),
+                              intProperty(KEY_SERIES_SPAN,
+                                          GribSelection.DEFAULT_SERIES_SPAN_HOURS));
             }
             catch (IllegalArgumentException e) {
                 LOG.warning("Ignoring an unusable stored series: " + e.getMessage());
@@ -229,6 +232,7 @@ public final class Preferences {
         // and not "the 48 hours after the morning I set this up".
         props.setProperty(KEY_SERIES_STEP, String.valueOf(sel.hasSeries() ? sel.seriesStepHours() : 0));
         props.setProperty(KEY_SERIES_SPAN, String.valueOf(sel.seriesSpanHours()));
+        props.setProperty(KEY_SERIES_BACK, String.valueOf(sel.seriesHoursBack()));
         if (sel.followsLatestRun()) {
             props.remove(KEY_RUN_DATE);
             props.remove(KEY_RUN_CYCLE);

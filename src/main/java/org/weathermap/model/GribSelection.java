@@ -1,6 +1,7 @@
 package org.weathermap.model;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -38,6 +39,17 @@ public final class GribSelection {
     /** How far ahead a new series runs. */
     public static final int DEFAULT_SERIES_SPAN_HOURS = 48;
 
+    /**
+     * The furthest back a series may start.
+     *
+     * <p>Not a limit of the data - NOMADS keeps about ten days of runs - but of
+     * what the feature is for: looking at how the weather that arrived compares
+     * with what was forecast, and seeing the run-up to now. Beyond a couple of
+     * days that is a different job, wanting reanalysis rather than the operational
+     * archive.</p>
+     */
+    public static final int MAX_SERIES_HOURS_BACK = 48;
+
     private GribModel model = GribModel.GFS_0P25;
 
     /** {@code null} means "whatever the latest published run is at download time". */
@@ -51,6 +63,9 @@ public final class GribSelection {
 
     /** How far ahead of now a series runs, in hours. */
     private int seriesSpanHours = DEFAULT_SERIES_SPAN_HOURS;
+
+    /** How far back before now a series starts, in hours. */
+    private int seriesHoursBack;
     private final Set<GribVariable> variables = new LinkedHashSet<>();
     private final Set<GribLevel> levels = new LinkedHashSet<>();
 
@@ -127,6 +142,9 @@ public final class GribSelection {
 
     public int seriesSpanHours() { return seriesSpanHours; }
 
+    /** How far back the series reaches, in hours before now. */
+    public int seriesHoursBack() { return seriesHoursBack; }
+
     /**
      * Asks for a chart every {@code step} hours, covering {@code span} hours
      * from now.
@@ -136,13 +154,38 @@ public final class GribSelection {
      *                                  describes a series with nothing in it
      */
     public void setSeries(int step, int span) {
+        setSeries(step, 0, span);
+    }
+
+    /**
+     * Asks for a chart every {@code step} hours, from {@code hoursBack} before
+     * now to {@code hoursAhead} after it.
+     *
+     * @throws IllegalArgumentException if the step is not positive, the window
+     *                                  is shorter than one step, or the past
+     *                                  reaches beyond {@link #MAX_SERIES_HOURS_BACK}
+     */
+    public void setSeries(int step, int hoursBack, int hoursAhead) {
         if (step <= 0) throw new IllegalArgumentException("series step must be at least 1 hour");
-        if (span < step) {
+        if (hoursBack < 0) {
+            throw new IllegalArgumentException("a series cannot start " + hoursBack + " hours ago");
+        }
+        if (hoursBack > MAX_SERIES_HOURS_BACK) {
             throw new IllegalArgumentException(
-                    "a series covering " + span + " hours cannot step " + step);
+                    "a series may start at most " + MAX_SERIES_HOURS_BACK
+                    + " hours back, not " + hoursBack);
+        }
+        if (hoursAhead < 0) {
+            throw new IllegalArgumentException("a series cannot end " + hoursAhead + " hours ahead");
+        }
+        if (hoursBack + hoursAhead < step) {
+            throw new IllegalArgumentException(
+                    "a series covering " + (hoursBack + hoursAhead)
+                    + " hours cannot step " + step);
         }
         this.seriesStepHours = step;
-        this.seriesSpanHours = span;
+        this.seriesHoursBack = hoursBack;
+        this.seriesSpanHours = hoursAhead;
     }
 
     /** Goes back to an explicit list of hours. */
@@ -161,6 +204,14 @@ public final class GribSelection {
      * perfectly well - it is simply a chart of this morning.</p>
      */
     public List<Integer> seriesHours(ZonedDateTime now) {
+        if (seriesHoursBack > 0) {
+            // With a past leg the charts come from several runs, so a list of
+            // forecast hours cannot describe them. Callers that need the whole
+            // picture ask chartRequests instead.
+            final List<Integer> out = new ArrayList<>();
+            for (ChartRequest request : chartRequests(now)) out.add(request.forecastHour());
+            return out;
+        }
         final Object[] run = resolveRun(now);
         final ZonedDateTime runStart = LocalDate.parse((String) run[0], YYYYMMDD)
                 .atStartOfDay(ZoneOffset.UTC)
@@ -194,6 +245,100 @@ public final class GribSelection {
      */
     public void applySeries(ZonedDateTime now) {
         if (hasSeries()) setForecastHours(seriesHours(now));
+    }
+
+    /**
+     * The charts this selection asks for, each with the run it comes from.
+     *
+     * <p>Without a series this is the listed forecast hours against one run,
+     * which is what it has always been. With one, it is a chart every step
+     * across the window, and each picks its own run by a single rule:</p>
+     *
+     * <pre>    run   = the latest cycle at or before min(valid time, now - publication lag)
+     *    lead  = valid time - run</pre>
+     *
+     * <p>That one rule covers both directions, which is why there is no separate
+     * path for the past. A chart of the future takes the newest run there is and
+     * a long lead, because that is the best forecast available. A chart of last
+     * night takes the run from last night and a lead of a few hours - often
+     * zero, which is the model's own analysis of that moment and the closest
+     * this source comes to what was actually observed.</p>
+     *
+     * <p>The {@code min} is what keeps the rule honest near the present: a run
+     * exists on paper before NOMADS finishes publishing it, and asking for one
+     * that is not there yet fails with a 404 rather than falling back.</p>
+     */
+    public List<ChartRequest> chartRequests(ZonedDateTime now) {
+        final ZonedDateTime utcNow = now.withZoneSameInstant(ZoneOffset.UTC);
+
+        if (!hasSeries()) {
+            final Object[] run = resolveRun(now);
+            final LocalDate date = LocalDate.parse((String) run[0], YYYYMMDD);
+            final int cycle = (Integer) run[1];
+            final List<ChartRequest> out = new ArrayList<>();
+            for (int hour : forecastHours()) out.add(new ChartRequest(date, cycle, hour));
+            return out;
+        }
+
+        final List<ChartRequest> out = new ArrayList<>();
+        for (Instant validTime : seriesTimes(utcNow)) {
+            final ChartRequest request = requestFor(validTime, utcNow);
+            if (request != null) out.add(request);
+        }
+        return out;
+    }
+
+    /**
+     * The moments a series covers, on a whole-hour grid.
+     *
+     * <p>Aligned to the step in UTC rather than counted from the clock, so two
+     * series generated twenty minutes apart name the same charts and hit the
+     * same cache, and so the times read as the round numbers a chart is
+     * expected to carry.</p>
+     */
+    private List<Instant> seriesTimes(ZonedDateTime utcNow) {
+        final Instant from = utcNow.minusHours(seriesHoursBack).toInstant();
+        final Instant to = utcNow.plusHours(seriesSpanHours).toInstant();
+        final long step = Duration.ofHours(seriesStepHours).getSeconds();
+
+        final long firstEpoch = Math.floorDiv(from.getEpochSecond() + step - 1, step) * step;
+        final List<Instant> out = new ArrayList<>();
+        for (long epoch = firstEpoch; epoch <= to.getEpochSecond(); epoch += step) {
+            out.add(Instant.ofEpochSecond(epoch));
+        }
+        return out;
+    }
+
+    /**
+     * The best run for one moment, or {@code null} when the model cannot reach
+     * it.
+     *
+     * @return a request whose lead is as short as the published runs allow
+     */
+    private ChartRequest requestFor(Instant validTime, ZonedDateTime utcNow) {
+        final Instant newestUsable = utcNow.minus(PUBLICATION_LAG).toInstant();
+        final Instant anchor = validTime.isBefore(newestUsable) ? validTime : newestUsable;
+
+        final ZonedDateTime anchorTime = anchor.atZone(ZoneOffset.UTC);
+        final int[] cycles = model.cycleHours();
+
+        LocalDate date = anchorTime.toLocalDate();
+        int cycle = -1;
+        for (int i = cycles.length - 1; i >= 0; i--) {
+            if (cycles[i] <= anchorTime.getHour()) {
+                cycle = cycles[i];
+                break;
+            }
+        }
+        if (cycle < 0) {                       // before the day's first cycle
+            date = date.minusDays(1);
+            cycle = cycles[cycles.length - 1];
+        }
+
+        final Instant runTime = date.atStartOfDay(ZoneOffset.UTC).plusHours(cycle).toInstant();
+        final long lead = Duration.between(runTime, validTime).toHours();
+        if (lead < 0 || lead > model.maxForecastHour()) return null;
+        return new ChartRequest(date, cycle, (int) lead);
     }
 
     /** Forecast hours to fetch, ascending. Never empty. */
@@ -292,9 +437,18 @@ public final class GribSelection {
 
     @Override
     public String toString() {
+        // With a series the forecast hours are whatever was last stored and mean
+        // nothing - the charts are chosen per run at download time - so saying
+        // the series is both shorter and true.
+        final String when = hasSeries()
+                ? "every " + seriesStepHours + "h from "
+                        + (seriesHoursBack == 0 ? "now" : seriesHoursBack + "h back")
+                        + " to " + seriesSpanHours + "h ahead"
+                : "f" + forecastHours;
+
         return model.displayName() + " "
                 + (followsLatestRun() ? "latest run" : runDate + " " + runCycle + "Z")
-                + " f" + forecastHours
+                + " " + when
                 + " " + variables + " @ " + levels;
     }
 }

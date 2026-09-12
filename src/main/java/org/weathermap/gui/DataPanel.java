@@ -48,8 +48,10 @@ public final class DataPanel extends JPanel {
     private final JCheckBox series = new JCheckBox("Series from now");
     private final javax.swing.JSpinner seriesStep = new javax.swing.JSpinner(
             new javax.swing.SpinnerNumberModel(GribSelection.DEFAULT_SERIES_STEP_HOURS, 1, 24, 1));
+    private final javax.swing.JSpinner seriesBack = new javax.swing.JSpinner(
+            new javax.swing.SpinnerNumberModel(0, 0, GribSelection.MAX_SERIES_HOURS_BACK, 3));
     private final javax.swing.JSpinner seriesSpan = new javax.swing.JSpinner(
-            new javax.swing.SpinnerNumberModel(GribSelection.DEFAULT_SERIES_SPAN_HOURS, 1, 384, 3));
+            new javax.swing.SpinnerNumberModel(GribSelection.DEFAULT_SERIES_SPAN_HOURS, 0, 384, 3));
     private final JLabel note = new JLabel(" ");
 
     public DataPanel() {
@@ -89,6 +91,10 @@ public final class DataPanel extends JPanel {
      * sentence.</p>
      */
     private JPanel seriesRow() {
+        seriesBack.setToolTipText("Hours before now. Past charts come from the runs "
+                + "of the time, so their lead is short - often zero, the model's "
+                + "own analysis of that moment.");
+        seriesSpan.setToolTipText("Hours after now, as far as the model reaches");
         final JPanel row = new JPanel();
         row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
         row.add(series);
@@ -97,11 +103,15 @@ public final class DataPanel extends JPanel {
         row.add(javax.swing.Box.createHorizontalStrut(4));
         row.add(seriesStep);
         row.add(javax.swing.Box.createHorizontalStrut(4));
-        row.add(new JLabel("h for"));
+        row.add(new JLabel("h, from"));
+        row.add(javax.swing.Box.createHorizontalStrut(4));
+        row.add(seriesBack);
+        row.add(javax.swing.Box.createHorizontalStrut(4));
+        row.add(new JLabel("h back to"));
         row.add(javax.swing.Box.createHorizontalStrut(4));
         row.add(seriesSpan);
         row.add(javax.swing.Box.createHorizontalStrut(4));
-        row.add(new JLabel("h"));
+        row.add(new JLabel("h ahead"));
         row.add(javax.swing.Box.createHorizontalGlue());
         return row;
     }
@@ -113,6 +123,7 @@ public final class DataPanel extends JPanel {
     private void updateSeriesEnabled() {
         final boolean on = series.isSelected();
         seriesStep.setEnabled(on);
+        seriesBack.setEnabled(on);
         seriesSpan.setEnabled(on);
         forecastHours.setEnabled(!on);
         forecastHours.setToolTipText(on
@@ -124,6 +135,17 @@ public final class DataPanel extends JPanel {
         final GribModel m = (GribModel) model.getSelectedItem();
         note.setText(m == null ? " "
                 : String.format("%.2f° grid, out to f%03d", m.resolutionDegrees(), m.maxForecastHour()));
+        if (m == null) return;
+
+        // How far ahead a series may run is the model's reach, not a constant.
+        // HRRR stops at f048; offering 384 would let someone ask for charts that
+        // can only fail at download time.
+        final javax.swing.SpinnerNumberModel ahead =
+                (javax.swing.SpinnerNumberModel) seriesSpan.getModel();
+        ahead.setMaximum(m.maxForecastHour());
+        if ((Integer) ahead.getValue() > m.maxForecastHour()) {
+            ahead.setValue(m.maxForecastHour());
+        }
     }
 
     private static JPanel labelled(String text, javax.swing.JComponent field) {
@@ -148,6 +170,7 @@ public final class DataPanel extends JPanel {
         forecastHours.setText(compact(selection.forecastHours()));
         series.setSelected(selection.hasSeries());
         if (selection.hasSeries()) seriesStep.setValue(selection.seriesStepHours());
+        seriesBack.setValue(selection.seriesHoursBack());
         seriesSpan.setValue(selection.seriesSpanHours());
         updateSeriesEnabled();
         latestRun.setSelected(selection.followsLatestRun());
@@ -193,7 +216,9 @@ public final class DataPanel extends JPanel {
         }
         if (series.isSelected()) {
             try {
-                sel.setSeries((Integer) seriesStep.getValue(), (Integer) seriesSpan.getValue());
+                sel.setSeries((Integer) seriesStep.getValue(),
+                              (Integer) seriesBack.getValue(),
+                              (Integer) seriesSpan.getValue());
             }
             catch (IllegalArgumentException e) {
                 note.setText(e.getMessage());

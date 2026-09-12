@@ -6,6 +6,7 @@ import org.weathermap.grib.GribSource;
 import org.weathermap.grib.Grid;
 import org.weathermap.grib.NomadsClient;
 import org.weathermap.model.BoundingBox;
+import org.weathermap.model.ChartRequest;
 import org.weathermap.model.GribSelection;
 import org.weathermap.model.GribVariable;
 import org.weathermap.model.RenderSpec;
@@ -96,8 +97,18 @@ public final class MapService {
         p.stage("Fetching base map from " + osm.description());
         final List<Feature> features = fetchFeatures(bbox, spec, p);
 
+        // Resolved once, here, so the download, the labelling and the status
+        // line all speak about the same charts.
+        final List<ChartRequest> requests =
+                selection.chartRequests(java.time.ZonedDateTime.now());
+        if (requests.isEmpty()) {
+            LOG.warning("Nothing to fetch: no run covers the requested times");
+            return List.of();
+        }
+
         p.stage("Downloading GRIB from " + grib.description());
-        final List<Path> gribFiles = grib.download(bbox, selection, new Http.ProgressListener() {
+        final List<Path> gribFiles = grib.download(bbox, selection, requests,
+                new Http.ProgressListener() {
             @Override
             public void onProgress(long soFar, long total) { p.bytes(soFar, total); }
 
@@ -110,9 +121,8 @@ public final class MapService {
 
         for (int i = 0; i < gribFiles.size() && !p.isCancelled(); i++) {
             final Path file = gribFiles.get(i);
-            final int forecastHour = selection.forecastHours().get(i);
-            p.stage("Rendering forecast hour " + forecastHour
-                    + " (" + (i + 1) + " of " + gribFiles.size() + ")");
+            final ChartRequest request = requests.get(i);
+            p.stage("Rendering " + request + " (" + (i + 1) + " of " + gribFiles.size() + ")");
 
             final List<Grid> grids = reader.read(file);
             if (grids.isEmpty()) {
@@ -120,7 +130,7 @@ public final class MapService {
                 continue;
             }
 
-            reportMissingFields(selection, grids, forecastHour, p);
+            reportMissingFields(selection, grids, request.forecastHour(), p);
 
             final BufferedImage image =
                     compositor.render(bbox, features, grids, selection.model().displayName());

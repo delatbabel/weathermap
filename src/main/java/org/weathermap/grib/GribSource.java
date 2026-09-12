@@ -1,6 +1,7 @@
 package org.weathermap.grib;
 
 import org.weathermap.model.BoundingBox;
+import org.weathermap.model.ChartRequest;
 import org.weathermap.model.GribSelection;
 import org.weathermap.util.Http;
 
@@ -18,13 +19,17 @@ import java.util.List;
 public interface GribSource {
 
     /**
-     * Downloads one file per forecast hour in {@code selection}, each cut to
-     * {@code bbox}.
+     * Downloads one file per request, each cut to {@code bbox}.
      *
-     * @return the downloaded files, in forecast-hour order
+     * <p>The requests carry their own runs rather than sharing the selection's,
+     * because a series that reaches into the past draws from several: forecast
+     * hours only count forwards, so a chart of yesterday afternoon cannot come
+     * from this morning's run at all.</p>
+     *
+     * @return the downloaded files, in the order requested
      */
     List<Path> download(BoundingBox bbox, GribSelection selection,
-                        Http.ProgressListener listener)
+                        List<ChartRequest> requests, Http.ProgressListener listener)
             throws IOException, InterruptedException;
 
     String description();

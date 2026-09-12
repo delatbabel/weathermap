@@ -1,6 +1,7 @@
 package org.weathermap.grib;
 
 import org.weathermap.model.BoundingBox;
+import org.weathermap.model.ChartRequest;
 import org.weathermap.model.GribLevel;
 import org.weathermap.model.GribModel;
 import org.weathermap.model.GribSelection;
@@ -83,16 +84,16 @@ public final class NomadsClient implements GribSource {
 
     @Override
     public List<Path> download(BoundingBox bbox, GribSelection selection,
-                               Http.ProgressListener listener)
+                               List<ChartRequest> requests, Http.ProgressListener listener)
             throws IOException, InterruptedException {
 
-        final Object[] run = selection.resolveRun(ZonedDateTime.now());
-        final String yyyymmdd = (String) run[0];
-        final int cycle = (Integer) run[1];
-
         final List<Path> out = new ArrayList<>();
-        for (int forecastHour : selection.forecastHours()) {
+        for (ChartRequest request : requests) {
             if (listener != null && listener.isCancelled()) break;
+
+            final String yyyymmdd = request.runDate().format(RUN_DATE);
+            final int cycle = request.cycle();
+            final int forecastHour = request.forecastHour();
 
             final URI uri = buildUri(bbox, selection, yyyymmdd, cycle, forecastHour);
 
@@ -111,6 +112,9 @@ public final class NomadsClient implements GribSource {
         }
         return out;
     }
+
+    private static final java.time.format.DateTimeFormatter RUN_DATE =
+            java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd");
 
     /** Builds one filter request. Package-private so it can be asserted in tests. */
     URI buildUri(BoundingBox bbox, GribSelection selection,
