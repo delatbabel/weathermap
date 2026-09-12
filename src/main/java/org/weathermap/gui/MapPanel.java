@@ -9,6 +9,7 @@ import org.weathermap.render.Compositor;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import java.awt.BasicStroke;
+import javax.swing.UIManager;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Dimension;
@@ -68,7 +69,9 @@ public final class MapPanel extends JPanel {
 
     private static final Color SELECTION_FILL = new Color(70, 130, 200, 55);
     private static final Color SELECTION_EDGE = new Color(20, 80, 170);
-    private static final Color HINT = new Color(90, 90, 90);
+    /** Fallbacks, used only when no look and feel has been installed. */
+    private static final Color DEFAULT_SURROUND = new Color(236, 240, 244);
+    private static final Color DEFAULT_HINT = new Color(90, 90, 90);
 
     /** One wheel notch. Chosen to feel like a web map rather than a microscope. */
     private static final double ZOOM_STEP = 1.25;
@@ -98,12 +101,46 @@ public final class MapPanel extends JPanel {
     private Point dragNow;
     private boolean draggingSelection;
 
+    /**
+     * Re-reads the theme's colours when the look and feel changes.
+     *
+     * <p>{@code SwingUtilities.updateComponentTreeUI} rebuilds a component's UI
+     * delegate but leaves any background set explicitly on it, so without this
+     * the letterboxing round the map stays the colour of whichever theme was
+     * installed at startup - a pale frame in a dark window.</p>
+     *
+     * <p><b>The map itself does not follow the theme, deliberately.</b> It is
+     * drawn by the same {@link Compositor} that writes the PNG, and that image
+     * is a chart: it gets saved, printed and read beside paper ones, so its
+     * colours answer to the conventions of a weather chart rather than to the
+     * time of day. Theming it here would either fork the renderer - the one
+     * thing this design refuses, since the point is that what is seen and what
+     * is saved cannot differ - or change the output of the command-line tool to
+     * match a setting in a window it never opens. So the map stays a light
+     * document in a dark room, the way a page does in a reader.</p>
+     */
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        setBackground(surround());
+    }
+
+    private static Color surround() {
+        final Color c = UIManager.getColor("Panel.background");
+        return c != null ? c : DEFAULT_SURROUND;
+    }
+
+    private static Color hintForeground() {
+        final Color c = UIManager.getColor("Label.foreground");
+        return c != null ? c : DEFAULT_HINT;
+    }
+
     public MapPanel(RenderSpec spec, BoundingBox initialView) {
         this.spec = spec;
         this.view = new MapView(initialView);
         this.selection = initialView;
 
-        setBackground(new Color(236, 240, 244));
+        setBackground(surround());
         setPreferredSize(new Dimension(900, 620));
         setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
         setFocusable(true);
@@ -433,9 +470,12 @@ public final class MapPanel extends JPanel {
         // bottom edge.
         final Rectangle box = new Rectangle(8, getHeight() - 48, textWidth + 12, 18);
 
-        g.setColor(new Color(255, 255, 255, 205));
+        // The pill is chrome sitting on the map, so it follows the theme even
+        // though the map under it does not.
+        final Color plate = surround();
+        g.setColor(new Color(plate.getRed(), plate.getGreen(), plate.getBlue(), 225));
         g.fillRoundRect(box.x, box.y, box.width, box.height, 6, 6);
-        g.setColor(HINT);
+        g.setColor(hintForeground());
         g.drawString(hint, box.x + 6, box.y + 13);
     }
 

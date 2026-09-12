@@ -26,19 +26,25 @@ the honest list.
 
 ## Build and run
 
-Java 21 or later. No third-party runtime dependencies — everything is in the
-JDK.
+Java 21 or later. One runtime dependency — [FlatLaf](https://www.formdev.com/flatlaf/),
+about a megabyte, and only the window uses it. Everything else is in the JDK.
 
 ```bash
-./mvnw package                                    # jar + tests
-java -jar target/weathermap-0.1.0-SNAPSHOT.jar    # the desktop application
+./mvnw package                                               # jars + tests
+./run.sh                                                     # the desktop application
+java -jar target/weathermap-0.1.0-SNAPSHOT-jar-with-dependencies.jar
 ```
 
-The command-line tool is the same jar:
+The command-line tool is the same jar, and runs from the plain one too, since
+it never creates a window:
 
 ```bash
 java -jar target/weathermap-0.1.0-SNAPSHOT.jar --cli --help
 ```
+
+The desktop application started from the plain jar still opens — it falls back
+to the platform look and feel rather than failing on the missing class — it just
+will not be themed.
 
 With no options it repeats the last area and GRIB selection the desktop
 application stored, against the latest published run — which is the point:
@@ -124,13 +130,44 @@ what is saved cannot drift apart.
 
 ### Persistence
 
-`~/.weathermap/preferences.properties` holds the last area, the GRIB selection
-and the render settings. The desktop application writes it **before** a download
-starts, not after — a run that was cancelled or that failed still represents
-what the user asked for, and that is what the CLI should repeat.
+`~/.weathermap/preferences.properties` holds the last area, the GRIB selection,
+the render settings, the theme and the window layout. The desktop application
+writes it **before** a download starts, not after — a run that was cancelled or
+that failed still represents what the user asked for, and that is what the CLI
+should repeat.
+
+`ui.layout` is six integers: window position and size, then the two divider
+positions — the map against the controls, and the area controls against the
+GRIB controls. One key rather than six, because they are only read and written
+together and a half-restored window is worse than a default one. Two things it
+refuses to restore: a size below 320 px, which is what a window minimised on
+some platforms reports and which comes back too small to find the controls in;
+and a position on a screen that is no longer attached, which opens the window
+where the user cannot reach it.
+
+A maximised window is not saved as a size, or un-maximising would restore to
+full screen and the size actually chosen would be lost.
 
 All of it fails soft: a missing or unreadable file yields defaults, and one bad
 value is dropped individually rather than discarding the file.
+
+### Themes
+
+FlatLaf, light or dark, switchable from the **Appearance** menu without a
+restart — the two themes share their metrics, so only colours change and no
+window has to be rebuilt. The choice is saved as soon as it is made rather than
+on close, since someone who switches theme and then kills the window has still
+expressed a preference.
+
+**The map does not follow the theme, and that is deliberate.** It is drawn by
+the same `Compositor` that writes the PNG, so theming it would either fork the
+renderer — the one thing this design refuses, since the point is that what is
+seen and what is saved cannot differ — or make the command-line tool's output
+depend on a setting in a window it never opens. A chart is a document: it gets
+saved, printed and read beside paper ones, and its colours answer to the
+conventions of a weather chart rather than to the time of day. So the map stays
+a light page in a dark room. The chrome around it — the letterboxing, the hint
+pill — does follow the theme.
 
 ### Caching
 

@@ -57,6 +57,17 @@ public final class Preferences {
      */
     private static final String KEY_LAYERS = "render.layers.v2";
 
+    private static final String KEY_THEME = "ui.theme";
+
+    /**
+     * Window geometry and divider positions, as one line.
+     *
+     * <p>One key rather than six because they are only ever read and written
+     * together, and a half-restored window - the right size in the wrong place,
+     * or a divider from a session at a different size - is worse than none.</p>
+     */
+    private static final String KEY_UI_LAYOUT = "ui.layout";
+
     /** Shown the first time the application runs, before anything is selected. */
     public static final BoundingBox DEFAULT_AREA = BoundingBox.of(49.5, -11.0, 61.0, 2.0);
 
@@ -230,6 +241,29 @@ public final class Preferences {
     // ---- output ---------------------------------------------------------
 
     /** Where composited PNGs are written. Defaults to {@code ~/.weathermap/maps}. */
+    // ---- desktop appearance ---------------------------------------------
+    //
+    // Written by the window and never read by the command-line tool, but stored
+    // here with everything else: one file is what the user backs up, copies to
+    // another machine, or deletes to start clean.
+
+    public Theme theme() {
+        return Theme.byId(props.getProperty(KEY_THEME));
+    }
+
+    public void setTheme(Theme theme) {
+        props.setProperty(KEY_THEME, theme.id());
+    }
+
+    /** Where the window was and how it was divided, or sensible defaults. */
+    public UiLayout uiLayout() {
+        return UiLayout.parse(props.getProperty(KEY_UI_LAYOUT));
+    }
+
+    public void setUiLayout(UiLayout layout) {
+        props.setProperty(KEY_UI_LAYOUT, layout.toString());
+    }
+
     public Path outputDir() {
         final String s = props.getProperty(KEY_OUTPUT_DIR);
         return (s == null || s.isBlank())

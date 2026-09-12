@@ -6,6 +6,8 @@ import org.weathermap.model.GribLevel;
 import org.weathermap.model.GribSelection;
 import org.weathermap.model.Preferences;
 import org.weathermap.model.RenderSpec;
+import org.weathermap.model.Theme;
+import org.weathermap.model.UiLayout;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -20,7 +22,9 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.ButtonGroup;
 import javax.swing.JProgressBar;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JToggleButton;
@@ -60,6 +64,12 @@ public final class MainWindow extends JFrame {
     private final JToggleButton selectMode = new JToggleButton("Select area");
     private final JToggleButton showResult = new JToggleButton("Show weather map");
 
+    /** The map against the controls. */
+    private JSplitPane mainSplit;
+
+    /** The area controls against the GRIB controls. */
+    private JSplitPane sideSplit;
+
     private BoundingBox area;
     private RenderSpec renderSpec;
     private DownloadWorker worker;
@@ -95,9 +105,7 @@ public final class MainWindow extends JFrame {
 
         setJMenuBar(buildMenuBar());
         setContentPane(buildContent());
-        setPreferredSize(new Dimension(1280, 800));
-        pack();
-        setLocationRelativeTo(null);
+        restoreLayout(preferences.uiLayout());
 
         addWindowListener(new WindowAdapter() {
             @Override
@@ -118,23 +126,92 @@ public final class MainWindow extends JFrame {
     // ---- layout ---------------------------------------------------------
 
     private JPanel buildContent() {
-        final JPanel side = new JPanel();
-        side.setLayout(new BoxLayout(side, BoxLayout.Y_AXIS));
-        side.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
-        side.add(areaPanel);
-        side.add(Box.createVerticalStrut(8));
-        side.add(dataPanel);
-        side.add(Box.createVerticalGlue());
+        // A split rather than a stack, so the area controls and the GRIB
+        // controls can be sized against each other. The variable and level
+        // lists are the reason: working through them is easier with the panel
+        // dragged tall, and before this their height was whatever the layout
+        // decided.
+        sideSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+                                   scrolled(areaPanel), scrolled(dataPanel));
+        sideSplit.setResizeWeight(0.0);          // extra height goes to the lists
+        sideSplit.setBorder(BorderFactory.createEmptyBorder());
 
-        final JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,
-                                                mapPanel, new JScrollPane(side));
-        split.setResizeWeight(1.0);
+        mainSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, mapPanel, sideSplit);
+        mainSplit.setResizeWeight(1.0);          // extra width goes to the map
+        mainSplit.setBorder(BorderFactory.createEmptyBorder());
 
         final JPanel root = new JPanel(new BorderLayout());
         root.add(buildToolBar(), BorderLayout.NORTH);
-        root.add(split, BorderLayout.CENTER);
+        root.add(mainSplit, BorderLayout.CENTER);
         root.add(buildStatusBar(), BorderLayout.SOUTH);
         return root;
+    }
+
+    private static JScrollPane scrolled(JPanel panel) {
+        panel.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        final JScrollPane pane = new JScrollPane(panel);
+        pane.setBorder(BorderFactory.createEmptyBorder());
+        pane.getVerticalScrollBar().setUnitIncrement(16);
+        return pane;
+    }
+
+    // ---- remembering the window -----------------------------------------
+
+    /**
+     * Opens at the size, position and proportions of the last run.
+     *
+     * <p>Dividers are set after the frame has its size, because
+     * {@link JSplitPane#setDividerLocation(int)} on a pane of zero width is
+     * silently ignored - which is why doing this in the constructor appears to
+     * work and then does not.</p>
+     */
+    private void restoreLayout(UiLayout layout) {
+        setPreferredSize(new Dimension(layout.width(), layout.height()));
+        pack();
+
+        if (layout.hasPosition() && isOnAScreen(layout)) setLocation(layout.x(), layout.y());
+        else setLocationRelativeTo(null);
+
+        SwingUtilities.invokeLater(() -> {
+            if (layout.mainDivider() > 0) mainSplit.setDividerLocation(layout.mainDivider());
+            if (layout.sideDivider() > 0) sideSplit.setDividerLocation(layout.sideDivider());
+        });
+    }
+
+    /**
+     * True when the stored position is still on a display.
+     *
+     * <p>Monitors get unplugged. A window restored to where a second screen used
+     * to be opens somewhere the user cannot see or reach, and the application
+     * looks like it failed to start.</p>
+     */
+    private boolean isOnAScreen(UiLayout layout) {
+        final java.awt.Rectangle window =
+                new java.awt.Rectangle(layout.x(), layout.y(), layout.width(), layout.height());
+        for (java.awt.GraphicsDevice screen
+                : java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+            if (screen.getDefaultConfiguration().getBounds().intersects(window)) return true;
+        }
+        LOG.fine(() -> "Stored window position " + layout + " is off-screen; centring instead");
+        return false;
+    }
+
+    /**
+     * The layout as it stands, or the stored one where it cannot be read.
+     *
+     * <p>A maximised window reports the size of the screen. Saving that means
+     * un-maximising restores to full screen and the size the user actually
+     * chose is gone, so the previous size is kept and only the dividers are
+     * taken.</p>
+     */
+    private UiLayout currentLayout() {
+        UiLayout layout = preferences.uiLayout();
+        if (getExtendedState() == JFrame.NORMAL) {
+            layout = layout.withWindow(getX(), getY(), getWidth(), getHeight());
+        }
+        return layout.withDividers(
+                mainSplit == null ? UiLayout.UNSET : mainSplit.getDividerLocation(),
+                sideSplit == null ? UiLayout.UNSET : sideSplit.getDividerLocation());
     }
 
     private JPanel buildToolBar() {
@@ -233,6 +310,24 @@ public final class MainWindow extends JFrame {
         mercator.addActionListener(e -> renderSpec.setMercator(mercator.isSelected()));
         view.add(mercator);
         bar.add(view);
+
+        final JMenu appearance = new JMenu("Appearance");
+        final ButtonGroup themes = new ButtonGroup();
+        for (Theme theme : Theme.values()) {
+            final JRadioButtonMenuItem item =
+                    new JRadioButtonMenuItem(theme.displayName(), theme == Themes.current());
+            item.addActionListener(e -> {
+                Themes.apply(theme);
+                // Saved now rather than on close: someone who switches theme and
+                // then kills the window has still expressed a preference.
+                preferences.setTheme(theme);
+                preferences.save();
+                setStatus(theme.displayName() + " theme");
+            });
+            themes.add(item);
+            appearance.add(item);
+        }
+        bar.add(appearance);
 
         final JMenu help = new JMenu("Help");
         final JMenuItem about = new JMenuItem("About");
@@ -363,6 +458,8 @@ public final class MainWindow extends JFrame {
         preferences.setArea(typed != null ? typed : area);
         if (selection != null) preferences.setSelection(selection);
         preferences.setRenderSpec(renderSpec);
+        preferences.setUiLayout(currentLayout());
+        preferences.setTheme(Themes.current());
         preferences.save();
     }
 
@@ -442,6 +539,12 @@ public final class MainWindow extends JFrame {
 
     /** Shows the window on the EDT. */
     public static void launch() {
-        SwingUtilities.invokeLater(() -> new MainWindow().setVisible(true));
+        SwingUtilities.invokeLater(() -> {
+            // Before the first component exists. A look and feel installed after
+            // the window is built themes only what is created afterwards, which
+            // shows up as a correctly themed dialog over a Metal window.
+            Themes.install(new Preferences().theme());
+            new MainWindow().setVisible(true);
+        });
     }
 }

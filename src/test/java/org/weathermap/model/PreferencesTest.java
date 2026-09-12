@@ -58,4 +58,31 @@ class PreferencesTest {
         assertEquals(GribModel.GFS_0P50, prefs.selection().model());
         assertEquals(java.util.List.of(0, 12), prefs.selection().forecastHours());
     }
+
+    @Test
+    void themeAndWindowLayoutSurviveARestart() throws Exception {
+        final java.nio.file.Path file = java.nio.file.Files.createTempFile("weathermap", ".properties");
+        try {
+            final Preferences saved = new Preferences(file);
+            saved.setTheme(Theme.DARK);
+            saved.setUiLayout(new UiLayout(10, 20, 1500, 950, 1100, 300));
+            saved.save();
+
+            final Preferences reopened = new Preferences(file);
+            assertEquals(Theme.DARK, reopened.theme());
+            assertEquals(new UiLayout(10, 20, 1500, 950, 1100, 300), reopened.uiLayout());
+        }
+        finally {
+            java.nio.file.Files.deleteIfExists(file);
+        }
+    }
+
+    /** A file written before these keys existed still opens a window. */
+    @Test
+    void anOlderPreferencesFileHasSensibleDefaults() {
+        final Preferences fresh = new Preferences(
+                java.nio.file.Path.of("/nonexistent/weathermap.properties"));
+        assertEquals(Theme.LIGHT, fresh.theme());
+        assertEquals(UiLayout.DEFAULT, fresh.uiLayout());
+    }
 }

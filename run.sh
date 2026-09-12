@@ -12,7 +12,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-JAR="target/weathermap-0.1.0-SNAPSHOT.jar"
+# The assembly, not the plain jar: FlatLaf lives inside it, and the plain jar
+# would open unthemed. The CLI runs from either.
+JAR="target/weathermap-0.1.0-SNAPSHOT-jar-with-dependencies.jar"
 MVNW="./mvnw"
 
 rebuild=0

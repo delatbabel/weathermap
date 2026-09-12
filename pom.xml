@@ -28,13 +28,23 @@
     </properties>
 
     <!--
-      No required runtime dependencies. Everything the application needs is in
+      One runtime dependency, and only the window uses it. Everything else is in
       the JDK: Swing and Java2D for the UI and the compositor, java.net.http for
       the downloads, javax.xml.stream for the OSM XML, and ImageIO for the PNG.
-      This is deliberate - it keeps the build offline-capable and the jar small.
-      JUnit is test-scoped and never ships.
+
+      FlatLaf is a Swing look and feel, about a megabyte, with light and dark
+      themes that can be swapped while the application is running. The
+      command-line tool never loads it - it never creates a window - and the
+      desktop application falls back to the platform look and feel if the class
+      is not on the classpath, so the plain jar still runs. JUnit is test-scoped
+      and never ships.
     -->
     <dependencies>
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.7.2</version>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
