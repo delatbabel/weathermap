@@ -311,6 +311,12 @@ public final class MainWindow extends JFrame {
         view.add(mercator);
         bar.add(view);
 
+        final JMenu chart = new JMenu("Chart");
+        final JMenuItem timeZone = new JMenuItem("Time zone…");
+        timeZone.addActionListener(e -> chooseTimeZone());
+        chart.add(timeZone);
+        bar.add(chart);
+
         final JMenu appearance = new JMenu("Appearance");
         final ButtonGroup themes = new ButtonGroup();
         for (Theme theme : Theme.values()) {
@@ -446,6 +452,50 @@ public final class MainWindow extends JFrame {
         setStatus(added.isEmpty() ? "No level could be added automatically"
                                   : "Added " + names + " to the selection");
         return true;
+    }
+
+    /**
+     * Chooses the zone the chart's times are written in.
+     *
+     * <p>Editable, because the list has six hundred entries and typing
+     * "Asia/Ban" finds one faster than scrolling ever will. Whatever is typed is
+     * checked before it is accepted: an unknown zone would otherwise be stored,
+     * fail to parse on the next run, and silently revert - which looks like the
+     * setting not working rather than the name being wrong.</p>
+     */
+    private void chooseTimeZone() {
+        final List<String> ids = new java.util.ArrayList<>(java.time.ZoneId.getAvailableZoneIds());
+        java.util.Collections.sort(ids);
+
+        final javax.swing.JComboBox<String> box =
+                new javax.swing.JComboBox<>(ids.toArray(new String[0]));
+        box.setEditable(true);
+        box.setSelectedItem(renderSpec.zone().getId());
+
+        final Object[] message = {
+            "Times on the chart are written in this zone.",
+            "The system default is " + java.time.ZoneId.systemDefault().getId() + ".",
+            " ",
+            box
+        };
+        final int choice = JOptionPane.showConfirmDialog(
+                this, message, "Chart time zone",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (choice != JOptionPane.OK_OPTION) return;
+
+        final String id = String.valueOf(box.getSelectedItem()).trim();
+        try {
+            renderSpec.setZone(java.time.ZoneId.of(id));
+            savePreferences();
+            setStatus("Chart times in " + renderSpec.zone().getId()
+                    + " - re-download to see it");
+        }
+        catch (java.time.DateTimeException e) {
+            JOptionPane.showMessageDialog(this,
+                    "\"" + id + "\" is not a time zone this machine knows.\n\n"
+                    + "Use an IANA identifier such as Asia/Bangkok, Europe/London or UTC.",
+                    "Unknown time zone", JOptionPane.WARNING_MESSAGE);
+        }
     }
 
     private void savePreferences() {

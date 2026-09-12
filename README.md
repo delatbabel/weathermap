@@ -352,6 +352,33 @@ read as more of the base map, and the barbs are near-black and have to stay the
 most prominent thing. Brown is what is left, and it is also what paper charts
 use.
 
+### Chart times
+
+Two labels, top right and much larger than the title: **VALID AT**, the instant
+the forecast describes, and **CHART CREATED**, when the PNG was rendered. They
+are what a chart gets checked against — whether this is the forecast for
+tomorrow's crossing, and whether it was made before or after the last model run.
+A chart whose age is not obvious gets trusted long after it should have been
+thrown away.
+
+The valid time used to sit in the title line, small and always in UTC. It does
+not any more: having it in two places in two zones is two answers to one
+question.
+
+Times are written in the zone set by `--timezone` or **Chart → Time zone…**,
+defaulting to the machine's own — "valid 06:00 UTC" makes someone in Bangkok do
+arithmetic before they can tell whether it is this afternoon. The zone changes
+how an instant is written down, never which instant it is.
+
+The label is always an offset — `GMT+7`, `GMT+5:30`, or `UTC` at zero — and
+never an abbreviation. The abbreviations are not unique and not international:
+BST is both British Summer Time and Bangladesh Standard Time, IST is India,
+Ireland and Israel. The offset is resolved at each instant rather than once per
+chart, so the two labels differ correctly across a clock change.
+
+**File names stay UTC**, so a directory of charts sorts chronologically no
+matter who generated it or where they were.
+
 ## Optional NetCDF-Java
 
 ```bash

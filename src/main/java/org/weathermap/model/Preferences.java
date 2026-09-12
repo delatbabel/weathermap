@@ -48,6 +48,7 @@ public final class Preferences {
     private static final String KEY_MAX_HEIGHT = "render.maxHeight";
     private static final String KEY_MERCATOR = "render.mercator";
     private static final String KEY_GRIB_OPACITY = "render.gribOpacity";
+    private static final String KEY_TIME_ZONE = "render.timeZone";
     /**
      * Versioned, because the stored value is a list of <em>enabled</em> layers
      * and a layer added later is absent from every file written before it
@@ -232,6 +233,7 @@ public final class Preferences {
             LOG.log(Level.WARNING, "Ignoring stored output size", e);
         }
         spec.setMercator(Boolean.parseBoolean(props.getProperty(KEY_MERCATOR, "false")));
+        spec.setZone(zone());
         try {
             spec.setGribOpacity(Float.parseFloat(props.getProperty(KEY_GRIB_OPACITY, "0.65")));
         }
@@ -263,6 +265,7 @@ public final class Preferences {
         props.setProperty(KEY_MAX_WIDTH, String.valueOf(spec.maxWidth()));
         props.setProperty(KEY_MAX_HEIGHT, String.valueOf(spec.maxHeight()));
         props.setProperty(KEY_MERCATOR, String.valueOf(spec.mercator()));
+        props.setProperty(KEY_TIME_ZONE, spec.zone().getId());
         props.setProperty(KEY_GRIB_OPACITY, String.valueOf(spec.gribOpacity()));
         props.setProperty(KEY_LAYERS, join(spec.layers().stream().map(Enum::name).toList()));
     }
@@ -270,6 +273,26 @@ public final class Preferences {
     // ---- output ---------------------------------------------------------
 
     /** Where composited PNGs are written. Defaults to {@code ~/.weathermap/maps}. */
+    /**
+     * The stored zone for chart times, or the machine's own.
+     *
+     * <p>An unknown zone falls back rather than failing: the tz database changes,
+     * and a preferences file copied from another machine can name a zone this
+     * one has never heard of. A chart with the wrong offset on it is a much
+     * smaller problem than an application that will not start.</p>
+     */
+    public java.time.ZoneId zone() {
+        final String id = props.getProperty(KEY_TIME_ZONE);
+        if (id == null || id.isBlank()) return java.time.ZoneId.systemDefault();
+        try {
+            return java.time.ZoneId.of(id.trim());
+        }
+        catch (java.time.DateTimeException e) {
+            LOG.warning("Unknown time zone " + id + "; using the system default");
+            return java.time.ZoneId.systemDefault();
+        }
+    }
+
     // ---- desktop appearance ---------------------------------------------
     //
     // Written by the window and never read by the command-line tool, but stored

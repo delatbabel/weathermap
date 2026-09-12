@@ -54,6 +54,8 @@ public final class WeatherMapCli {
               --size WxH            maximum output size (default 1600x1200)
               --opacity 0..1        how strongly the field covers the base map
               --mercator            use Mercator instead of equirectangular
+              --timezone ZONE       write chart times in this zone, e.g.
+                                    Asia/Bangkok or UTC (default: this machine's)
               --config FILE         a preferences file other than the default
               --save                store the overrides as the new defaults
               --dry-run             report what would be fetched, fetch nothing
@@ -179,6 +181,7 @@ public final class WeatherMapCli {
         if (options.width > 0 && options.height > 0) spec.setMaxSize(options.width, options.height);
         if (options.opacity >= 0) spec.setGribOpacity(options.opacity);
         if (options.mercator) spec.setMercator(true);
+        if (options.zone != null) spec.setZone(options.zone);
         return spec;
     }
 
@@ -197,6 +200,7 @@ public final class WeatherMapCli {
         int height = -1;
         float opacity = -1;
         boolean mercator;
+        java.time.ZoneId zone;
         boolean save;
         boolean dryRun;
         boolean quiet;
@@ -210,6 +214,17 @@ public final class WeatherMapCli {
                     case "--cli" -> { }                       // consumed by Main
                     case "--help", "-h" -> o.help = true;
                     case "--mercator" -> o.mercator = true;
+                    case "--timezone", "--tz" -> {
+                        final String id = next(args, ++i, a);
+                        try {
+                            o.zone = java.time.ZoneId.of(id);
+                        }
+                        catch (java.time.DateTimeException e) {
+                            throw new IllegalArgumentException(
+                                    "unknown time zone: " + id + " - use an IANA id "
+                                    + "such as Asia/Bangkok, Europe/London or UTC");
+                        }
+                    }
                     case "--save" -> o.save = true;
                     case "--dry-run" -> o.dryRun = true;
                     case "--quiet", "-q" -> o.quiet = true;

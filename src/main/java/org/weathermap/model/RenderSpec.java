@@ -1,5 +1,6 @@
 package org.weathermap.model;
 
+import java.time.ZoneId;
 import java.util.EnumSet;
 import java.util.Set;
 
@@ -41,6 +42,21 @@ public final class RenderSpec {
         ANNOTATION
     }
 
+    /**
+     * The zone the chart's times are written in.
+     *
+     * <p>Defaults to the machine's own, because the times on a chart are read by
+     * whoever is standing in front of it, and "valid 06:00 UTC" makes someone in
+     * Bangkok do arithmetic before they can tell whether it is this afternoon.
+     * The forecast itself is unaffected: this changes how an instant is written
+     * down, never which instant it is.</p>
+     *
+     * <p>Deliberately not applied to file names, which stay UTC so that a
+     * directory of charts sorts chronologically no matter who generated it or
+     * where they were.</p>
+     */
+    private ZoneId zone = ZoneId.systemDefault();
+
     private int maxWidth = 1600;
     private int maxHeight = 1200;
     private boolean mercator = false;
@@ -50,6 +66,12 @@ public final class RenderSpec {
             LayerKind.LAND_SEA, LayerKind.GRIB, LayerKind.COASTLINE, LayerKind.BOUNDARIES,
             LayerKind.PLACE_LABELS, LayerKind.ISOBARS, LayerKind.WIND_BARBS,
             LayerKind.ANNOTATION);
+
+    public ZoneId zone() { return zone; }
+
+    public void setZone(ZoneId zone) {
+        this.zone = (zone == null) ? ZoneId.systemDefault() : zone;
+    }
 
     public int maxWidth() { return maxWidth; }
 

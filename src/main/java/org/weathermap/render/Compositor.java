@@ -177,7 +177,8 @@ public final class Compositor {
         final boolean hasWind = uGrid != null && vGrid != null;
         layers.add(new AnnotationLayer(primaryGrid, primaryRamp, modelName, hasWind,
                                        validTimeOf(fields), attributionsFor(features),
-                                       isolines.isEmpty() ? null : isolines.get(0)));
+                                       isolines.isEmpty() ? null : isolines.get(0),
+                                       java.time.Instant.now(), spec.zone()));
         return layers;
     }
 

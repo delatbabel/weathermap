@@ -129,4 +129,43 @@ class PreferencesTest {
             java.nio.file.Files.deleteIfExists(file);
         }
     }
+
+    @Test
+    void theChartTimeZoneSurvivesARestart() throws Exception {
+        final java.nio.file.Path file = java.nio.file.Files.createTempFile("weathermap", ".properties");
+        try {
+            final Preferences saved = new Preferences(file);
+            final RenderSpec spec = saved.renderSpec();
+            spec.setZone(java.time.ZoneId.of("Asia/Bangkok"));
+            saved.setRenderSpec(spec);
+            saved.save();
+
+            assertEquals(java.time.ZoneId.of("Asia/Bangkok"), new Preferences(file).zone());
+        }
+        finally {
+            java.nio.file.Files.deleteIfExists(file);
+        }
+    }
+
+    /**
+     * The tz database changes and preferences files get copied between machines,
+     * so a zone this machine has never heard of must not stop the application.
+     */
+    @Test
+    void anUnknownTimeZoneFallsBackToTheSystemOne() throws Exception {
+        final java.nio.file.Path file = java.nio.file.Files.createTempFile("weathermap", ".properties");
+        try {
+            java.nio.file.Files.writeString(file, "render.timeZone=Mars/Olympus\n");
+            assertEquals(java.time.ZoneId.systemDefault(), new Preferences(file).zone());
+        }
+        finally {
+            java.nio.file.Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void noStoredZoneMeansTheSystemOne() {
+        assertEquals(java.time.ZoneId.systemDefault(),
+                     new Preferences(java.nio.file.Path.of("/nonexistent/x.properties")).zone());
+    }
 }
