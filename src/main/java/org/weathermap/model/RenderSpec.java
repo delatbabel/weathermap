@@ -33,6 +33,8 @@ public final class RenderSpec {
         BOUNDARIES,
         /** City, town and village labels with their dots. */
         PLACE_LABELS,
+        /** Isobars and other isolines, drawn over the base map. */
+        ISOBARS,
         /** Wind barbs. The top layer, and the point of the map. */
         WIND_BARBS,
         /** Colour-ramp legend, model name and valid time. */
@@ -46,7 +48,8 @@ public final class RenderSpec {
     private boolean autoScaleRamp = true;
     private final Set<LayerKind> layers = EnumSet.of(
             LayerKind.LAND_SEA, LayerKind.GRIB, LayerKind.COASTLINE, LayerKind.BOUNDARIES,
-            LayerKind.PLACE_LABELS, LayerKind.WIND_BARBS, LayerKind.ANNOTATION);
+            LayerKind.PLACE_LABELS, LayerKind.ISOBARS, LayerKind.WIND_BARBS,
+            LayerKind.ANNOTATION);
 
     public int maxWidth() { return maxWidth; }
 

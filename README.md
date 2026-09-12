@@ -284,6 +284,31 @@ the equator — decided per station, so a chart spanning it is right on both sid
 Wind is one selectable variable that fetches `UGRD` and `VGRD` together;
 selecting a single component would download data that cannot be drawn.
 
+### Isobars
+
+Pressure is drawn as isolines rather than as a colour wash, because a wash of
+pressure is a meaningless pastel gradient while the lines are what a synoptic
+chart is read by: their *spacing* is the pressure gradient, so tight lines mean
+strong wind whether or not a barb happens to have been drawn there.
+
+Marching squares over a lattice sampled every 4 output pixels — finer would
+trace interpolation artefacts rather than weather, since the field underneath is
+a 0.25° grid. Both ambiguous saddle cases are resolved against the cell centre;
+getting that wrong joins two systems that are not connected.
+
+The interval is 4 hPa, which is the marine and synoptic convention, so the
+spacing means the same thing here as on a chart from anywhere else. Every fifth
+line — each 20 hPa — is drawn heavier, and the interval is written in the title,
+because a reader cannot judge a gradient without knowing what one gap is worth.
+Labels lie along their own contour, kept upright, spaced so a short closed
+contour gets one and a long one gets several.
+
+The colour is a warm dark brown, chosen against what is already on the map: the
+coastline is dark blue and the boundaries a dusty purple, so a cool colour would
+read as more of the base map, and the barbs are near-black and have to stay the
+most prominent thing. Brown is what is left, and it is also what paper charts
+use.
+
 ## Optional NetCDF-Java
 
 ```bash
@@ -309,7 +334,6 @@ Ordered by how much they matter.
 |---|---|---|
 | Barb station spacing is a fixed pixel grid | `WindBarbLayer` | Never finer than the data, but it does not thin toward the poles under Mercator, where stations crowd together in latitude. |
 | Land/sea fill is flat | `VectorLayers.LandSeaLayer` | Deriving land needs the OSM convention that land is left of a coastline way, plus stitching open segments into closed rings against the box edges. Today the coastline stroke does the work, which reads correctly for a coastal box and wrongly for an inland one. |
-| Isolines | `GribLayer.drawContours` | Marching squares plus contour-interval selection and label placement. This is what makes a synoptic chart look like one. |
 | `NetcdfGribReader` | `grib/netcdf/` | Stub. |
 | Accumulated fields are labelled with the start of their period | `Grib2Scanner.validTime` | Product template 4.8 stores the interval end further into the template; an `APCP` message for f006 still reports 00Z. `Compositor.validTimeOf` works around it for the chart caption by taking the latest time across the fields, but the `Grid` itself is still wrong. |
 | Overpass queries are not tiled | `OverpassClient` | A very large box exceeds the server limit. Splitting needs coastline segments stitched across tile seams. |
@@ -317,6 +341,8 @@ Ordered by how much they matter.
 | Antimeridian | `BoundingBox` | Refused rather than split. Supporting it means two boxes and compositing the halves. |
 | Download progress is end-only | `Http.download` | `BodyHandlers.ofFile` gives no intermediate callbacks; needs a counting `BodySubscriber`. |
 | Variable/level availability is only partly validated | `GribCatalog.STANDARD_LEVELS` | The common levels are known and an impossible pair is now repaired by the CLI and queried by the UI, but the full set is only discoverable from each model's filter form, so an unknown pairing is still allowed through and fails at download time. |
+| Isoline segments are not stitched into paths | `IsolineLayer` | Marching squares emits unordered segments, which draw correctly and label adequately. Stitching would buy smoothing and a gap in the line under each label. |
+| No pressure centres | `IsolineLayer` | Isobars are drawn but the H and L that a reader looks for first are not marked; needs local extrema of the smoothed field. |
 | A marine label point can land on land | `tools/make-gazetteer.py` | The centroid-then-chord rule holds for convex and crescent shapes; a many-armed one such as "Inner Seas off the West Coast of Scotland" can still put its name over an island. A pole of inaccessibility would fix it. |
 | Cache eviction is never called | `Cache.evictTo` | Implemented but unwired; needs a configured budget. |
 | Elevation | — | Left out by decision. OSM has `ele` tags on peaks but no terrain model; shaded relief needs SRTM or Copernicus DEM as a separate source. |

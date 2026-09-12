@@ -7,6 +7,7 @@ import org.weathermap.grib.Grid;
 import org.weathermap.grib.NomadsClient;
 import org.weathermap.model.BoundingBox;
 import org.weathermap.model.GribSelection;
+import org.weathermap.model.GribVariable;
 import org.weathermap.model.RenderSpec;
 import org.weathermap.osm.Feature;
 import org.weathermap.osm.FeatureKind;
@@ -21,6 +22,9 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Locale;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -110,6 +114,8 @@ public final class MapService {
                 continue;
             }
 
+            reportMissingFields(selection, grids, forecastHour, p);
+
             final BufferedImage image =
                     compositor.render(bbox, features, grids, selection.model().displayName());
 
@@ -125,6 +131,39 @@ public final class MapService {
             results.add(new Result(image, primary, png));
         }
         return results;
+    }
+
+    /**
+     * Says so when a variable that was asked for is not in what came back.
+     *
+     * <p>A field that is simply absent renders as nothing at all, which is
+     * indistinguishable from a field that is present and flat - so a chart
+     * missing its precipitation looks like a chart of a dry day. The commonest
+     * cause is not an error: accumulated precipitation does not exist at
+     * forecast hour 0, because nothing has accumulated yet, and asking for it
+     * there is a reasonable thing to do once.</p>
+     */
+    private void reportMissingFields(GribSelection selection, List<Grid> grids,
+                                     int forecastHour, Progress p) {
+        final Set<String> decoded = new HashSet<>();
+        for (Grid grid : grids) decoded.add(grid.variable().code());
+
+        final List<String> missing = new ArrayList<>();
+        for (GribVariable variable : selection.variables()) {
+            if (decoded.contains(variable.code())) continue;
+            if (variable.pairedCode() != null && decoded.contains(variable.pairedCode())) continue;
+            missing.add(variable.displayName());
+        }
+        if (missing.isEmpty()) return;
+
+        final String names = String.join(", ", missing);
+        final String because = (forecastHour == 0 && missing.stream()
+                .anyMatch(m -> m.toLowerCase(Locale.ROOT).contains("precipitation")))
+                ? " - accumulated fields do not exist at forecast hour 0; ask for 3 or more"
+                : " - not published for this model, level or hour";
+
+        LOG.warning("f" + forecastHour + ": no data for " + names + because);
+        p.stage("No data for " + names + because);
     }
 
     /**

@@ -47,20 +47,21 @@ public final class GribLayer implements Layer {
 
     public ColourRamp ramp() { return ramp; }
 
+    /**
+     * Paints the wash.
+     *
+     * <p>Only the wash. This class once dispatched on
+     * {@link GribVariable.RenderStyle} and carried empty methods for the other
+     * two, which meant a variable styled as lines or as vectors was given a
+     * layer that drew nothing at all - pressure was silently absent from every
+     * chart that asked for it. Those styles now have layers of their own,
+     * {@link IsolineLayer} and {@link WindBarbLayer}, and {@link Compositor}
+     * decides which a field gets. A field that is not washed does not get this
+     * one.</p>
+     */
     @Override
     public void draw(Graphics2D g, MapProjection projection) {
-        final GribVariable.RenderStyle style = grid.variable().style();
-        if (style == GribVariable.RenderStyle.FILLED_CONTOUR
-                || style == GribVariable.RenderStyle.FILLED_AND_LINES) {
-            drawFilled(g, projection);
-        }
-        if (style == GribVariable.RenderStyle.CONTOUR_LINES
-                || style == GribVariable.RenderStyle.FILLED_AND_LINES) {
-            drawContours(g, projection);
-        }
-        if (style == GribVariable.RenderStyle.VECTOR) {
-            drawBarbs(g, projection);
-        }
+        drawFilled(g, projection);
     }
 
     private void drawFilled(Graphics2D g, MapProjection projection) {
@@ -81,32 +82,6 @@ public final class GribLayer implements Layer {
         g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, opacity));
         g.drawImage(field, 0, 0, null);
         g.setComposite(saved);
-    }
-
-    /**
-     * Isolines, for pressure and geopotential height.
-     *
-     * <p>TODO: implement marching squares over the sampled field, then label the
-     * contours along their paths. This is the piece that makes a synoptic chart
-     * look like one, and it is not hard - a 16-case lookup over each cell - but
-     * it needs contour interval selection (whole hectopascals for MSLP, 60 gpm
-     * at 500 mb) and label placement to be worth drawing.</p>
-     */
-    private void drawContours(Graphics2D g, MapProjection projection) {
-        // Intentionally empty until marching squares exists.
-    }
-
-    /**
-     * Wind barbs or arrows.
-     *
-     * <p>TODO: this needs the <em>paired</em> u and v components, which one
-     * {@link Grid} does not carry - so the constructor has to take two grids for
-     * this style, or {@link Compositor} has to pair them before building the
-     * layer. Pairing in the compositor is the better seam: it already knows the
-     * whole set of grids for one forecast hour.</p>
-     */
-    private void drawBarbs(Graphics2D g, MapProjection projection) {
-        // Intentionally empty until u/v pairing exists.
     }
 
     @Override

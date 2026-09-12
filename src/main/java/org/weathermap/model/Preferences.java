@@ -55,7 +55,24 @@ public final class Preferences {
      * barbs arriving that way would be invisible with no clue as to why.
      * Bumping the key retires the old list and takes the new defaults.
      */
-    private static final String KEY_LAYERS = "render.layers.v2";
+    private static final String KEY_LAYERS = "render.layers.v3";
+
+    /**
+     * The previous layer key, still read when the current one is absent.
+     *
+     * <p>The list is stored as the layers that are <em>on</em>, so a kind added
+     * to the enum later is absent from every file written before it existed and
+     * would be read back as "the user turned this off" - silently disabling a
+     * new feature for exactly the people who have used the application before.
+     * Bumping the key means an older file is upgraded instead: its choices are
+     * kept and anything it could not have known about takes its default.</p>
+     */
+    private static final String KEY_LAYERS_V2 = "render.layers.v2";
+
+    /** The layer kinds that existed when {@link #KEY_LAYERS_V2} was current. */
+    private static final List<String> KNOWN_IN_V2 = List.of(
+            "LAND_SEA", "GRIB", "GRATICULE", "COASTLINE", "BOUNDARIES",
+            "PLACE_LABELS", "WIND_BARBS", "ANNOTATION");
 
     private static final String KEY_THEME = "ui.theme";
 
@@ -225,6 +242,18 @@ public final class Preferences {
         if (!stored.isEmpty()) {
             for (RenderSpec.LayerKind kind : RenderSpec.LayerKind.values()) {
                 spec.setEnabled(kind, stored.contains(kind.name()));
+            }
+            return spec;
+        }
+
+        final List<String> older = csv(KEY_LAYERS_V2);
+        if (!older.isEmpty()) {
+            for (RenderSpec.LayerKind kind : RenderSpec.LayerKind.values()) {
+                // Anything the older file had an opinion about is honoured; a
+                // kind it predates keeps the default it was constructed with.
+                if (KNOWN_IN_V2.contains(kind.name())) {
+                    spec.setEnabled(kind, older.contains(kind.name()));
+                }
             }
         }
         return spec;

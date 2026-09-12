@@ -42,6 +42,9 @@ public final class AnnotationLayer implements Layer {
     private final java.time.Instant validTime;
     private final List<String> attributions;
 
+    /** One of the isoline layers, for the caption; null when none are drawn. */
+    private final IsolineLayer isolines;
+
     public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName) {
         this(grid, ramp, modelName, false);
     }
@@ -70,12 +73,23 @@ public final class AnnotationLayer implements Layer {
      */
     public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName, boolean hasWind,
                            java.time.Instant validTime, List<String> attributions) {
+        this(grid, ramp, modelName, hasWind, validTime, attributions, null);
+    }
+
+    /**
+     * @param isolines one of the isoline layers, so the caption can give the
+     *                 contour interval; {@code null} when none are drawn
+     */
+    public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName, boolean hasWind,
+                           java.time.Instant validTime, List<String> attributions,
+                           IsolineLayer isolines) {
         this.grid = grid;
         this.ramp = ramp;
         this.modelName = modelName;
         this.hasWind = hasWind;
         this.validTime = validTime;
         this.attributions = List.copyOf(attributions);
+        this.isolines = isolines;
     }
 
     @Override
@@ -84,7 +98,10 @@ public final class AnnotationLayer implements Layer {
         final int h = projection.imageHeight();
 
         drawTitle(g, w);
-        if (grid != null && ramp != null && !FieldStyle.isVectorComponent(grid.variable())) {
+        // A legend explains a colour ramp, so it is drawn only when something
+        // was painted with one. A chart of wind and pressure has no wash on it
+        // and used to carry a legend for a ramp nothing was drawn in.
+        if (grid != null && ramp != null && Compositor.isFilled(grid.variable().style())) {
             drawLegend(g, w, h);
         }
         drawAttribution(g, w, h);
@@ -99,7 +116,18 @@ public final class AnnotationLayer implements Layer {
             subject.append(grid.variable().displayName())
                    .append(" @ ").append(grid.level().displayName());
         }
-        final String line = modelName + "  ·  " + subject
+        // The contour interval belongs on the chart, not in the documentation.
+        // Isobar spacing is read as a gradient, and a reader cannot do that
+        // without knowing what one gap is worth.
+        if (isolines != null && isolines.grid() != grid) {
+            subject.append(" + ").append(isolines.grid().variable().displayName());
+        }
+        final String isobarNote = isolines == null ? ""
+                : String.format("  ·  %s every %s %s",
+                        isolines.grid().variable().displayName().toLowerCase(java.util.Locale.ROOT)
+                                .contains("pressure") ? "isobars" : "contours",
+                        trim(isolines.labelledInterval()), isolines.labelUnit());
+        final String line = modelName + "  ·  " + subject + isobarNote
                 + (validTime == null ? "" : "  ·  valid " + VALID_TIME.format(validTime));
         g.setFont(g.getFont().deriveFont(Font.BOLD, 13f));
         final FontMetrics fm = g.getFontMetrics();
@@ -148,6 +176,12 @@ public final class AnnotationLayer implements Layer {
         final String hiLabel = fmt(hi);
         g.drawString(hiLabel, x + barWidth - fm.stringWidth(hiLabel), y + barHeight + fm.getAscent() + 2);
         g.drawString(ramp.name(), x, y - 3);
+    }
+
+    private static String trim(double value) {
+        return Math.abs(value - Math.rint(value)) < 0.05
+                ? String.valueOf(Math.round(value))
+                : String.format("%.1f", value);
     }
 
     private void drawAttribution(Graphics2D g, int width, int height) {

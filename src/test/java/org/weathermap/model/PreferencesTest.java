@@ -85,4 +85,48 @@ class PreferencesTest {
         assertEquals(Theme.LIGHT, fresh.theme());
         assertEquals(UiLayout.DEFAULT, fresh.uiLayout());
     }
+
+    /**
+     * The layer list is stored as the layers that are on, so a kind added later
+     * is missing from every file written before it existed. Read literally that
+     * says "the user turned this off", which would have silently denied isobars
+     * to exactly the people who had used the application before.
+     */
+    @Test
+    void aLayerAddedAfterTheFileWasWrittenIsOnNotOff() throws Exception {
+        final java.nio.file.Path file = java.nio.file.Files.createTempFile("weathermap", ".properties");
+        try {
+            java.nio.file.Files.writeString(file,
+                    "render.layers.v2=LAND_SEA,GRIB,COASTLINE,PLACE_LABELS,WIND_BARBS,ANNOTATION\n");
+
+            final RenderSpec spec = new Preferences(file).renderSpec();
+
+            // Not in the old list because it did not exist: keeps its default.
+            assertTrue(spec.isEnabled(RenderSpec.LayerKind.ISOBARS));
+            // In the old list: honoured.
+            assertTrue(spec.isEnabled(RenderSpec.LayerKind.COASTLINE));
+            // Known then and deliberately left out: still off.
+            assertFalse(spec.isEnabled(RenderSpec.LayerKind.BOUNDARIES));
+            assertFalse(spec.isEnabled(RenderSpec.LayerKind.GRATICULE));
+        }
+        finally {
+            java.nio.file.Files.deleteIfExists(file);
+        }
+    }
+
+    @Test
+    void theCurrentLayerListIsTakenLiterally() throws Exception {
+        final java.nio.file.Path file = java.nio.file.Files.createTempFile("weathermap", ".properties");
+        try {
+            java.nio.file.Files.writeString(file, "render.layers.v3=COASTLINE\n");
+
+            final RenderSpec spec = new Preferences(file).renderSpec();
+            assertTrue(spec.isEnabled(RenderSpec.LayerKind.COASTLINE));
+            assertFalse(spec.isEnabled(RenderSpec.LayerKind.ISOBARS),
+                        "a v3 file that omits it means the user turned it off");
+        }
+        finally {
+            java.nio.file.Files.deleteIfExists(file);
+        }
+    }
 }

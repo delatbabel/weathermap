@@ -111,12 +111,14 @@ public final class Compositor {
         // coastline rather than assuming land. See VectorLayers.LandSeaLayer.
         layers.add(new VectorLayers.LandSeaLayer(true));
 
-        final Grid primaryGrid = primaryOf(grids);
+        final List<Grid> fields = distinct(grids);
+        final Grid primaryGrid = primaryOf(fields);
+        final List<IsolineLayer> isolines = new ArrayList<>();
         ColourRamp primaryRamp = null;
         Grid uGrid = null;
         Grid vGrid = null;
 
-        for (Grid grid : grids) {
+        for (Grid grid : fields) {
             final String code = grid.variable().code();
             // Wind is held back: its two components are not fields to be washed
             // over the map but one vector to be drawn on top of it.
@@ -129,10 +131,18 @@ public final class Compositor {
                 continue;
             }
 
-            final FieldStyle style = FieldStyle.forGrid(grid, spec.autoScaleRamp());
-            layers.add(new GribLayer(grid, style.ramp(),
-                                     style.opacity() * spec.gribOpacity()));
-            if (grid == primaryGrid) primaryRamp = style.ramp();
+            // A field is a wash, a set of lines, or both - the variable says
+            // which. Pressure is the reason: painted as a wash it is a
+            // meaningless pastel gradient, and drawn as isobars it is the thing
+            // the chart is read by.
+            final org.weathermap.model.GribVariable.RenderStyle drawn = grid.variable().style();
+            if (isFilled(drawn)) {
+                final FieldStyle style = FieldStyle.forGrid(grid, spec.autoScaleRamp());
+                layers.add(new GribLayer(grid, style.ramp(),
+                                         style.opacity() * spec.gribOpacity()));
+                if (grid == primaryGrid) primaryRamp = style.ramp();
+            }
+            if (isContoured(drawn)) isolines.add(new IsolineLayer(grid));
         }
 
         // --- middle: the base map, over the fields --------------------------
@@ -140,6 +150,15 @@ public final class Compositor {
         layers.add(new VectorLayers.CoastlineLayer(features, 1.4f));
         layers.add(new VectorLayers.BoundaryLayer(features, 2));
         layers.add(new VectorLayers.PlaceLabelLayer(features));
+
+        // --- isolines, over the base map -------------------------------------
+        //
+        // Above the coastline because that is where a chart puts them: an
+        // isobar crossing a coast is normal and reads correctly, while a
+        // coastline drawn over the pressure field breaks the one line whose
+        // continuity carries the meaning. Still below the barbs, which stay the
+        // top layer.
+        layers.addAll(isolines);
 
         // --- top: the wind ---------------------------------------------------
         if (uGrid != null && vGrid != null) {
@@ -157,7 +176,8 @@ public final class Compositor {
         // with an opaque backing and does not compete with the barbs.
         final boolean hasWind = uGrid != null && vGrid != null;
         layers.add(new AnnotationLayer(primaryGrid, primaryRamp, modelName, hasWind,
-                                       validTimeOf(grids), attributionsFor(features)));
+                                       validTimeOf(fields), attributionsFor(features),
+                                       isolines.isEmpty() ? null : isolines.get(0)));
         return layers;
     }
 
@@ -202,10 +222,49 @@ public final class Compositor {
      * only becomes the primary when nothing else was decoded.</p>
      */
     public static Grid primaryOf(List<Grid> grids) {
+        // A washed field first, because the legend describes a colour ramp and
+        // there is no ramp to describe for one drawn as lines. Pressure named
+        // the chart and suppressed the precipitation legend at the same time.
+        for (Grid grid : grids) {
+            if (isFilled(grid.variable().style())) return grid;
+        }
         for (Grid grid : grids) {
             if (!FieldStyle.isVectorComponent(grid.variable())) return grid;
         }
         return grids.isEmpty() ? null : grids.get(0);
+    }
+
+    static boolean isFilled(org.weathermap.model.GribVariable.RenderStyle style) {
+        return style == org.weathermap.model.GribVariable.RenderStyle.FILLED_CONTOUR
+                || style == org.weathermap.model.GribVariable.RenderStyle.FILLED_AND_LINES;
+    }
+
+    static boolean isContoured(org.weathermap.model.GribVariable.RenderStyle style) {
+        return style == org.weathermap.model.GribVariable.RenderStyle.CONTOUR_LINES
+                || style == org.weathermap.model.GribVariable.RenderStyle.FILLED_AND_LINES;
+    }
+
+    /**
+     * Drops a field that has already been seen.
+     *
+     * <p>NOMADS returns accumulated precipitation for one forecast hour more
+     * than once - a request for {@code APCP} at f006 comes back with two
+     * records carrying identical values - and drawing a translucent wash twice
+     * composites it twice, so the second copy silently darkens the first. The
+     * duplicate is worth dropping rather than tolerating, because nothing
+     * downstream can tell it apart from a field that is genuinely that
+     * strong.</p>
+     */
+    static List<Grid> distinct(List<Grid> grids) {
+        final List<Grid> out = new ArrayList<>(grids.size());
+        final java.util.Set<String> seen = new java.util.HashSet<>();
+        for (Grid grid : grids) {
+            final String key = grid.variable().code() + "/" + grid.level().code()
+                    + "/" + grid.validTime() + "/" + grid.width() + "x" + grid.height();
+            if (seen.add(key)) out.add(grid);
+            else LOG.fine(() -> "dropping a duplicate " + key);
+        }
+        return out;
     }
 
     /**

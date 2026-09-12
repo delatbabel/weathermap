@@ -69,4 +69,51 @@ class CompositorPrimaryTest {
         assertEquals(Instant.parse("2026-09-12T06:00:00Z"),
                      Compositor.validTimeOf(List.of(u, rain)));
     }
+
+    /**
+     * Pressure is drawn as isobars, not as a wash, so it has no colour ramp for
+     * the legend to describe. It used to be picked as the primary anyway, which
+     * named the chart after it and suppressed the precipitation legend at the
+     * same time.
+     */
+    @Test
+    void aContouredFieldDoesNotOutrankAWashedOneAsTheSubject() {
+        final Grid pressure = grid(GribCatalog.PRESSURE_MSL, GribCatalog.LEVEL_MSL,
+                                   "2026-09-12T06:00:00Z");
+        final Grid rain = grid(GribCatalog.PRECIPITATION, GribCatalog.LEVEL_SURFACE,
+                               "2026-09-12T00:00:00Z");
+
+        assertSame(rain, Compositor.primaryOf(List.of(pressure, rain)));
+        // With nothing washed, it is still the subject - the chart has to be
+        // called something.
+        assertSame(pressure, Compositor.primaryOf(List.of(pressure)));
+    }
+
+    /**
+     * NOMADS returns accumulated precipitation for one forecast hour twice, with
+     * identical values. Drawing a translucent wash twice composites it twice, so
+     * the second copy silently darkens the first.
+     */
+    @Test
+    void anIdenticalFieldIsOnlyDrawnOnce() {
+        final Grid rain = grid(GribCatalog.PRECIPITATION, GribCatalog.LEVEL_SURFACE,
+                               "2026-09-12T00:00:00Z");
+        final Grid again = grid(GribCatalog.PRECIPITATION, GribCatalog.LEVEL_SURFACE,
+                                "2026-09-12T00:00:00Z");
+        final Grid wind = grid(GribCatalog.WIND_U, GribCatalog.LEVEL_10M,
+                               "2026-09-12T06:00:00Z");
+
+        assertEquals(List.of(rain, wind), Compositor.distinct(List.of(rain, again, wind)));
+    }
+
+    /** Two accumulations over different periods are two fields, not a duplicate. */
+    @Test
+    void thatSameFieldAtAnotherTimeIsNotADuplicate() {
+        final Grid six = grid(GribCatalog.PRECIPITATION, GribCatalog.LEVEL_SURFACE,
+                              "2026-09-12T06:00:00Z");
+        final Grid twelve = grid(GribCatalog.PRECIPITATION, GribCatalog.LEVEL_SURFACE,
+                                 "2026-09-12T12:00:00Z");
+
+        assertEquals(2, Compositor.distinct(List.of(six, twelve)).size());
+    }
 }
