@@ -171,10 +171,39 @@ org.weathermap
 └── util/                Http, Cache
 ```
 
-The layer stack, bottom to top: land/sea fill, coastline, boundaries, GRIB
-field, graticule, place labels, annotation. Labels sit **above** the field
-deliberately — a translucent ramp over a city name makes it unreadable, and the
-name is what tells the reader where they are looking.
+The layer stack, bottom to top: land/sea fill, **scalar fields**, graticule,
+coastline, boundaries, place labels, **wind barbs**, annotation.
+
+That order is the argument of `Compositor`, and it is the opposite of what
+"weather overlay" usually means. A marine chart is read for the wind; the
+coastline is what tells you where the wind is. Both have to survive whatever
+else is drawn, so the colour fields go *underneath* rather than over the top — a
+temperature wash painted over a coastline does not make the temperature clearer,
+it makes the coastline worse.
+
+Each field carries its own weight rather than sharing one opacity setting,
+because the right answer differs (`render/FieldStyle`):
+
+| Field | Treatment | Opacity |
+|---|---|---|
+| Temperature, dew point | Desaturated and lightened — a pale wash to read past | 0.32 |
+| Precipitation | Darkened and saturated — weight on the map | 0.62 |
+| Cloud, humidity | A grey veil | 0.38 |
+
+`RenderSpec.gribOpacity` (`--opacity`) scales all of them at once.
+
+### Wind barbs
+
+The top layer. `WindBarbLayer` draws the standard notation: the staff points
+**into** the wind, a short tick is 5 knots, a long tick 10, a filled triangle 50,
+and calm is an open circle. Speed is rounded to the nearest 5 before
+decomposition, since the notation cannot express anything finer.
+
+Feathers sit on the side toward low pressure, which Buys Ballot's law mirrors at
+the equator — decided per station, so a chart spanning it is right on both sides.
+
+Wind is one selectable variable that fetches `UGRD` and `VGRD` together;
+selecting a single component would download data that cannot be drawn.
 
 ## Optional NetCDF-Java
 
@@ -199,9 +228,9 @@ Ordered by how much they matter.
 
 | Gap | Where | Notes |
 |---|---|---|
+| Barb station spacing is a fixed pixel grid | `WindBarbLayer` | Never finer than the data, but it does not thin toward the poles under Mercator, where stations crowd together in latitude. |
 | Land/sea fill is flat | `VectorLayers.LandSeaLayer` | Deriving land needs the OSM convention that land is left of a coastline way, plus stitching open segments into closed rings against the box edges. Today the coastline stroke does the work, which reads correctly for a coastal box and wrongly for an inland one. |
 | Isolines | `GribLayer.drawContours` | Marching squares plus contour-interval selection and label placement. This is what makes a synoptic chart look like one. |
-| Wind barbs | `GribLayer.drawBarbs` | Needs `UGRD` and `VGRD` paired before the layer is built — `Compositor` is the right seam, since it sees the whole set. |
 | `NetcdfGribReader` | `grib/netcdf/` | Stub. |
 | Accumulated fields are labelled with the start of their period | `Grib2Scanner.validTime` | Product template 4.8 stores the interval end further into the template; an `APCP` message for f006 currently reports 00Z. |
 | Overpass queries are not tiled | `OverpassClient` | A very large box exceeds the server limit. Splitting needs coastline segments stitched across tile seams. |

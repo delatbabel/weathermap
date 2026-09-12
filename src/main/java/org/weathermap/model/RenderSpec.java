@@ -13,20 +13,28 @@ import java.util.Set;
  */
 public final class RenderSpec {
 
-    /** The layers that can be switched on and off, drawn bottom to top in this order. */
+    /**
+     * The layers that can be switched on and off.
+     *
+     * <p>Declaration order is not drawing order - {@link org.weathermap.render.Compositor}
+     * decides that, and it puts the scalar fields at the bottom, the base map
+     * over them and the wind barbs on top. The reasoning is in that class.</p>
+     */
     public enum LayerKind {
         /** Flat sea and land fill derived from the coastline. */
         LAND_SEA,
+        /** Scalar fields - temperature, precipitation, cloud - as colour washes. */
+        GRIB,
+        /** Lat/lon graticule. */
+        GRATICULE,
         /** Coastline strokes. */
         COASTLINE,
         /** National (and optionally regional) boundaries. */
         BOUNDARIES,
-        /** The GRIB field itself. */
-        GRIB,
         /** City, town and village labels with their dots. */
         PLACE_LABELS,
-        /** Lat/lon graticule. */
-        GRATICULE,
+        /** Wind barbs. The top layer, and the point of the map. */
+        WIND_BARBS,
         /** Colour-ramp legend, model name and valid time. */
         ANNOTATION
     }
@@ -34,11 +42,11 @@ public final class RenderSpec {
     private int maxWidth = 1600;
     private int maxHeight = 1200;
     private boolean mercator = false;
-    private float gribOpacity = 0.65f;
+    private float gribOpacity = 1.0f;
     private boolean autoScaleRamp = true;
     private final Set<LayerKind> layers = EnumSet.of(
-            LayerKind.LAND_SEA, LayerKind.COASTLINE, LayerKind.BOUNDARIES,
-            LayerKind.GRIB, LayerKind.PLACE_LABELS, LayerKind.ANNOTATION);
+            LayerKind.LAND_SEA, LayerKind.GRIB, LayerKind.COASTLINE, LayerKind.BOUNDARIES,
+            LayerKind.PLACE_LABELS, LayerKind.WIND_BARBS, LayerKind.ANNOTATION);
 
     public int maxWidth() { return maxWidth; }
 
@@ -54,7 +62,17 @@ public final class RenderSpec {
 
     public void setMercator(boolean mercator) { this.mercator = mercator; }
 
-    /** 0 = base map only, 1 = the field hides what is under it. */
+    /**
+     * A master scale on every scalar field's opacity, not the opacity itself.
+     *
+     * <p>Each field carries its own weight - temperature is a pale wash,
+     * precipitation a darker stain - because the right answer differs per field
+     * and a single number cannot express both. This multiplies all of them, for
+     * turning the whole wash up or down at once. 1 leaves each field as
+     * designed; 0 removes them and leaves the base map and the barbs.</p>
+     *
+     * @see org.weathermap.render.FieldStyle
+     */
     public float gribOpacity() { return gribOpacity; }
 
     public void setGribOpacity(float opacity) {

@@ -2,6 +2,7 @@ package org.weathermap.render;
 
 import org.weathermap.grib.Grid;
 import org.weathermap.model.BoundingBox;
+import org.weathermap.model.GribCatalog;
 import org.weathermap.model.MapProjection;
 import org.weathermap.model.RenderSpec;
 import org.weathermap.osm.Feature;
@@ -27,6 +28,9 @@ import java.util.List;
  * wind v, a field with its ramp - belong somewhere that can see the whole set.</p>
  */
 public final class Compositor {
+
+    private static final java.util.logging.Logger LOG =
+            java.util.logging.Logger.getLogger(Compositor.class.getName());
 
     private final RenderSpec spec;
 
@@ -93,43 +97,71 @@ public final class Compositor {
     private List<Layer> buildLayers(List<Feature> features, List<Grid> grids, String modelName) {
         final List<Layer> layers = new ArrayList<>();
 
+        // --- bottom: the fields, as colour under everything else -----------
+        //
+        // The order below is the whole argument of this class, so it is worth
+        // stating. A marine chart is read for the wind; the coastline is what
+        // tells you where the wind is. Both have to survive whatever else is
+        // drawn, so the scalar fields go underneath rather than over the top,
+        // which is the opposite of what a "weather overlay" usually means. A
+        // temperature wash painted over a coastline does not make the
+        // temperature clearer - it makes the coastline worse.
+
         // TODO: decide land-versus-sea default from whether the box contains any
         // coastline rather than assuming land. See VectorLayers.LandSeaLayer.
         layers.add(new VectorLayers.LandSeaLayer(true));
-        layers.add(new VectorLayers.CoastlineLayer(features, 1.2f));
-        layers.add(new VectorLayers.BoundaryLayer(features, 2));
 
         Grid primary = null;
         ColourRamp primaryRamp = null;
+        Grid uGrid = null;
+        Grid vGrid = null;
+
         for (Grid grid : grids) {
-            // TODO: pair UGRD with VGRD into a single vector layer instead of
-            // drawing each component separately - see GribLayer#drawBarbs.
-            final ColourRamp ramp = rampFor(grid);
-            layers.add(new GribLayer(grid, ramp, spec.gribOpacity()));
+            final String code = grid.variable().code();
+            // Wind is held back: its two components are not fields to be washed
+            // over the map but one vector to be drawn on top of it.
+            if (GribCatalog.WIND_U.code().equals(code) && uGrid == null) {
+                uGrid = grid;
+                continue;
+            }
+            if (GribCatalog.WIND_V.code().equals(code) && vGrid == null) {
+                vGrid = grid;
+                continue;
+            }
+
+            final FieldStyle style = FieldStyle.forGrid(grid, spec.autoScaleRamp());
+            layers.add(new GribLayer(grid, style.ramp(),
+                                     style.opacity() * spec.gribOpacity()));
             if (primary == null) {
                 primary = grid;
-                primaryRamp = ramp;
+                primaryRamp = style.ramp();
             }
         }
 
+        // --- middle: the base map, over the fields --------------------------
         layers.add(new GraticuleLayer());
+        layers.add(new VectorLayers.CoastlineLayer(features, 1.4f));
+        layers.add(new VectorLayers.BoundaryLayer(features, 2));
         layers.add(new VectorLayers.PlaceLabelLayer(features));
-        layers.add(new AnnotationLayer(primary, primaryRamp, modelName));
-        return layers;
-    }
 
-    /**
-     * The ramp one field is drawn with.
-     *
-     * <p>Built here rather than inside {@link GribLayer} so that the legend and
-     * the field cannot disagree: {@link AnnotationLayer} is handed the same
-     * instance, so whatever range is used is the range that is labelled.</p>
-     */
-    private ColourRamp rampFor(Grid grid) {
-        final ColourRamp ramp = ColourRamp.forVariable(grid.variable());
-        if (!spec.autoScaleRamp() || ramp.isAbsolute()) return ramp;
-        final float[] range = grid.range();
-        return ramp.fittedTo(range[0], range[1]);
+        // --- top: the wind ---------------------------------------------------
+        if (uGrid != null && vGrid != null) {
+            layers.add(new WindBarbLayer(uGrid, vGrid));
+            if (primary == null) primary = uGrid;      // so the title names something
+        }
+        else if (uGrid != null || vGrid != null) {
+            // One component without the other cannot be drawn. Saying so beats
+            // a map that silently has no wind on it.
+            LOG.warning("Wind needs both UGRD and VGRD; only "
+                    + (uGrid != null ? "UGRD" : "VGRD") + " was decoded, so no barbs "
+                    + "were drawn. Select \"Wind\" rather than a single component.");
+        }
+
+        // Chrome last, so the legend stays readable. It occupies two corners
+        // with an opaque backing and does not compete with the barbs.
+        final boolean hasWind = uGrid != null && vGrid != null;
+        layers.add(new AnnotationLayer(primary, primaryRamp, modelName, hasWind));
+        return layers;
     }
 
     public RenderSpec spec() { return spec; }

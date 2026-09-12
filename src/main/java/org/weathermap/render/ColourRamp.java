@@ -86,6 +86,62 @@ public final class ColourRamp {
         return new ColourRamp(name, fitted, colours);
     }
 
+    /**
+     * The same ramp with its colours pulled toward a pale wash.
+     *
+     * <p>For a field that is context rather than the subject. Temperature over
+     * a marine chart is exactly that: useful to have, ruinous if it competes
+     * with the wind barbs and the coastline for attention. Saturation is scaled
+     * down and lightness lifted toward white, which keeps the hue ordering - so
+     * the ramp still reads cold-to-warm - while removing its weight.</p>
+     *
+     * <p>Worked in HSB rather than RGB because scaling RGB channels toward white
+     * shifts the hue, and a temperature ramp whose "cold" end has drifted toward
+     * cyan is worse than no ramp.</p>
+     *
+     * @param saturationScale below 1 desaturates
+     * @param lightnessLift   0 to 1, the fraction of the way to full brightness
+     * @param alphaScale      below 1 makes it more transparent
+     */
+    public ColourRamp muted(float saturationScale, float lightnessLift, float alphaScale) {
+        final Color[] out = new Color[colours.length];
+        for (int i = 0; i < colours.length; i++) {
+            final Color c = colours[i];
+            final float[] hsb = Color.RGBtoHSB(c.getRed(), c.getGreen(), c.getBlue(), null);
+            final float saturation = clamp01(hsb[1] * saturationScale);
+            final float brightness = clamp01(hsb[2] + (1f - hsb[2]) * lightnessLift);
+            final Color muted = new Color(Color.HSBtoRGB(hsb[0], saturation, brightness));
+            out[i] = new Color(muted.getRed(), muted.getGreen(), muted.getBlue(),
+                               Math.round(clamp01(c.getAlpha() / 255f * alphaScale) * 255));
+        }
+        return new ColourRamp(name, stops, out);
+    }
+
+    /**
+     * The same ramp with its colours taken toward the dark end.
+     *
+     * <p>The opposite treatment, for a field that should read as weight on the
+     * map - rain being the obvious one. Brightness is scaled down and saturation
+     * pushed up, so heavy precipitation reads as a dark stain rather than a
+     * pastel smear.</p>
+     */
+    public ColourRamp darkened(float brightnessScale, float saturationScale, float alphaScale) {
+        final Color[] out = new Color[colours.length];
+        for (int i = 0; i < colours.length; i++) {
+            final Color c = colours[i];
+            final float[] hsb = Color.RGBtoHSB(c.getRed(), c.getGreen(), c.getBlue(), null);
+            final Color darker = new Color(Color.HSBtoRGB(
+                    hsb[0], clamp01(hsb[1] * saturationScale), clamp01(hsb[2] * brightnessScale)));
+            out[i] = new Color(darker.getRed(), darker.getGreen(), darker.getBlue(),
+                               Math.round(clamp01(c.getAlpha() / 255f * alphaScale) * 255));
+        }
+        return new ColourRamp(name, stops, out);
+    }
+
+    private static float clamp01(float v) {
+        return Math.max(0f, Math.min(1f, v));
+    }
+
     private static Color interpolate(Color a, Color b, float t) {
         return new Color(
                 Math.round(a.getRed() + (b.getRed() - a.getRed()) * t),
@@ -109,17 +165,25 @@ public final class ColourRamp {
                         new Color(120, 10, 20)});
     }
 
-    /** Sequential, transparent at zero so dry areas show the base map. */
+    /**
+     * Sequential and deliberately dark, transparent at zero so dry ground shows
+     * the base map.
+     *
+     * <p>Weighted toward the low end - 0.5, 2 and 10 mm are the steps that
+     * matter to anyone reading a forecast, and a linear ramp to 75 would render
+     * all of them as the same faint green.</p>
+     */
     public static ColourRamp precipitation() {
         return new ColourRamp("Precipitation (kg/m²)",
-                new float[]{0f, 0.5f, 2f, 10f, 25f, 75f},
+                new float[]{0f, 0.2f, 1f, 4f, 12f, 30f, 75f},
                 new Color[]{
                         new Color(255, 255, 255, 0),
-                        new Color(199, 233, 192, 180),
-                        new Color(116, 196, 118, 200),
-                        new Color(35, 139, 69, 220),
-                        new Color(0, 109, 44, 235),
-                        new Color(120, 0, 120, 245)});
+                        new Color(120, 170, 135, 120),
+                        new Color(56, 132, 92, 175),
+                        new Color(26, 100, 84, 205),
+                        new Color(22, 68, 96, 225),
+                        new Color(58, 34, 94, 238),
+                        new Color(74, 12, 52, 246)});
     }
 
     /** Greyscale, transparent when clear. */

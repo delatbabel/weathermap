@@ -48,7 +48,14 @@ public final class Preferences {
     private static final String KEY_MAX_HEIGHT = "render.maxHeight";
     private static final String KEY_MERCATOR = "render.mercator";
     private static final String KEY_GRIB_OPACITY = "render.gribOpacity";
-    private static final String KEY_LAYERS = "render.layers";
+    /**
+     * Versioned, because the stored value is a list of <em>enabled</em> layers
+     * and a layer added later is absent from every file written before it
+     * existed - which would silently switch it off for anyone upgrading. Wind
+     * barbs arriving that way would be invisible with no clue as to why.
+     * Bumping the key retires the old list and takes the new defaults.
+     */
+    private static final String KEY_LAYERS = "render.layers.v2";
 
     /** Shown the first time the application runs, before anything is selected. */
     public static final BoundingBox DEFAULT_AREA = BoundingBox.of(49.5, -11.0, 61.0, 2.0);

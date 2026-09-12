@@ -120,8 +120,13 @@ public final class NomadsClient implements GribSource {
 
         q.append("file=").append(Http.encode(model.fileName(yyyymmdd, cycle, forecastHour)));
 
-        for (GribVariable v : selection.variables()) {
-            q.append('&').append(v.queryParam());
+        // A LinkedHashSet because a variable and its pair can overlap with
+        // another selection - asking for var_UGRD twice is not an error but it
+        // is untidy, and the URL is asserted in a test.
+        final java.util.Set<String> params = new java.util.LinkedHashSet<>();
+        for (GribVariable v : selection.variables()) params.addAll(v.queryParams());
+        for (String param : params) {
+            q.append('&').append(param);
         }
         for (GribLevel l : selection.levels()) {
             q.append('&').append(l.queryParam());

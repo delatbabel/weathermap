@@ -99,7 +99,7 @@ public final class VectorLayers {
     public static final class CoastlineLayer implements Layer {
 
         private final List<Feature> coastlines;
-        private final Color colour = new Color(70, 100, 130);
+        private final Color colour = new Color(40, 70, 105);
         private final float width;
 
         public CoastlineLayer(List<Feature> features, float width) {
@@ -213,17 +213,38 @@ public final class VectorLayers {
                     .thenComparing(Comparator.comparingLong(Feature::population).reversed()));
         }
 
+        /**
+         * How many labels the map can carry before they stop being labels.
+         *
+         * <p>Rank filtering alone is not enough. Nine degrees of Britain at
+         * {@code place=town} is several hundred names, and drawing them all
+         * buries the wind barbs - which inverts the whole point of the chart,
+         * since the barbs are what it is for and the names are only there to say
+         * where. Roughly one label per two thousand square pixels leaves the map
+         * readable; the ones that survive are the most important, because the
+         * list is already sorted that way.</p>
+         */
+        private static int labelBudget(MapProjection projection) {
+            final long area = (long) projection.imageWidth() * projection.imageHeight();
+            return (int) Math.max(12, Math.min(90, area / 22_000));
+        }
+
+        /** Breathing room around a label, so names do not sit shoulder to shoulder. */
+        private static final int LABEL_PADDING = 5;
+
         @Override
         public void draw(Graphics2D g, MapProjection projection) {
             final double span = Math.max(projection.bounds().widthDegrees(),
                                          projection.bounds().heightDegrees());
             final int rankLimit = rankLimitFor(span);
+            final int budget = labelBudget(projection);
             final List<Rectangle2D> placed = new ArrayList<>();
             final Font font = g.getFont().deriveFont(Font.PLAIN, 11f);
             g.setFont(font);
             final FontMetrics fm = g.getFontMetrics();
 
             for (Feature f : places) {
+                if (placed.size() >= budget) break;
                 if (rankOf(f) > rankLimit) continue;
                 final String name = f.name();
                 if (name == null || name.isBlank()) continue;
@@ -238,7 +259,9 @@ public final class VectorLayers {
                 final double tx = pt.x + 5;
                 final double ty = pt.y + fm.getAscent() / 2.0 - 1;
                 final Rectangle2D box = new Rectangle2D.Double(
-                        tx - 2, ty - fm.getAscent(), fm.stringWidth(name) + 4, fm.getHeight());
+                        tx - LABEL_PADDING, ty - fm.getAscent() - LABEL_PADDING,
+                        fm.stringWidth(name) + LABEL_PADDING * 2,
+                        fm.getHeight() + LABEL_PADDING * 2);
 
                 boolean collides = false;
                 for (Rectangle2D other : placed) {

@@ -141,14 +141,24 @@ public final class MapService {
 
         try {
             final List<Feature> features = osm.fetch(bbox, kinds);
-            LOG.info(() -> "base map: " + features.size() + " feature(s)");
-            return features;
+            if (!features.isEmpty()) {
+                LOG.info(() -> "base map: " + features.size() + " feature(s) from OSM");
+                return features;
+            }
+            LOG.info("OSM returned nothing here; using the bundled world outline");
         }
         catch (IOException | InterruptedException e) {
             if (e instanceof InterruptedException) Thread.currentThread().interrupt();
-            LOG.log(Level.WARNING, "Base map unavailable; rendering the field without it", e);
-            p.stage("Base map unavailable - rendering the field alone");
-            return List.of();
+            LOG.log(Level.WARNING, "OSM base map unavailable; falling back to the "
+                    + "bundled world outline", e);
         }
+
+        // Coarse, but a coastline is what tells a reader where the weather is,
+        // and a chart without one is barely a chart. Natural Earth 1:110m is
+        // the wrong resolution for a small area and still far better than an
+        // empty background - which is what this used to produce whenever
+        // Overpass was busy.
+        p.stage("OSM detail unavailable - using the coarse world outline");
+        return org.weathermap.osm.WorldBaseMap.features();
     }
 }

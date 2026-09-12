@@ -37,11 +37,23 @@ public final class AnnotationLayer implements Layer {
     private final Grid grid;
     private final ColourRamp ramp;
     private final String modelName;
+    private final boolean hasWind;
 
     public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName) {
+        this(grid, ramp, modelName, false);
+    }
+
+    /**
+     * @param grid    the field the legend describes, or {@code null}
+     * @param hasWind whether barbs are on the map, so the title can say so -
+     *                a chart captioned "Temperature" whose subject is plainly
+     *                the wind misdescribes itself
+     */
+    public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName, boolean hasWind) {
         this.grid = grid;
         this.ramp = ramp;
         this.modelName = modelName;
+        this.hasWind = hasWind;
     }
 
     @Override
@@ -50,14 +62,22 @@ public final class AnnotationLayer implements Layer {
         final int h = projection.imageHeight();
 
         drawTitle(g, w);
-        if (grid != null && ramp != null) drawLegend(g, w, h);
+        if (grid != null && ramp != null && !FieldStyle.isVectorComponent(grid.variable())) {
+            drawLegend(g, w, h);
+        }
         drawAttribution(g, w, h);
     }
 
     private void drawTitle(Graphics2D g, int width) {
         if (grid == null) return;
-        final String line = modelName + "  ·  " + grid.variable().displayName()
-                + " @ " + grid.level().displayName()
+        final StringBuilder subject = new StringBuilder();
+        if (hasWind) subject.append("Wind");
+        if (!FieldStyle.isVectorComponent(grid.variable())) {
+            if (subject.length() > 0) subject.append(" + ");
+            subject.append(grid.variable().displayName())
+                   .append(" @ ").append(grid.level().displayName());
+        }
+        final String line = modelName + "  ·  " + subject
                 + "  ·  valid " + VALID_TIME.format(grid.validTime());
         g.setFont(g.getFont().deriveFont(Font.BOLD, 13f));
         final FontMetrics fm = g.getFontMetrics();

@@ -35,16 +35,34 @@ public final class GribCatalog {
             new GribVariable("APCP", "Precipitation", "kg/m²", GribVariable.RenderStyle.FILLED_CONTOUR);
     public static final GribVariable TOTAL_CLOUD =
             new GribVariable("TCDC", "Total cloud cover", "%", GribVariable.RenderStyle.FILLED_CONTOUR);
+    /**
+     * Wind, as one selectable thing.
+     *
+     * <p>Fetches {@code UGRD} and {@code VGRD} together, because a barb needs
+     * both and selecting one alone would download data that cannot be drawn.
+     * The decoder still returns them as two separate {@link org.weathermap.grib.Grid}s;
+     * {@link org.weathermap.render.Compositor} pairs them again.</p>
+     */
+    public static final GribVariable WIND =
+            new GribVariable("UGRD", "Wind", "kt", GribVariable.RenderStyle.VECTOR, "VGRD");
+
+    /** The eastward component on its own, as the decoder reports it. */
     public static final GribVariable WIND_U =
             new GribVariable("UGRD", "Wind (u component)", "m/s", GribVariable.RenderStyle.VECTOR);
+
+    /** The northward component on its own, as the decoder reports it. */
     public static final GribVariable WIND_V =
             new GribVariable("VGRD", "Wind (v component)", "m/s", GribVariable.RenderStyle.VECTOR);
     public static final GribVariable GEOPOTENTIAL_HEIGHT =
             new GribVariable("HGT", "Geopotential height", "gpm", GribVariable.RenderStyle.CONTOUR_LINES);
 
+    /**
+     * What the UI offers, wind first because it is the field these maps exist
+     * for.
+     */
     public static final List<GribVariable> VARIABLES = List.of(
-            TEMPERATURE, DEWPOINT, RELATIVE_HUMIDITY, PRESSURE_MSL, PRECIPITATION,
-            TOTAL_CLOUD, WIND_U, WIND_V, GEOPOTENTIAL_HEIGHT);
+            WIND, TEMPERATURE, PRECIPITATION, DEWPOINT, RELATIVE_HUMIDITY,
+            PRESSURE_MSL, TOTAL_CLOUD, GEOPOTENTIAL_HEIGHT);
 
     // ---- levels ---------------------------------------------------------
 
@@ -65,9 +83,13 @@ public final class GribCatalog {
 
     /** @return the catalogued variable with this NOMADS code, or a bare one if unknown. */
     public static GribVariable variable(String code) {
+        // UGRD resolves to WIND, so asking for it on the command line fetches
+        // the partner too; VGRD is listed after it so the decoder can still
+        // name a lone northward grid correctly.
         for (GribVariable v : VARIABLES) {
             if (v.code().equalsIgnoreCase(code)) return v;
         }
+        if (WIND_V.code().equalsIgnoreCase(code)) return WIND_V;
         return new GribVariable(code.toUpperCase(java.util.Locale.ROOT), code, "",
                                 GribVariable.RenderStyle.FILLED_CONTOUR);
     }
