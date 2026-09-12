@@ -44,6 +44,12 @@ public final class DataPanel extends JPanel {
     private final JList<GribLevel> levels = new JList<>(new DefaultListModel<>());
     private final JTextField forecastHours = new JTextField("0,6,12", 12);
     private final JCheckBox latestRun = new JCheckBox("Use the latest published run", true);
+
+    private final JCheckBox series = new JCheckBox("Series from now");
+    private final javax.swing.JSpinner seriesStep = new javax.swing.JSpinner(
+            new javax.swing.SpinnerNumberModel(GribSelection.DEFAULT_SERIES_STEP_HOURS, 1, 24, 1));
+    private final javax.swing.JSpinner seriesSpan = new javax.swing.JSpinner(
+            new javax.swing.SpinnerNumberModel(GribSelection.DEFAULT_SERIES_SPAN_HOURS, 1, 384, 3));
     private final JLabel note = new JLabel(" ");
 
     public DataPanel() {
@@ -61,6 +67,7 @@ public final class DataPanel extends JPanel {
 
         add(labelled("Model", model));
         add(labelled("Forecast hours", forecastHours));
+        add(seriesRow());
         add(latestRun);
         add(listPane("Variables", variables));
         add(listPane("Levels", levels));
@@ -69,7 +76,48 @@ public final class DataPanel extends JPanel {
         add(note);
 
         model.addActionListener(e -> updateNote());
+        series.addActionListener(e -> updateSeriesEnabled());
+        updateSeriesEnabled();
         updateNote();
+    }
+
+    /**
+     * The series controls: a chart every so many hours, for so many hours ahead.
+     *
+     * <p>On one line with the checkbox that governs them, because three separate
+     * rows would read as three independent settings when they are one
+     * sentence.</p>
+     */
+    private JPanel seriesRow() {
+        final JPanel row = new JPanel();
+        row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        row.add(series);
+        row.add(javax.swing.Box.createHorizontalStrut(6));
+        row.add(new JLabel("every"));
+        row.add(javax.swing.Box.createHorizontalStrut(4));
+        row.add(seriesStep);
+        row.add(javax.swing.Box.createHorizontalStrut(4));
+        row.add(new JLabel("h for"));
+        row.add(javax.swing.Box.createHorizontalStrut(4));
+        row.add(seriesSpan);
+        row.add(javax.swing.Box.createHorizontalStrut(4));
+        row.add(new JLabel("h"));
+        row.add(javax.swing.Box.createHorizontalGlue());
+        return row;
+    }
+
+    /**
+     * A series and a list of hours are two answers to the same question, so only
+     * one of them is ever live.
+     */
+    private void updateSeriesEnabled() {
+        final boolean on = series.isSelected();
+        seriesStep.setEnabled(on);
+        seriesSpan.setEnabled(on);
+        forecastHours.setEnabled(!on);
+        forecastHours.setToolTipText(on
+                ? "Ignored while a series is set - the series decides the hours"
+                : null);
     }
 
     private void updateNote() {
@@ -98,6 +146,10 @@ public final class DataPanel extends JPanel {
     public void setSelection(GribSelection selection) {
         model.setSelectedItem(selection.model());
         forecastHours.setText(compact(selection.forecastHours()));
+        series.setSelected(selection.hasSeries());
+        if (selection.hasSeries()) seriesStep.setValue(selection.seriesStepHours());
+        seriesSpan.setValue(selection.seriesSpanHours());
+        updateSeriesEnabled();
         latestRun.setSelected(selection.followsLatestRun());
         selectIn(variables, selection.variables());
         selectIn(levels, selection.levels());
@@ -114,13 +166,15 @@ public final class DataPanel extends JPanel {
         final GribSelection sel = new GribSelection();
         sel.setModel((GribModel) model.getSelectedItem());
 
-        final List<Integer> hours;
-        try {
-            hours = parseHours(forecastHours.getText());
-        }
-        catch (IllegalArgumentException e) {
-            note.setText(e.getMessage());
-            return null;
+        List<Integer> hours = List.of(0);
+        if (!series.isSelected()) {
+            try {
+                hours = parseHours(forecastHours.getText());
+            }
+            catch (IllegalArgumentException e) {
+                note.setText(e.getMessage());
+                return null;
+            }
         }
         final Set<GribVariable> vars = new LinkedHashSet<>(variables.getSelectedValuesList());
         final Set<GribLevel> levs = new LinkedHashSet<>(levels.getSelectedValuesList());
@@ -136,6 +190,15 @@ public final class DataPanel extends JPanel {
         catch (IllegalArgumentException e) {
             note.setText(e.getMessage());
             return null;
+        }
+        if (series.isSelected()) {
+            try {
+                sel.setSeries((Integer) seriesStep.getValue(), (Integer) seriesSpan.getValue());
+            }
+            catch (IllegalArgumentException e) {
+                note.setText(e.getMessage());
+                return null;
+            }
         }
         if (latestRun.isSelected()) sel.useLatestRun();
         updateNote();

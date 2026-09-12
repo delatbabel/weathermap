@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 class GribSelectionTest {
 
@@ -105,5 +106,119 @@ class GribSelectionTest {
 
         assertEquals(java.util.List.of(), sel.problems());
         assertEquals(java.util.List.of(), sel.addMissingLevels());
+    }
+
+    // ---- a series of charts ---------------------------------------------
+
+    /**
+     * The subtlety the whole feature turns on: forecast hours are counted from
+     * the model run, and the run in hand is always hours old. "Starting now" is
+     * therefore not hour 0 - hour 0 renders perfectly well and is a chart of
+     * this morning, which is exactly the kind of mistake nobody spots.
+     */
+    @Test
+    void aSeriesStartsAtNowNotAtHourZero() {
+        final GribSelection sel = new GribSelection();
+        sel.useLatestRun();
+        sel.setSeries(3, 12);
+
+        // 09:30Z minus the four-hour publication lag lands in the 00Z run, so
+        // the run is 9.5 hours old and the first three-hourly step after that
+        // is hour 12.
+        final java.util.List<Integer> hours =
+                sel.seriesHours(ZonedDateTime.parse("2026-09-12T09:30:00Z"));
+
+        assertEquals(java.util.List.of(12, 15, 18, 21), hours);
+    }
+
+    @Test
+    void theSpanIsMeasuredFromNowNotFromTheRun() {
+        final GribSelection sel = new GribSelection();
+        sel.useLatestRun();
+        sel.setSeries(6, 48);
+
+        final java.util.List<Integer> hours =
+                sel.seriesHours(ZonedDateTime.parse("2026-09-12T09:30:00Z"));
+
+        // First step at or after 9.5 hours, then out to 9.5 + 48 = 57.5.
+        assertEquals(12, hours.get(0));
+        assertEquals(54, hours.get(hours.size() - 1));
+    }
+
+    @Test
+    void theDefaultsAreThreeHourlyForTwoDays() {
+        final GribSelection sel = new GribSelection();
+        sel.useLatestRun();
+        sel.setSeries(GribSelection.DEFAULT_SERIES_STEP_HOURS,
+                      GribSelection.DEFAULT_SERIES_SPAN_HOURS);
+
+        final java.util.List<Integer> hours =
+                sel.seriesHours(ZonedDateTime.parse("2026-09-12T09:30:00Z"));
+
+        // 9.5 hours old at 09:30Z, so hours 12 through 57 - sixteen charts.
+        assertEquals(16, hours.size(), hours.toString());
+        for (int i = 1; i < hours.size(); i++) {
+            assertEquals(3, hours.get(i) - hours.get(i - 1));
+        }
+    }
+
+    /** A series must not run past the end of the model. */
+    @Test
+    void aSeriesStopsAtTheModelsLastHour() {
+        final GribSelection sel = new GribSelection();
+        sel.useLatestRun();
+        sel.setSeries(6, 1000);
+
+        final java.util.List<Integer> hours =
+                sel.seriesHours(ZonedDateTime.parse("2026-09-12T09:30:00Z"));
+
+        assertTrue(hours.get(hours.size() - 1) <= sel.model().maxForecastHour(),
+                   hours.get(hours.size() - 1) + " is beyond the model");
+        assertFalse(hours.isEmpty());
+    }
+
+    @Test
+    void anImpossibleSeriesIsRefusedRatherThanSilentlyEmpty() {
+        final GribSelection sel = new GribSelection();
+        assertThrows(IllegalArgumentException.class, () -> sel.setSeries(0, 48));
+        assertThrows(IllegalArgumentException.class, () -> sel.setSeries(-3, 48));
+        assertThrows(IllegalArgumentException.class, () -> sel.setSeries(6, 3));
+    }
+
+    /**
+     * A series is a standing description, not the hours it happened to resolve
+     * to - that is what lets an unattended run mean the same thing tomorrow.
+     */
+    @Test
+    void applyingASeriesFillsInTheHoursAndKeepsTheDefinition() {
+        final GribSelection sel = new GribSelection();
+        sel.useLatestRun();
+        sel.setSeries(3, 12);
+        sel.applySeries(ZonedDateTime.parse("2026-09-12T09:30:00Z"));
+
+        assertEquals(java.util.List.of(12, 15, 18, 21), sel.forecastHours());
+        assertTrue(sel.hasSeries());
+        assertEquals(3, sel.seriesStepHours());
+        assertEquals(12, sel.seriesSpanHours());
+    }
+
+    @Test
+    void aSeriesSurvivesBeingCopied() {
+        final GribSelection sel = new GribSelection();
+        sel.setSeries(6, 72);
+        final GribSelection copy = sel.copy();
+
+        assertTrue(copy.hasSeries());
+        assertEquals(6, copy.seriesStepHours());
+        assertEquals(72, copy.seriesSpanHours());
+    }
+
+    @Test
+    void withNoSeriesTheListedHoursAreLeftAlone() {
+        final GribSelection sel = new GribSelection();
+        sel.setForecastHours(java.util.List.of(0, 6, 12));
+        sel.applySeries(ZonedDateTime.parse("2026-09-12T09:30:00Z"));
+
+        assertEquals(java.util.List.of(0, 6, 12), sel.forecastHours());
     }
 }

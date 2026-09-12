@@ -352,6 +352,38 @@ read as more of the base map, and the barbs are near-black and have to stay the
 most prominent thing. Brown is what is left, and it is also what paper charts
 use.
 
+### A series of charts
+
+A chart every *n* hours covering *m* hours from now — three and forty-eight by
+default. `--series 3,48` on the command line, or the **Series from now** row in
+the window, which disables the explicit forecast-hours field because a series
+and a list of hours are two answers to the same question.
+
+The subtlety is that **"starting now" is not forecast hour 0**. Forecast hours
+count from the model run, and the run in hand is always hours old — NOMADS
+publishes one about four hours after its nominal time. So the first chart is the
+first step at or after the gap between the run and the clock: for the 00Z run at
+09:30 UTC with a three-hour step, that is hour 12. Getting this wrong is not
+visible in the output, because hour 0 renders perfectly well — it is simply a
+chart of this morning.
+
+The series is stored as its definition rather than as the hours it resolved to,
+which is what makes it correct in a crontab: "every three hours for the next two
+days" means the same thing every night, while `9,12,15,18` means three moments
+that have already passed. It is resolved to actual hours exactly once per run,
+so the download and the labelling cannot disagree across a step boundary.
+
+In the window, **◀** and **▶** step through the series one chart at a time, as
+do the arrow keys while the map has focus. A front's arrival is obvious in the
+difference between two charts and nearly invisible in either one alone, so the
+buttons are on the toolbar rather than in a menu.
+
+**Chart → Copy chart image** (Ctrl-Shift-C) puts the chart on screen on the
+clipboard as an image, not as a path — a chart is usually wanted in a message or
+a document. The accelerator avoids Ctrl-C deliberately: a menu accelerator fires
+wherever the focus is, and taking Ctrl-C would break copying out of the latitude
+and longitude fields.
+
 ### Chart times
 
 Two labels, top right and much larger than the title: **VALID AT**, the instant

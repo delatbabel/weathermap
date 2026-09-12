@@ -51,6 +51,9 @@ public final class MainWindow extends JFrame {
 
     private static final Logger LOG = Logger.getLogger(MainWindow.class.getName());
 
+    private static final java.time.format.DateTimeFormatter CHART_TIME =
+            java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm");
+
     private final Preferences preferences = new Preferences();
     private final MapService service = new MapService();
 
@@ -69,6 +72,15 @@ public final class MainWindow extends JFrame {
 
     /** The area controls against the GRIB controls. */
     private JSplitPane sideSplit;
+
+    private final JButton previousChart = new JButton("◀");
+    private final JButton nextChart = new JButton("▶");
+    private final JButton copyChart = new JButton("Copy");
+    private final JLabel chartPosition = new JLabel(" ");
+
+    /** The composited series, in time order, and which one is on screen. */
+    private List<MapService.Result> results = List.of();
+    private int resultIndex;
 
     private BoundingBox area;
     private RenderSpec renderSpec;
@@ -103,6 +115,7 @@ public final class MainWindow extends JFrame {
         baseMap.setOnLoaded(mapPanel::setFeatures);
         baseMap.setOnStatus(mapStatus::setText);
 
+        bindSeriesKeys();
         setJMenuBar(buildMenuBar());
         setContentPane(buildContent());
         restoreLayout(preferences.uiLayout());
@@ -255,8 +268,44 @@ public final class MainWindow extends JFrame {
         showResult.addActionListener(e -> mapPanel.setShowingResult(showResult.isSelected()));
         bar.add(showResult);
 
+        bar.add(Box.createHorizontalStrut(18));
+        bar.add(buildSeriesControls());
+
         bar.add(Box.createHorizontalGlue());
         return bar;
+    }
+
+    /**
+     * Stepping through a series, one chart at a time.
+     *
+     * <p>A series is read by flicking back and forth across a step or two -
+     * a front's arrival is obvious in the difference between two charts and
+     * nearly invisible in either one alone - so the buttons sit on the toolbar
+     * rather than in a menu, and the arrow keys do the same thing.</p>
+     */
+    private JPanel buildSeriesControls() {
+        final JPanel group = new JPanel();
+        group.setLayout(new BoxLayout(group, BoxLayout.X_AXIS));
+
+        previousChart.setToolTipText("The previous chart in the series (Left arrow)");
+        previousChart.addActionListener(e -> showChart(resultIndex - 1));
+        nextChart.setToolTipText("The next chart in the series (Right arrow)");
+        nextChart.addActionListener(e -> showChart(resultIndex + 1));
+
+        chartPosition.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+
+        copyChart.setToolTipText(
+                "Copy the chart on screen to the clipboard (Ctrl-Shift-C)");
+        copyChart.addActionListener(e -> copyCurrentChart());
+
+        group.add(previousChart);
+        group.add(chartPosition);
+        group.add(nextChart);
+        group.add(Box.createHorizontalStrut(12));
+        group.add(copyChart);
+
+        updateSeriesControls();
+        return group;
     }
 
     private JPanel buildStatusBar() {
@@ -312,6 +361,17 @@ public final class MainWindow extends JFrame {
         bar.add(view);
 
         final JMenu chart = new JMenu("Chart");
+        final JMenuItem copyItem = new JMenuItem("Copy chart image");
+        // Ctrl-Shift-C rather than Ctrl-C: a menu accelerator fires wherever the
+        // focus is, and taking Ctrl-C would break copying out of the latitude
+        // and longitude fields.
+        copyItem.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
+                java.awt.event.KeyEvent.VK_C,
+                java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()
+                        | java.awt.event.InputEvent.SHIFT_DOWN_MASK));
+        copyItem.addActionListener(e -> copyCurrentChart());
+        chart.add(copyItem);
+        chart.addSeparator();
         final JMenuItem timeZone = new JMenuItem("Time zone…");
         timeZone.addActionListener(e -> chooseTimeZone());
         chart.add(timeZone);
@@ -394,12 +454,23 @@ public final class MainWindow extends JFrame {
 
         // Save before the work starts, not after: a download that is cancelled
         // or fails still represents what the user asked for, and that is what
-        // the CLI should repeat.
+        // the CLI should repeat. The series is stored as its definition, so what
+        // is saved is "every three hours for two days" and not the particular
+        // hours this run happens to resolve to.
         savePreferences(selection);
+
+        // Resolved once, here, on the copy that is actually run.
+        final GribSelection running = selection.copy();
+        running.applySeries(java.time.ZonedDateTime.now());
+        if (running.hasSeries()) {
+            setStatus("Series: " + running.forecastHours().size() + " charts, f"
+                    + running.forecastHours().get(0) + " to f"
+                    + running.forecastHours().get(running.forecastHours().size() - 1));
+        }
 
         progress.setIndeterminate(true);
         progress.setVisible(true);
-        worker = new DownloadWorker(area, selection, renderSpec.copy(), preferences.outputDir());
+        worker = new DownloadWorker(area, running, renderSpec.copy(), preferences.outputDir());
         worker.execute();
     }
 
@@ -498,6 +569,94 @@ public final class MainWindow extends JFrame {
         }
     }
 
+    /**
+     * Left and right step the series while the map has focus.
+     *
+     * <p>Bound on the map rather than on the window, because a binding that
+     * fires wherever the focus is would take the arrow keys away from the
+     * latitude and longitude fields, where they move the caret.</p>
+     */
+    private void bindSeriesKeys() {
+        final javax.swing.InputMap keys = mapPanel.getInputMap(JPanel.WHEN_FOCUSED);
+        keys.put(javax.swing.KeyStroke.getKeyStroke("LEFT"), "previousChart");
+        keys.put(javax.swing.KeyStroke.getKeyStroke("RIGHT"), "nextChart");
+        mapPanel.getActionMap().put("previousChart", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                showChart(resultIndex - 1);
+            }
+        });
+        mapPanel.getActionMap().put("nextChart", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                showChart(resultIndex + 1);
+            }
+        });
+    }
+
+    // ---- the series on screen -------------------------------------------
+
+    /**
+     * Puts one chart of the series on the map.
+     *
+     * <p>Out-of-range indices are ignored rather than clamped, so holding an
+     * arrow key at the end of the series does nothing instead of flickering
+     * against the last chart.</p>
+     */
+    private void showChart(int index) {
+        if (index < 0 || index >= results.size()) return;
+        resultIndex = index;
+
+        final MapService.Result result = results.get(index);
+        mapPanel.setResult(result.image(), renderSpec.projectionFor(area));
+        showResult.setEnabled(true);
+        showResult.setSelected(true);
+        updateSeriesControls();
+        setStatus(chartDescription(result));
+    }
+
+    private String chartDescription(MapService.Result result) {
+        if (result.validTime() == null) return String.valueOf(result.pngFile().getFileName());
+        return "Valid " + CHART_TIME.withZone(renderSpec.zone()).format(result.validTime())
+                + "  ·  " + result.pngFile().getFileName();
+    }
+
+    private void updateSeriesControls() {
+        final boolean many = results.size() > 1;
+        previousChart.setEnabled(many && resultIndex > 0);
+        nextChart.setEnabled(many && resultIndex < results.size() - 1);
+        copyChart.setEnabled(!results.isEmpty());
+        chartPosition.setText(results.isEmpty() ? "—"
+                : (resultIndex + 1) + " / " + results.size());
+    }
+
+    /**
+     * Copies the chart on screen to the system clipboard.
+     *
+     * <p>The image rather than the file: a chart is usually wanted in a message
+     * or a document, and a path to a PNG in {@code ~/.weathermap/maps} is one
+     * more step for whoever receives it.</p>
+     */
+    private void copyCurrentChart() {
+        if (results.isEmpty()) {
+            setStatus("No chart to copy - download one first");
+            return;
+        }
+        final java.awt.image.BufferedImage image = results.get(resultIndex).image();
+        try {
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new ImageTransferable(image), null);
+            setStatus("Chart copied to the clipboard ("
+                    + image.getWidth() + "×" + image.getHeight() + ")");
+        }
+        catch (IllegalStateException e) {
+            // Another application can hold the clipboard; X11 makes this
+            // commoner than it sounds.
+            LOG.log(Level.WARNING, "Clipboard unavailable", e);
+            setStatus("The clipboard is busy - try again");
+        }
+    }
+
     private void savePreferences() {
         final GribSelection selection = dataPanel.selection();
         savePreferences(selection);
@@ -567,12 +726,13 @@ public final class MainWindow extends JFrame {
                     setStatus("Nothing was rendered - the request matched no GRIB records");
                     return;
                 }
-                final MapService.Result first = results.get(0);
-                mapPanel.setResult(first.image(), spec.projectionFor(bbox));
-                showResult.setEnabled(true);
-                showResult.setSelected(true);
-                setStatus("Wrote " + results.size() + " map(s) to " + outputDir
-                        + " - pan or zoom to go back to the base map");
+                MainWindow.this.results = results;
+                MainWindow.this.resultIndex = 0;
+                showChart(0);
+                setStatus(results.size() == 1
+                        ? "Wrote 1 map to " + outputDir
+                        : "Wrote " + results.size() + " maps to " + outputDir
+                                + " - step through them with ◀ and ▶");
             }
             catch (java.util.concurrent.CancellationException e) {
                 setStatus("Cancelled");

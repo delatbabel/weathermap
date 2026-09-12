@@ -41,6 +41,8 @@ public final class Preferences {
     private static final String KEY_VARIABLES = "grib.variables";
     private static final String KEY_LEVELS = "grib.levels";
     private static final String KEY_FORECAST_HOURS = "grib.forecastHours";
+    private static final String KEY_SERIES_STEP = "grib.series.stepHours";
+    private static final String KEY_SERIES_SPAN = "grib.series.spanHours";
     private static final String KEY_RUN_DATE = "grib.runDate";
     private static final String KEY_RUN_CYCLE = "grib.runCycle";
     private static final String KEY_OUTPUT_DIR = "output.dir";
@@ -193,6 +195,17 @@ public final class Preferences {
 
         // A pinned run is only restored when both halves are readable. Anything
         // else falls back to "latest", which is what the CLI wants anyway.
+        final int step = intProperty(KEY_SERIES_STEP, 0);
+        if (step > 0) {
+            try {
+                sel.setSeries(step, intProperty(KEY_SERIES_SPAN,
+                                                GribSelection.DEFAULT_SERIES_SPAN_HOURS));
+            }
+            catch (IllegalArgumentException e) {
+                LOG.warning("Ignoring an unusable stored series: " + e.getMessage());
+            }
+        }
+
         final String date = props.getProperty(KEY_RUN_DATE, "");
         final String cycle = props.getProperty(KEY_RUN_CYCLE, "");
         if (!date.isBlank() && !cycle.isBlank()) {
@@ -211,6 +224,11 @@ public final class Preferences {
         props.setProperty(KEY_VARIABLES, join(sel.variables().stream().map(GribVariable::code).toList()));
         props.setProperty(KEY_LEVELS, join(sel.levels().stream().map(GribLevel::code).toList()));
         props.setProperty(KEY_FORECAST_HOURS, join(sel.forecastHours().stream().map(String::valueOf).toList()));
+        // The series is stored as what it means rather than as the hours it
+        // last resolved to, so an unattended run repeats "the next 48 hours"
+        // and not "the 48 hours after the morning I set this up".
+        props.setProperty(KEY_SERIES_STEP, String.valueOf(sel.hasSeries() ? sel.seriesStepHours() : 0));
+        props.setProperty(KEY_SERIES_SPAN, String.valueOf(sel.seriesSpanHours()));
         if (sel.followsLatestRun()) {
             props.remove(KEY_RUN_DATE);
             props.remove(KEY_RUN_CYCLE);
@@ -273,6 +291,18 @@ public final class Preferences {
     // ---- output ---------------------------------------------------------
 
     /** Where composited PNGs are written. Defaults to {@code ~/.weathermap/maps}. */
+    private int intProperty(String key, int fallback) {
+        final String value = props.getProperty(key);
+        if (value == null || value.isBlank()) return fallback;
+        try {
+            return Integer.parseInt(value.trim());
+        }
+        catch (NumberFormatException e) {
+            LOG.warning("Ignoring unreadable " + key + "=" + value);
+            return fallback;
+        }
+    }
+
     /**
      * The stored zone for chart times, or the machine's own.
      *

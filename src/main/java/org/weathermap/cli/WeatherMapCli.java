@@ -49,6 +49,9 @@ public final class WeatherMapCli {
               --var CODE[,CODE...]  NOMADS variable codes, e.g. TMP,APCP
               --level CODE[,...]    NOMADS level codes, e.g. 2_m_above_ground
               --hours H[,H-H...]    forecast hours, e.g. 0,6,12-24
+              --series STEP,SPAN    a chart every STEP hours covering SPAN hours
+                                    from now, e.g. 3,48 - repeats correctly on a
+                                    schedule, unlike a fixed list of hours
               --run YYYYMMDD:HH     pin a model run instead of using the latest
               --out DIR             where to write the PNGs
               --size WxH            maximum output size (default 1600x1200)
@@ -87,6 +90,11 @@ public final class WeatherMapCli {
 
         final BoundingBox area = (options.area != null) ? options.area : prefs.area();
         final GribSelection selection = buildSelection(prefs, options);
+        // Resolved here so the printed selection is what will be fetched, and
+        // so a run that spans a step boundary cannot download one set of hours
+        // and label them with another.
+        selection.applySeries(java.time.ZonedDateTime.now());
+
         final RenderSpec spec = buildRenderSpec(prefs, options);
         final Path outputDir = (options.outputDir != null) ? options.outputDir : prefs.outputDir();
 
@@ -168,7 +176,13 @@ public final class WeatherMapCli {
             for (String code : options.levels) levels.add(GribCatalog.level(code));
             selection.setLevels(levels);
         }
-        if (!options.hours.isEmpty()) selection.setForecastHours(options.hours);
+        if (!options.hours.isEmpty()) {
+            // An explicit list is the more specific instruction, so it wins and
+            // turns the stored series off rather than being silently ignored.
+            selection.clearSeries();
+            selection.setForecastHours(options.hours);
+        }
+        if (options.seriesStep > 0) selection.setSeries(options.seriesStep, options.seriesSpan);
 
         if (options.runDate != null) selection.setRun(options.runDate, options.runCycle);
         else selection.useLatestRun();
@@ -201,6 +215,8 @@ public final class WeatherMapCli {
         float opacity = -1;
         boolean mercator;
         java.time.ZoneId zone;
+        int seriesStep;
+        int seriesSpan = org.weathermap.model.GribSelection.DEFAULT_SERIES_SPAN_HOURS;
         boolean save;
         boolean dryRun;
         boolean quiet;
@@ -213,6 +229,21 @@ public final class WeatherMapCli {
                 switch (a) {
                     case "--cli" -> { }                       // consumed by Main
                     case "--help", "-h" -> o.help = true;
+                    case "--series" -> {
+                        final String[] parts = next(args, ++i, a).split(",");
+                        if (parts.length != 2) {
+                            throw new IllegalArgumentException(
+                                    "--series takes STEP,SPAN in hours, e.g. 3,48");
+                        }
+                        try {
+                            o.seriesStep = Integer.parseInt(parts[0].trim());
+                            o.seriesSpan = Integer.parseInt(parts[1].trim());
+                        }
+                        catch (NumberFormatException e) {
+                            throw new IllegalArgumentException(
+                                    "--series takes whole hours, e.g. 3,48");
+                        }
+                    }
                     case "--mercator" -> o.mercator = true;
                     case "--timezone", "--tz" -> {
                         final String id = next(args, ++i, a);

@@ -72,8 +72,14 @@ public final class MapService {
 
     public GribReader reader() { return reader; }
 
-    /** One composited map: the image and where it came from. */
-    public record Result(BufferedImage image, Grid primaryGrid, Path pngFile) { }
+    /**
+     * One composited map: the image, where it came from, and when it is for.
+     *
+     * @param validTime the instant the chart depicts, which is not the primary
+     *                  grid's own time when that grid is an accumulation
+     */
+    public record Result(BufferedImage image, Grid primaryGrid, Path pngFile,
+                         java.time.Instant validTime) { }
 
     /**
      * Runs the job.
@@ -124,11 +130,12 @@ public final class MapService {
             // after a wind component the title never mentions, and stamped it
             // with that component's time rather than the chart's.
             final Grid primary = Compositor.primaryOf(grids);
+            final java.time.Instant validTime = Compositor.validTimeOf(grids);
             final Path png = outputDir.resolve(PngWriter.fileName(
                     selection.model().id(), primary.variable().code(),
-                    primary.level().code(), Compositor.validTimeOf(grids)));
+                    primary.level().code(), validTime));
             PngWriter.write(image, png);
-            results.add(new Result(image, primary, png));
+            results.add(new Result(image, primary, png, validTime));
         }
         return results;
     }
