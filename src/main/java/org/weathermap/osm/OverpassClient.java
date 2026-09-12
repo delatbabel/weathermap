@@ -135,6 +135,34 @@ public final class OverpassClient implements OsmSource {
         }
     }
 
+    /**
+     * Rejects a response that is an Overpass error report rather than data.
+     *
+     * <p><b>Overpass reports a failed query with HTTP 200.</b> A query that
+     * times out server-side comes back as a well-formed OSM document whose only
+     * content is
+     * {@code <remark> runtime error: Query timed out ... </remark>} - 360 bytes,
+     * status 200, parses perfectly, and contains nothing.</p>
+     *
+     * <p>Without this check that document was treated as a successful empty
+     * result and <b>written to the cache, where it stayed valid for four
+     * weeks</b>. The area it covered then rendered with no base map at all, on
+     * every subsequent run, with nothing in the logs to say why - the request
+     * was never made again. Two such entries were found in a real cache.</p>
+     *
+     * <p>Treating it as a failure means failover moves to the next instance and
+     * nothing is cached, which is what a timeout should do.</p>
+     */
+    private static void rejectErrorDocument(String xml, URI uri) throws IOException {
+        final int remark = xml.indexOf("<remark>");
+        if (remark < 0) return;
+        final int end = xml.indexOf("</remark>", remark);
+        final String message = (end > remark)
+                ? xml.substring(remark + "<remark>".length(), end).trim()
+                : "unspecified";
+        throw new IOException(uri.getHost() + " reported: " + message);
+    }
+
     /** Tries each endpoint once, preferred first, until one answers. */
     private String queryWithFailover(String query, BoundingBox bbox) throws IOException,
             InterruptedException {
@@ -149,6 +177,7 @@ public final class OverpassClient implements OsmSource {
             try {
                 LOG.info(() -> "Querying Overpass at " + uri.getHost() + " for " + bbox);
                 final String xml = Http.postFormOnce(uri, "data=" + Http.encode(query));
+                rejectErrorDocument(xml, uri);
                 preferred = uri;
                 return xml;
             }
