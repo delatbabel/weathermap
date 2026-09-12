@@ -303,6 +303,42 @@ because a reader cannot judge a gradient without knowing what one gap is worth.
 Labels lie along their own contour, kept upright, spaced so a short closed
 contour gets one and a long one gets several.
 
+### Highs and lows
+
+The letters a reader looks at before any individual isobar: the lines say what
+the gradient is doing, the letters say what is driving it. A closed contour
+already implies a centre, but finding it by eye means tracing rings inwards, and
+near the edge of the chart the innermost ring may not be drawn at all.
+
+Local extrema of the field, with four filters, each removing a different kind of
+false centre:
+
+- **Smoothing** first. A quarter-degree field interpolated up to chart size
+  carries ripples that are extrema in the strict sense and weather in no sense.
+- **A radius.** A centre must beat everything within 110 px, not just the samples
+  next to it — measured over a circle, since the corners of a square are half
+  again as far away and would bias the test.
+- **Prominence** of half a contour interval. The real test is for a *closed*
+  isobar: a system worth a letter has lines that go round it, and a bump on a
+  slope does not. A quarter of an interval was tried first and marked two highs
+  on one European ridge plus a 1 hPa dip over the Gulf of Lion, neither of which
+  a forecaster would have drawn.
+- **The saddle between two centres.** Distance cannot tell a ridge with two
+  bumps from two adjacent highs; the ground between them can. Walk the field
+  from one to the other, and if it never drops a full interval below the lower
+  of the two, no isobar can close around either alone and it is one system.
+
+Candidates within the search radius of the edge are dropped outright. A field
+still rising as it leaves the chart has its maximum on the border, and that is
+not a high — it is a high somewhere off the map, and marking the edge of the
+paper claims to know where it is.
+
+Central pressure is written underneath in whole hectopascals. The extra digit is
+below the accuracy of the analysis and reads as a precision the forecast does
+not have. Only pressure gets letters: the extrema of a geopotential height field
+are ridges and troughs, and marking those with an H would be worse than leaving
+them unmarked.
+
 The colour is a warm dark brown, chosen against what is already on the map: the
 coastline is dark blue and the boundaries a dusty purple, so a cool colour would
 read as more of the base map, and the barbs are near-black and have to stay the
@@ -342,7 +378,6 @@ Ordered by how much they matter.
 | Download progress is end-only | `Http.download` | `BodyHandlers.ofFile` gives no intermediate callbacks; needs a counting `BodySubscriber`. |
 | Variable/level availability is only partly validated | `GribCatalog.STANDARD_LEVELS` | The common levels are known and an impossible pair is now repaired by the CLI and queried by the UI, but the full set is only discoverable from each model's filter form, so an unknown pairing is still allowed through and fails at download time. |
 | Isoline segments are not stitched into paths | `IsolineLayer` | Marching squares emits unordered segments, which draw correctly and label adequately. Stitching would buy smoothing and a gap in the line under each label. |
-| No pressure centres | `IsolineLayer` | Isobars are drawn but the H and L that a reader looks for first are not marked; needs local extrema of the smoothed field. |
 | A marine label point can land on land | `tools/make-gazetteer.py` | The centroid-then-chord rule holds for convex and crescent shapes; a many-armed one such as "Inner Seas off the West Coast of Scotland" can still put its name over an island. A pole of inaccessibility would fix it. |
 | Cache eviction is never called | `Cache.evictTo` | Implemented but unwired; needs a configured budget. |
 | Elevation | — | Left out by decision. OSM has `ele` tags on peaks but no terrain model; shaded relief needs SRTM or Copernicus DEM as a separate source. |
