@@ -149,6 +149,19 @@ class ChartRequestSeriesTest {
         assertEquals(1, requests.stream().map(ChartRequest::runTime).distinct().count());
     }
 
+    /**
+     * Three days back was asked for and refused by a limit that was a guess, not
+     * a fact. The archive holds nine to ten days, so the cap now sits at eight.
+     */
+    @Test
+    void aSeriesCanReachSeveralDaysBack() {
+        final List<ChartRequest> requests = series(6, 72, 0).chartRequests(NOW);
+
+        assertEquals(Instant.parse("2026-09-09T12:00:00Z"), requests.get(0).validTime());
+        assertTrue(requests.size() >= 12, "72 hours at 6-hourly steps: " + requests.size());
+        assertTrue(GribSelection.MAX_SERIES_HOURS_BACK >= 72);
+    }
+
     @Test
     void theReachIntoThePastIsCapped() {
         final GribSelection sel = new GribSelection();

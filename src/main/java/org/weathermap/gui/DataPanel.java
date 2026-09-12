@@ -49,7 +49,7 @@ public final class DataPanel extends JPanel {
     private final javax.swing.JSpinner seriesStep = new javax.swing.JSpinner(
             new javax.swing.SpinnerNumberModel(GribSelection.DEFAULT_SERIES_STEP_HOURS, 1, 24, 1));
     private final javax.swing.JSpinner seriesBack = new javax.swing.JSpinner(
-            new javax.swing.SpinnerNumberModel(0, 0, GribSelection.MAX_SERIES_HOURS_BACK, 3));
+            new javax.swing.SpinnerNumberModel(0, 0, GribSelection.MAX_SERIES_HOURS_BACK, 6));
     private final javax.swing.JSpinner seriesSpan = new javax.swing.JSpinner(
             new javax.swing.SpinnerNumberModel(GribSelection.DEFAULT_SERIES_SPAN_HOURS, 0, 384, 3));
     private final JLabel note = new JLabel(" ");

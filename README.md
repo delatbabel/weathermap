@@ -360,9 +360,23 @@ the window, which disables the explicit forecast-hours field because a series
 and a list of hours are two answers to the same question.
 
 It can start in the past: `--series 6,24,48` covers twenty-four hours back as
-well as forty-eight ahead, up to `MAX_SERIES_HOURS_BACK` (48). NOMADS keeps
-about ten days of runs — verified, `20260904` still served while `20260902` had
-gone — so the archive is comfortably deeper than the window.
+well as forty-eight ahead, up to `MAX_SERIES_HOURS_BACK` — **eight days**.
+
+That limit is set from what the archive holds rather than from a guess about
+what anyone would want; the first version guessed two days and was wrong within
+a week. Probing NOMADS found runs from nine days ago served and ten days gone,
+and the boundary moves each day as a day rolls off, so eight leaves a day of
+margin. A live `--series 24,192,0` returned eight charts spanning a week, every
+one of them an analysis.
+
+It is a margin and not a guarantee: a run can disappear between one request and
+the next. A chart whose run has rolled off is therefore **skipped with a
+warning** rather than failing the series around it — one chart of a week ago
+being gone is no reason to throw away the other fifteen. Anything other than a
+404 still stops the run, since a broken connection would fail every remaining
+chart too. Downloads come back paired with the request that produced them rather
+than matched by position, because the result can now be shorter than what was
+asked for.
 
 **Past charts are not forecasts re-run.** Each chart picks its own run by a
 single rule that covers both directions:

@@ -40,15 +40,19 @@ public final class GribSelection {
     public static final int DEFAULT_SERIES_SPAN_HOURS = 48;
 
     /**
-     * The furthest back a series may start.
+     * The furthest back a series may start: eight days.
      *
-     * <p>Not a limit of the data - NOMADS keeps about ten days of runs - but of
-     * what the feature is for: looking at how the weather that arrived compares
-     * with what was forecast, and seeing the run-up to now. Beyond a couple of
-     * days that is a different job, wanting reanalysis rather than the operational
-     * archive.</p>
+     * <p>Set from what the archive actually holds rather than from a guess about
+     * what anyone would want - the first version guessed two days and was wrong
+     * within a week. Probing NOMADS found runs from nine days ago served and ten
+     * days gone, and that boundary moves every day as a day rolls off, so eight
+     * leaves a day of margin.</p>
+     *
+     * <p>It is a margin and not a guarantee. A run can disappear between one
+     * request and the next, which is why a chart whose run has rolled off is
+     * skipped with a warning rather than failing the series around it.</p>
      */
-    public static final int MAX_SERIES_HOURS_BACK = 48;
+    public static final int MAX_SERIES_HOURS_BACK = 192;
 
     private GribModel model = GribModel.GFS_0P25;
 

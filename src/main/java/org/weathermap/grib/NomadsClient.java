@@ -83,11 +83,12 @@ public final class NomadsClient implements GribSource {
     }
 
     @Override
-    public List<Path> download(BoundingBox bbox, GribSelection selection,
-                               List<ChartRequest> requests, Http.ProgressListener listener)
+    public List<Downloaded> download(BoundingBox bbox, GribSelection selection,
+                                    List<ChartRequest> requests, Http.ProgressListener listener)
             throws IOException, InterruptedException {
 
-        final List<Path> out = new ArrayList<>();
+        final List<Downloaded> out = new ArrayList<>();
+        final List<ChartRequest> missing = new ArrayList<>();
         for (ChartRequest request : requests) {
             if (listener != null && listener.isCancelled()) break;
 
@@ -106,11 +107,49 @@ public final class NomadsClient implements GribSource {
             else {
                 LOG.info(() -> "Downloading " + selection.model().displayName()
                         + " " + yyyymmdd + " " + cycle + "Z f" + forecastHour);
-                Http.download(uri, entry, listener);
+                try {
+                    Http.download(uri, entry, listener);
+                }
+                catch (Http.RateLimitedException e) {
+                    throw e;                     // not this chart's fault; stop
+                }
+                catch (IOException e) {
+                    // A run that has aged out of the archive answers 404, and
+                    // one chart of a week ago being gone is no reason to throw
+                    // away the rest of the series. Anything else - a broken
+                    // connection, a server error - would fail every remaining
+                    // chart too, so it still stops the run.
+                    if (!hasRolledOff(e)) throw e;
+                    LOG.warning("No longer in the archive, skipping: " + request);
+                    missing.add(request);
+                    continue;
+                }
             }
-            out.add(entry);
+            out.add(new Downloaded(request, entry));
+        }
+
+        if (!missing.isEmpty()) {
+            LOG.warning(missing.size() + " chart(s) skipped: their runs have rolled off "
+                    + "NOMADS, the oldest wanted being " + missing.get(0));
+        }
+        if (out.isEmpty() && !requests.isEmpty()) {
+            throw new IOException("none of the " + requests.size()
+                    + " requested charts are still in the archive; "
+                    + "ask for a more recent window");
         }
         return out;
+    }
+
+    /**
+     * True for the archive having aged a run out rather than a transient fault.
+     *
+     * <p>NOMADS answers a request for a run it no longer holds with a 404. That
+     * is a fact about the past, not a failure, and the difference matters: one
+     * is skipped and the rest of the series proceeds, the other stops it.</p>
+     */
+    private static boolean hasRolledOff(IOException e) {
+        final String message = String.valueOf(e.getMessage());
+        return message.contains("HTTP 404") || message.contains("empty response");
     }
 
     private static final java.time.format.DateTimeFormatter RUN_DATE =

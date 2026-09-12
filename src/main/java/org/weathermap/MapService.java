@@ -107,7 +107,7 @@ public final class MapService {
         }
 
         p.stage("Downloading GRIB from " + grib.description());
-        final List<Path> gribFiles = grib.download(bbox, selection, requests,
+        final List<GribSource.Downloaded> fetched = grib.download(bbox, selection, requests,
                 new Http.ProgressListener() {
             @Override
             public void onProgress(long soFar, long total) { p.bytes(soFar, total); }
@@ -119,10 +119,18 @@ public final class MapService {
         final Compositor compositor = new Compositor(spec);
         final List<Result> results = new ArrayList<>();
 
-        for (int i = 0; i < gribFiles.size() && !p.isCancelled(); i++) {
-            final Path file = gribFiles.get(i);
-            final ChartRequest request = requests.get(i);
-            p.stage("Rendering " + request + " (" + (i + 1) + " of " + gribFiles.size() + ")");
+        if (fetched.size() < requests.size()) {
+            final int skipped = requests.size() - fetched.size();
+            p.stage(skipped + " chart(s) skipped - their runs are no longer in the archive");
+        }
+
+        for (int i = 0; i < fetched.size() && !p.isCancelled(); i++) {
+            // The request comes with the file rather than from the same index of
+            // another list: a chart whose run has rolled off is skipped, so the
+            // two are no longer the same length.
+            final Path file = fetched.get(i).file();
+            final ChartRequest request = fetched.get(i).request();
+            p.stage("Rendering " + request + " (" + (i + 1) + " of " + fetched.size() + ")");
 
             final List<Grid> grids = reader.read(file);
             if (grids.isEmpty()) {

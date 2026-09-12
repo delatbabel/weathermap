@@ -18,6 +18,9 @@ import java.util.List;
  */
 public interface GribSource {
 
+    /** One chart that was actually fetched. */
+    record Downloaded(ChartRequest request, Path file) { }
+
     /**
      * Downloads one file per request, each cut to {@code bbox}.
      *
@@ -26,10 +29,16 @@ public interface GribSource {
      * hours only count forwards, so a chart of yesterday afternoon cannot come
      * from this morning's run at all.</p>
      *
-     * @return the downloaded files, in the order requested
+     * <p>The result pairs each file with the request that produced it rather
+     * than relying on position, because it may be <em>shorter</em> than the
+     * requests: a run old enough to have rolled off the archive is skipped, and
+     * a series of a week ago that failed entirely because its first chart had
+     * aged out would be a poor trade for a run that is nearly all there.</p>
+     *
+     * @return what was fetched, in the order requested; possibly fewer than asked
      */
-    List<Path> download(BoundingBox bbox, GribSelection selection,
-                        List<ChartRequest> requests, Http.ProgressListener listener)
+    List<Downloaded> download(BoundingBox bbox, GribSelection selection,
+                              List<ChartRequest> requests, Http.ProgressListener listener)
             throws IOException, InterruptedException;
 
     String description();
