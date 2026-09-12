@@ -157,8 +157,36 @@ public final class Compositor {
         // with an opaque backing and does not compete with the barbs.
         final boolean hasWind = uGrid != null && vGrid != null;
         layers.add(new AnnotationLayer(primaryGrid, primaryRamp, modelName, hasWind,
-                                       validTimeOf(grids)));
+                                       validTimeOf(grids), attributionsFor(features)));
         return layers;
+    }
+
+    /**
+     * The map-data credits this chart has actually earned.
+     *
+     * <p>Derived from the features rather than fixed, because which sources were
+     * used is decided at fetch time and can change between one chart and the
+     * next: a wide area is drawn entirely from the bundle, a narrow one mostly
+     * from OSM, and one where Overpass timed out from the bundle after asking.
+     * OpenStreetMap's licence requires the credit when its data is present -
+     * and printing it when the data is absent is a small untruth on every
+     * copy.</p>
+     */
+    static List<String> attributionsFor(List<Feature> features) {
+        boolean osm = false;
+        boolean bundled = false;
+        for (Feature f : features) {
+            if (org.weathermap.osm.WorldGazetteer.isBundled(f)) bundled = true;
+            else osm = true;
+            if (osm && bundled) break;
+        }
+
+        final List<String> out = new ArrayList<>();
+        if (osm) out.add(AnnotationLayer.OSM_ATTRIBUTION);
+        if (bundled) out.add(org.weathermap.osm.WorldGazetteer.ATTRIBUTION);
+        // A chart with no base map at all still says where its numbers came
+        // from, which the caller adds after these.
+        return out;
     }
 
     /**

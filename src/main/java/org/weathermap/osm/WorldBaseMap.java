@@ -64,9 +64,16 @@ public final class WorldBaseMap {
         if (cached != null) return cached;
 
         final List<Feature> out = new ArrayList<>();
-        out.addAll(read(COASTLINE, FeatureKind.COASTLINE, Map.of("natural", "coastline")));
+        // Tagged with their source so the attribution line can say what the
+        // chart was actually drawn from. A map credited to OpenStreetMap that
+        // contains no OpenStreetMap data is a small untruth printed on every
+        // copy.
+        out.addAll(read(COASTLINE, FeatureKind.COASTLINE,
+                        Map.of("natural", "coastline",
+                               WorldGazetteer.SOURCE_TAG, WorldGazetteer.SOURCE)));
         out.addAll(read(BOUNDARIES, FeatureKind.BOUNDARY,
-                        Map.of("boundary", "administrative", "admin_level", "2")));
+                        Map.of("boundary", "administrative", "admin_level", "2",
+                               WorldGazetteer.SOURCE_TAG, WorldGazetteer.SOURCE)));
         LOG.fine(() -> "world outline: " + out.size() + " features");
         cached = List.copyOf(out);
         return cached;

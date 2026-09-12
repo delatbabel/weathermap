@@ -12,6 +12,7 @@ import java.awt.Graphics2D;
 import java.awt.LinearGradientPaint;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.List;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
@@ -39,6 +40,7 @@ public final class AnnotationLayer implements Layer {
     private final String modelName;
     private final boolean hasWind;
     private final java.time.Instant validTime;
+    private final List<String> attributions;
 
     public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName) {
         this(grid, ramp, modelName, false);
@@ -59,11 +61,21 @@ public final class AnnotationLayer implements Layer {
      */
     public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName, boolean hasWind,
                            java.time.Instant validTime) {
+        this(grid, ramp, modelName, hasWind, validTime, List.of(OSM_ATTRIBUTION));
+    }
+
+    /**
+     * @param attributions the map-data credits to print, in order; the forecast
+     *                     credit is always added after them
+     */
+    public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName, boolean hasWind,
+                           java.time.Instant validTime, List<String> attributions) {
         this.grid = grid;
         this.ramp = ramp;
         this.modelName = modelName;
         this.hasWind = hasWind;
         this.validTime = validTime;
+        this.attributions = List.copyOf(attributions);
     }
 
     @Override
@@ -141,7 +153,9 @@ public final class AnnotationLayer implements Layer {
     private void drawAttribution(Graphics2D g, int width, int height) {
         g.setFont(g.getFont().deriveFont(Font.PLAIN, 10f));
         final FontMetrics fm = g.getFontMetrics();
-        final String line = OSM_ATTRIBUTION + "  ·  " + NOAA_ATTRIBUTION;
+        final List<String> credits = new java.util.ArrayList<>(attributions);
+        credits.add(NOAA_ATTRIBUTION);
+        final String line = String.join("  ·  ", credits);
         final int textWidth = fm.stringWidth(line);
         final int pad = 4;
 

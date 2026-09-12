@@ -4,6 +4,7 @@ import org.weathermap.model.MapProjection;
 import org.weathermap.model.RenderSpec;
 import org.weathermap.osm.Feature;
 import org.weathermap.osm.FeatureKind;
+import org.weathermap.osm.WorldGazetteer;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -175,10 +176,24 @@ public final class VectorLayers {
         private static final List<String> IMPORTANCE =
                 List.of("city", "town", "village", "hamlet");
 
+        /** Cities, towns and so on, most important first. */
         private final List<Feature> places;
+
+        /** Named water, most important first. */
+        private final List<Feature> water;
+
+        /** Country label points, most important first. */
+        private final List<Feature> countries;
+
         private final Color dot = new Color(60, 60, 60);
         private final Color text = new Color(30, 30, 30);
         private final Color halo = new Color(255, 255, 255, 200);
+
+        /** Water names in the colour of water, so they read as sea and not as land. */
+        private final Color waterText = new Color(52, 92, 132);
+
+        /** Country names sit back: they are the frame, not the subject. */
+        private final Color countryText = new Color(105, 105, 112);
 
         /**
          * The most detailed place type worth drawing at a given span.
@@ -201,16 +216,71 @@ public final class VectorLayers {
             return IMPORTANCE.size();            // everything
         }
 
+        /**
+         * How small a body of water is worth naming at a given span.
+         *
+         * <p>Natural Earth's scale rank runs from 0 for an ocean through 1 for
+         * the Bay of Bengal and 2 for the Gulf of Thailand to 4 for the Gulf of
+         * Tonkin, so the cut runs the same way round as it does for places: a
+         * wide chart wants the large features, and the small ones are clutter
+         * on it. Narrow charts admit everything, because a body of water too
+         * small to be in the set simply is not there to draw.</p>
+         */
+        private static int waterRankLimitFor(double spanDegrees) {
+            if (spanDegrees > 40) return 2;
+            if (spanDegrees > 15) return 4;
+            return Integer.MAX_VALUE;
+        }
+
+        /**
+         * Below this span, country names are left off.
+         *
+         * <p>Under about ten degrees the coastline shape and the city names
+         * already say which country is which, and "Thailand" across a chart of
+         * the upper Gulf is a word taking up room that a wind barb wanted.</p>
+         */
+        private static final double MIN_COUNTRY_SPAN = 10.0;
+
+        /** Country label ranks above this are minor territories, not context. */
+        private static final int COUNTRY_RANK_LIMIT = 5;
+
         private static int rankOf(Feature f) {
             final int i = IMPORTANCE.indexOf(String.valueOf(f.placeType()));
             return i < 0 ? IMPORTANCE.size() : i;
         }
 
+        /**
+         * What to place first when labels compete for the same space.
+         *
+         * <p>The two sources measure importance differently and cannot be
+         * compared directly. An OSM place has a {@code place} tag and a real
+         * population; a bundled one has Natural Earth's scale rank, which
+         * already encodes the cartographer's judgement about when a name earns
+         * its ink. They never appear together - the bundle is only reached for
+         * when OSM has supplied nothing - so each list is simply sorted on its
+         * own terms.</p>
+         *
+         * <p>Before this, every bundled city tagged itself {@code place=city}
+         * and so ranked identically, and none of them carries a population tag:
+         * the sort had nothing to work with and the survivors were whichever
+         * happened to be tried first. That is how a chart of southern Asia
+         * ended up naming Bhilai and Sholapur.</p>
+         */
+        private static int importanceOf(Feature f) {
+            return WorldGazetteer.isBundled(f) ? WorldGazetteer.rankOf(f) : rankOf(f);
+        }
+
         public PlaceLabelLayer(List<Feature> features) {
             this.places = new ArrayList<>(of(features, FeatureKind.PLACE));
             this.places.sort(Comparator
-                    .comparingInt(PlaceLabelLayer::rankOf)
+                    .comparingInt(PlaceLabelLayer::importanceOf)
                     .thenComparing(Comparator.comparingLong(Feature::population).reversed()));
+
+            this.water = new ArrayList<>(of(features, FeatureKind.MARINE));
+            this.water.sort(Comparator.comparingInt(WorldGazetteer::rankOf));
+
+            this.countries = new ArrayList<>(of(features, FeatureKind.COUNTRY));
+            this.countries.sort(Comparator.comparingInt(WorldGazetteer::rankOf));
         }
 
         /**
@@ -236,62 +306,123 @@ public final class VectorLayers {
         public void draw(Graphics2D g, MapProjection projection) {
             final double span = Math.max(projection.bounds().widthDegrees(),
                                          projection.bounds().heightDegrees());
-            final int rankLimit = rankLimitFor(span);
             final int budget = labelBudget(projection);
+
+            // One collision set across all three kinds, because a sea name and a
+            // city name overlapping is exactly as unreadable as two city names
+            // overlapping, and separate layers cannot see each other to avoid it.
             final List<Rectangle2D> placed = new ArrayList<>();
-            final Font font = g.getFont().deriveFont(Font.PLAIN, 11f);
-            g.setFont(font);
-            final FontMetrics fm = g.getFontMetrics();
+            final Font base = g.getFont();
 
+            // Order is priority. Water first: on a chart read for the wind, the
+            // sea the wind is blowing over is the thing that locates it, and the
+            // names are few enough that they never crowd the cities out.
+            drawWater(g, projection, placed, budget, span, base);
+            drawCountries(g, projection, placed, budget, span, base);
+            drawPlaces(g, projection, placed, budget, span, base);
+        }
+
+        private void drawWater(Graphics2D g, MapProjection projection,
+                               List<Rectangle2D> placed, int budget, double span, Font base) {
+            final int limit = waterRankLimitFor(span);
+            // Italic, the cartographic convention for water, and sized by
+            // importance so an ocean reads as larger than a gulf inside it.
+            for (Feature f : water) {
+                if (placed.size() >= budget) return;
+                final int rank = WorldGazetteer.rankOf(f);
+                if (rank > limit) continue;
+
+                final float size = rank <= 1 ? 13f : 11.5f;
+                g.setFont(base.deriveFont(Font.ITALIC, size));
+                place(g, projection, placed, f, waterText, false);
+            }
+        }
+
+        private void drawCountries(Graphics2D g, MapProjection projection,
+                                   List<Rectangle2D> placed, int budget, double span, Font base) {
+            if (span < MIN_COUNTRY_SPAN) return;
+            g.setFont(base.deriveFont(Font.PLAIN, 11f));
+            for (Feature f : countries) {
+                if (placed.size() >= budget) return;
+                if (WorldGazetteer.rankOf(f) > COUNTRY_RANK_LIMIT) continue;
+                place(g, projection, placed, f, countryText, false);
+            }
+        }
+
+        private void drawPlaces(Graphics2D g, MapProjection projection,
+                                List<Rectangle2D> placed, int budget, double span, Font base) {
+            final int rankLimit = rankLimitFor(span);
+            g.setFont(base.deriveFont(Font.PLAIN, 11f));
             for (Feature f : places) {
-                if (placed.size() >= budget) break;
+                if (placed.size() >= budget) return;
                 if (rankOf(f) > rankLimit) continue;
-                final String name = f.name();
-                if (name == null || name.isBlank()) continue;
+                place(g, projection, placed, f, text, true);
+            }
+        }
 
-                final double[] p = f.points().get(0);
-                final Point2D.Double pt = projection.toPixel(p[0], p[1]);
-                if (pt.x < 0 || pt.y < 0
-                        || pt.x > projection.imageWidth() || pt.y > projection.imageHeight()) {
-                    continue;
-                }
+        /**
+         * Places one label if it fits, and reports nothing if it does not.
+         *
+         * <p>A name with a dot is offset to the right of it; one without is
+         * centred on its point, because a sea name marks an area rather than a
+         * position and putting it beside an invisible dot looks like a mistake.</p>
+         */
+        private void place(Graphics2D g, MapProjection projection, List<Rectangle2D> placed,
+                           Feature f, Color colour, boolean withDot) {
+            final String name = f.name();
+            if (name == null || name.isBlank()) return;
 
-                final double tx = pt.x + 5;
-                final double ty = pt.y + fm.getAscent() / 2.0 - 1;
-                final Rectangle2D box = new Rectangle2D.Double(
-                        tx - LABEL_PADDING, ty - fm.getAscent() - LABEL_PADDING,
-                        fm.stringWidth(name) + LABEL_PADDING * 2,
-                        fm.getHeight() + LABEL_PADDING * 2);
+            final double[] p = f.points().get(0);
+            final Point2D.Double pt = projection.toPixel(p[0], p[1]);
+            if (pt.x < 0 || pt.y < 0
+                    || pt.x > projection.imageWidth() || pt.y > projection.imageHeight()) {
+                return;
+            }
 
-                boolean collides = false;
-                for (Rectangle2D other : placed) {
-                    if (other.intersects(box)) {
-                        collides = true;
-                        break;
-                    }
-                }
+            final FontMetrics fm = g.getFontMetrics();
+            final double width = fm.stringWidth(name);
+            final double tx = withDot ? pt.x + 5 : pt.x - width / 2;
+            final double ty = pt.y + fm.getAscent() / 2.0 - 1;
+
+            final Rectangle2D box = new Rectangle2D.Double(
+                    tx - LABEL_PADDING, ty - fm.getAscent() - LABEL_PADDING,
+                    width + LABEL_PADDING * 2, fm.getHeight() + LABEL_PADDING * 2);
+
+            // The point being on the page is not enough - a sea name is centred
+            // on its point and runs both ways from it, so "East China Sea" a
+            // few pixels inside the right edge was drawn as "East China". Half
+            // a name is worse than no name: it reads as a different place.
+            if (box.getMinX() < 0 || box.getMinY() < 0
+                    || box.getMaxX() > projection.imageWidth()
+                    || box.getMaxY() > projection.imageHeight()) {
+                return;
+            }
+
+            for (Rectangle2D other : placed) {
                 // TODO: try the other three quadrants around the dot before
                 // dropping the label.
-                if (collides) continue;
-                placed.add(box);
+                if (other.intersects(box)) return;
+            }
+            placed.add(box);
 
+            if (withDot) {
                 g.setColor(dot);
                 g.fillOval((int) pt.x - 2, (int) pt.y - 2, 4, 4);
+            }
 
-                // A halo keeps names legible over a busy GRIB field. Drawing the
-                // string four times is crude next to a real outline but costs
-                // nothing and needs no font-glyph work.
-                g.setColor(halo);
-                for (int dx = -1; dx <= 1; dx++) {
-                    for (int dy = -1; dy <= 1; dy++) {
-                        if (dx != 0 || dy != 0) {
-                            g.drawString(name, (float) tx + dx, (float) ty + dy);
-                        }
+            // A halo keeps names legible over a busy GRIB field. Drawing the
+            // string four times is crude next to a real outline but costs
+            // nothing and needs no font-glyph work.
+            g.setColor(halo);
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    if (dx != 0 || dy != 0) {
+                        g.drawString(name, (float) tx + dx, (float) ty + dy);
                     }
                 }
-                g.setColor(text);
-                g.drawString(name, (float) tx, (float) ty);
             }
+            g.setColor(colour);
+            g.drawString(name, (float) tx, (float) ty);
         }
 
         @Override

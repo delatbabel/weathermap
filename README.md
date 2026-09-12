@@ -80,6 +80,41 @@ Overpass API as OSM features and drawn as separate Java2D layers. Two reasons:
   bulk downloading, so they are not a legal source for a
   "download-a-region" feature. Overpass is designed for exactly this query.
 
+### Names come from a bundle, shapes from OSM
+
+Overpass is asked for coastline, boundaries and populated places. It is never
+asked for water, and above 20 degrees it is not asked at all — a 56 degree box
+is refused or times out, and full-resolution coastline at that scale lands
+several nodes to the pixel anyway.
+
+That left two holes, and a bundled Natural Earth gazetteer
+(`WorldGazetteer`, 29 KB, public domain) fills both:
+
+- **Water has no name at any scale.** The place query asks for
+  `place=city|town|…`, so nothing ever supplied "Gulf of Thailand". On a chart
+  read for the wind this is the wrong thing to omit: whether a southerly over
+  southern Vietnam comes off the Gulf of Thailand or out of the South China Sea
+  is the difference between two forecasts. Marine names are therefore drawn at
+  every scale, not only wide ones.
+- **Wide charts had no labels at all.** Beyond the Overpass limit a composite
+  was unnamed outlines and several hundred barbs. Bundled cities and country
+  names now stand in, and are used *only* there — where OSM has answered, its
+  places are better.
+
+Two resolutions, deliberately: marine features and cities at 1:50m, countries
+at 1:110m. The 1:110m marine set has 29 entries and stops at "South China
+Sea"; 1:50m has 118 and includes the Gulf of Thailand, the Andaman Sea and the
+Gulf of Tonkin. Everything is bundled and the *renderer* cuts by span, because
+what belongs on a chart depends on how wide it is.
+
+Marine features are polygons in the source, so `tools/make-gazetteer.py`
+derives a point for the name to sit on: the area centroid where it falls inside
+the shape, and the midpoint of the widest horizontal chord where it does not —
+a crescent like the Gulf of Thailand has its centroid on land.
+
+All three kinds compete for one label budget against a single collision set, so
+a sea name and a city name cannot be drawn on top of each other.
+
 ### One renderer, two front ends
 
 `MapService` is the whole job: fetch, download, decode, composite, write.
@@ -232,12 +267,13 @@ Ordered by how much they matter.
 | Land/sea fill is flat | `VectorLayers.LandSeaLayer` | Deriving land needs the OSM convention that land is left of a coastline way, plus stitching open segments into closed rings against the box edges. Today the coastline stroke does the work, which reads correctly for a coastal box and wrongly for an inland one. |
 | Isolines | `GribLayer.drawContours` | Marching squares plus contour-interval selection and label placement. This is what makes a synoptic chart look like one. |
 | `NetcdfGribReader` | `grib/netcdf/` | Stub. |
-| Accumulated fields are labelled with the start of their period | `Grib2Scanner.validTime` | Product template 4.8 stores the interval end further into the template; an `APCP` message for f006 currently reports 00Z. |
+| Accumulated fields are labelled with the start of their period | `Grib2Scanner.validTime` | Product template 4.8 stores the interval end further into the template; an `APCP` message for f006 still reports 00Z. `Compositor.validTimeOf` works around it for the chart caption by taking the latest time across the fields, but the `Grid` itself is still wrong. |
 | Overpass queries are not tiled | `OverpassClient` | A very large box exceeds the server limit. Splitting needs coastline segments stitched across tile seams. |
 | OSM relations are ignored | `OsmXmlParser` | Multipolygon boundaries render as their member ways — right for strokes, wrong for fills. |
 | Antimeridian | `BoundingBox` | Refused rather than split. Supporting it means two boxes and compositing the halves. |
 | Download progress is end-only | `Http.download` | `BodyHandlers.ofFile` gives no intermediate callbacks; needs a counting `BodySubscriber`. |
-| Variable/level availability is not validated | `GribCatalog` | Only discoverable from each model's filter form, so an impossible pair fails at download time with an empty result rather than being greyed out. |
+| Variable/level availability is only partly validated | `GribCatalog.STANDARD_LEVELS` | The common levels are known and an impossible pair is now repaired by the CLI and queried by the UI, but the full set is only discoverable from each model's filter form, so an unknown pairing is still allowed through and fails at download time. |
+| A marine label point can land on land | `tools/make-gazetteer.py` | The centroid-then-chord rule holds for convex and crescent shapes; a many-armed one such as "Inner Seas off the West Coast of Scotland" can still put its name over an island. A pole of inaccessibility would fix it. |
 | Cache eviction is never called | `Cache.evictTo` | Implemented but unwired; needs a configured budget. |
 | Elevation | — | Left out by decision. OSM has `ele` tags on peaks but no terrain model; shaded relief needs SRTM or Copernicus DEM as a separate source. |
 
@@ -258,4 +294,5 @@ Ordered by how much they matter.
 | Source | Licence | Obligation |
 |---|---|---|
 | OpenStreetMap | ODbL 1.0 | Attribute; share alike if you publish derived data |
+| Natural Earth | Public domain | None, but the outline and the gazetteer are credited on charts that use them |
 | NOAA NOMADS | US Government public domain | None, but crediting NOAA is conventional |

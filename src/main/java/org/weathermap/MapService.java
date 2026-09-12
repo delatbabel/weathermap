@@ -12,6 +12,7 @@ import org.weathermap.osm.Feature;
 import org.weathermap.osm.FeatureKind;
 import org.weathermap.osm.OsmSource;
 import org.weathermap.osm.OverpassClient;
+import org.weathermap.osm.WorldGazetteer;
 import org.weathermap.render.Compositor;
 import org.weathermap.render.PngWriter;
 import org.weathermap.util.Http;
@@ -144,6 +145,24 @@ public final class MapService {
         if (spec.isEnabled(RenderSpec.LayerKind.PLACE_LABELS)) kinds.add(FeatureKind.PLACE);
         if (kinds.isEmpty()) return List.of();
 
+        final List<Feature> out = new ArrayList<>(baseMapFor(bbox, kinds, p));
+
+        // The names of the sea come from the bundle at every scale, not only the
+        // wide ones. Overpass is never asked for water - the place query wants
+        // cities - so without this a marine chart has no name for the thing the
+        // wind is blowing across, at any zoom. Country names join them once the
+        // chart is wide enough that city names have stopped saying where you
+        // are. Both are a few hundred bytes of labels against a shared budget,
+        // so they cost the cities almost nothing.
+        if (spec.isEnabled(RenderSpec.LayerKind.PLACE_LABELS)) {
+            out.addAll(WorldGazetteer.of(FeatureKind.MARINE));
+            out.addAll(WorldGazetteer.of(FeatureKind.COUNTRY));
+        }
+        return out;
+    }
+
+    /** Coastline, boundaries and city names - from OSM where it can serve them. */
+    private List<Feature> baseMapFor(BoundingBox bbox, List<FeatureKind> kinds, Progress p) {
         // Asked before the request is built, not after it fails. Overpass
         // answers an impossible box by timing out, which costs the full retry
         // budget across every instance - ninety seconds to arrive at the
@@ -151,13 +170,13 @@ public final class MapService {
         if (OverpassClient.isTooLarge(bbox)) {
             LOG.info(() -> String.format(
                     "area spans %.1f deg, beyond the %.0f deg Overpass is worth asking "
-                    + "for; using the bundled world outline",
+                    + "for; using the bundled world outline and gazetteer",
                     Math.max(bbox.widthDegrees(), bbox.heightDegrees()),
                     OverpassClient.MAX_SERVABLE_SPAN));
             p.stage(String.format(
-                    "Area wider than %.0f\u00b0 - using the coarse world outline",
+                    "Area wider than %.0f\u00b0 - using the bundled world map",
                     OverpassClient.MAX_SERVABLE_SPAN));
-            return org.weathermap.osm.WorldBaseMap.features();
+            return bundledBaseMap();
         }
 
         try {
@@ -179,7 +198,22 @@ public final class MapService {
         // the wrong resolution for a small area and still far better than an
         // empty background - which is what this used to produce whenever
         // Overpass was busy.
-        p.stage("OSM detail unavailable - using the coarse world outline");
-        return org.weathermap.osm.WorldBaseMap.features();
+        p.stage("OSM detail unavailable - using the bundled world map");
+        return bundledBaseMap();
+    }
+
+    /**
+     * The bundled outline together with its city names.
+     *
+     * <p>The names are only reached for here, when OSM is not supplying any.
+     * Where OSM has answered, its places are better - they carry real
+     * populations and go down to villages - and mixing the two sets would put
+     * two dots on some cities and rank them by two different meanings of
+     * "important".</p>
+     */
+    private static List<Feature> bundledBaseMap() {
+        final List<Feature> out = new ArrayList<>(org.weathermap.osm.WorldBaseMap.features());
+        out.addAll(WorldGazetteer.of(FeatureKind.PLACE));
+        return out;
     }
 }
