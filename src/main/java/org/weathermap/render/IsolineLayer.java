@@ -152,6 +152,23 @@ public final class IsolineLayer implements Layer {
 
     private final Color halo = new Color(255, 255, 255, 205);
 
+    /**
+     * Blue for a high, red for a low - the convention most charts use.
+     *
+     * <p>Both are pushed well clear of what is already on the map: the blue is
+     * more saturated than the coastline's muted navy, and the red is nowhere
+     * near the dusty purple of the boundaries or the brown of the isobars
+     * themselves. A letter that could be mistaken for a boundary is worse than
+     * no colour at all, and at this size and weight there is no ambiguity.</p>
+     *
+     * <p>The isobars stay brown. Colouring the lines by the system they belong
+     * to is not a thing charts do, and could not be done anyway - one isobar
+     * usually runs past several.</p>
+     */
+    private final Color highInk = new Color(20, 70, 175);
+
+    private final Color lowInk = new Color(190, 32, 32);
+
     public IsolineLayer(Grid grid) {
         this.grid = grid;
         this.style = styleFor(grid);
@@ -411,6 +428,7 @@ public final class IsolineLayer implements Layer {
                 style.interval() * MIN_PROMINENCE_FRACTION);
 
         for (Centre centre : centres) {
+            final Color colour = centre.high() ? highInk : lowInk;
             final String letter = centre.high() ? "H" : "L";
             // Whole hectopascals. A chart writes "1026", not "1026.3" - the
             // extra digit is below the accuracy of the analysis and reads as a
@@ -421,25 +439,25 @@ public final class IsolineLayer implements Layer {
             final FontMetrics letterMetrics = g.getFontMetrics();
             final float letterX = (float) (centre.x() - letterMetrics.stringWidth(letter) / 2.0);
             final float letterY = (float) (centre.y() + letterMetrics.getAscent() / 2.0 - 3);
-            haloed(g, letter, letterX, letterY);
+            haloed(g, letter, letterX, letterY, colour);
 
             // The central pressure underneath, which is what turns "a low" into
             // "how deep a low".
             g.setFont(g.getFont().deriveFont(Font.BOLD, 11f));
             final FontMetrics valueMetrics = g.getFontMetrics();
             final float valueX = (float) (centre.x() - valueMetrics.stringWidth(value) / 2.0);
-            haloed(g, value, valueX, letterY + valueMetrics.getHeight() - 1);
+            haloed(g, value, valueX, letterY + valueMetrics.getHeight() - 1, colour);
         }
     }
 
-    private void haloed(Graphics2D g, String text, float x, float y) {
+    private void haloed(Graphics2D g, String text, float x, float y, Color colour) {
         g.setColor(halo);
         for (int dx = -2; dx <= 2; dx++) {
             for (int dy = -2; dy <= 2; dy++) {
                 if (dx != 0 || dy != 0) g.drawString(text, x + dx, y + dy);
             }
         }
-        g.setColor(ink);
+        g.setColor(colour);
         g.drawString(text, x, y);
     }
 

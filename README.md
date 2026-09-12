@@ -339,6 +339,13 @@ not have. Only pressure gets letters: the extrema of a geopotential height field
 are ridges and troughs, and marking those with an H would be worse than leaving
 them unmarked.
 
+The letters follow the blue-H, red-L convention. Both are pushed well clear of
+what is already on the map — the blue is more saturated than the coastline's
+muted navy, and the red is nowhere near the boundaries' dusty purple. The
+isobars themselves stay brown: colouring lines by the system they belong to is
+not something charts do, and could not be done anyway, since one isobar usually
+runs past several.
+
 The colour is a warm dark brown, chosen against what is already on the map: the
 coastline is dark blue and the boundaries a dusty purple, so a cool colour would
 read as more of the base map, and the barbs are near-black and have to stay the
