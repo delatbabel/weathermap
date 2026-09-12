@@ -44,8 +44,8 @@ public final class Compositor {
      * @param bbox      the area
      * @param features  OSM features covering it; may be empty, in which case only
      *                  the fill and the GRIB field are drawn
-     * @param grids     decoded fields for one forecast hour; the first drives the
-     *                  legend and the title
+     * @param grids     decoded fields for one forecast hour; {@link #primaryOf}
+     *                  picks the one that drives the legend and the title
      * @param modelName for the annotation line
      */
     public BufferedImage render(BoundingBox bbox, List<Feature> features,
@@ -111,7 +111,7 @@ public final class Compositor {
         // coastline rather than assuming land. See VectorLayers.LandSeaLayer.
         layers.add(new VectorLayers.LandSeaLayer(true));
 
-        Grid primary = null;
+        final Grid primaryGrid = primaryOf(grids);
         ColourRamp primaryRamp = null;
         Grid uGrid = null;
         Grid vGrid = null;
@@ -132,10 +132,7 @@ public final class Compositor {
             final FieldStyle style = FieldStyle.forGrid(grid, spec.autoScaleRamp());
             layers.add(new GribLayer(grid, style.ramp(),
                                      style.opacity() * spec.gribOpacity()));
-            if (primary == null) {
-                primary = grid;
-                primaryRamp = style.ramp();
-            }
+            if (grid == primaryGrid) primaryRamp = style.ramp();
         }
 
         // --- middle: the base map, over the fields --------------------------
@@ -147,7 +144,6 @@ public final class Compositor {
         // --- top: the wind ---------------------------------------------------
         if (uGrid != null && vGrid != null) {
             layers.add(new WindBarbLayer(uGrid, vGrid));
-            if (primary == null) primary = uGrid;      // so the title names something
         }
         else if (uGrid != null || vGrid != null) {
             // One component without the other cannot be drawn. Saying so beats
@@ -160,8 +156,45 @@ public final class Compositor {
         // Chrome last, so the legend stays readable. It occupies two corners
         // with an opaque backing and does not compete with the barbs.
         final boolean hasWind = uGrid != null && vGrid != null;
-        layers.add(new AnnotationLayer(primary, primaryRamp, modelName, hasWind));
+        layers.add(new AnnotationLayer(primaryGrid, primaryRamp, modelName, hasWind,
+                                       validTimeOf(grids)));
         return layers;
+    }
+
+    /**
+     * The field the chart is named and captioned for.
+     *
+     * <p>Public and static because {@link org.weathermap.MapService} names the
+     * PNG file from it, and a file called {@code UGRD} whose title reads
+     * "Precipitation" is a small lie that takes a while to notice. Before this
+     * existed they picked independently - the file took the first decoded grid,
+     * which the wind hold-back made a component that is never the subject.</p>
+     *
+     * <p>Wind is the subject of these charts but it is drawn, not shaded, so it
+     * only becomes the primary when nothing else was decoded.</p>
+     */
+    public static Grid primaryOf(List<Grid> grids) {
+        for (Grid grid : grids) {
+            if (!FieldStyle.isVectorComponent(grid.variable())) return grid;
+        }
+        return grids.isEmpty() ? null : grids.get(0);
+    }
+
+    /**
+     * The instant the chart depicts.
+     *
+     * <p>The latest valid time among the fields, not the primary's own, because
+     * an accumulation reports the <em>start</em> of its window: precipitation
+     * for forecast hour 6 carries 00:00, and a chart of 06:00 winds captioned
+     * "valid 00:00" is wrong in the one way a forecast must never be.</p>
+     */
+    public static java.time.Instant validTimeOf(List<Grid> grids) {
+        java.time.Instant latest = null;
+        for (Grid grid : grids) {
+            final java.time.Instant t = grid.validTime();
+            if (t != null && (latest == null || t.isAfter(latest))) latest = t;
+        }
+        return latest;
     }
 
     public RenderSpec spec() { return spec; }

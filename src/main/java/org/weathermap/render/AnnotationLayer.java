@@ -38,9 +38,14 @@ public final class AnnotationLayer implements Layer {
     private final ColourRamp ramp;
     private final String modelName;
     private final boolean hasWind;
+    private final java.time.Instant validTime;
 
     public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName) {
         this(grid, ramp, modelName, false);
+    }
+
+    public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName, boolean hasWind) {
+        this(grid, ramp, modelName, hasWind, grid == null ? null : grid.validTime());
     }
 
     /**
@@ -48,12 +53,17 @@ public final class AnnotationLayer implements Layer {
      * @param hasWind whether barbs are on the map, so the title can say so -
      *                a chart captioned "Temperature" whose subject is plainly
      *                the wind misdescribes itself
+     * @param validTime the instant the chart depicts, which is not always the
+     *                primary field's own: an accumulation reports the start of
+     *                its window. See {@link Compositor#validTimeOf}.
      */
-    public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName, boolean hasWind) {
+    public AnnotationLayer(Grid grid, ColourRamp ramp, String modelName, boolean hasWind,
+                           java.time.Instant validTime) {
         this.grid = grid;
         this.ramp = ramp;
         this.modelName = modelName;
         this.hasWind = hasWind;
+        this.validTime = validTime;
     }
 
     @Override
@@ -78,7 +88,7 @@ public final class AnnotationLayer implements Layer {
                    .append(" @ ").append(grid.level().displayName());
         }
         final String line = modelName + "  ·  " + subject
-                + "  ·  valid " + VALID_TIME.format(grid.validTime());
+                + (validTime == null ? "" : "  ·  valid " + VALID_TIME.format(validTime));
         g.setFont(g.getFont().deriveFont(Font.BOLD, 13f));
         final FontMetrics fm = g.getFontMetrics();
         final int pad = 8;

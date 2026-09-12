@@ -130,6 +130,51 @@ public final class GribSelection {
         levels.addAll(levs);
     }
 
+    /**
+     * Selections that will come back empty, described in terms of the fix.
+     *
+     * <p>Checked before anything is downloaded, because the alternative is a
+     * request that matches no records, an empty body with HTTP 200, and an error
+     * that says so without saying why.</p>
+     *
+     * @return one message per problem, empty when the selection can work
+     */
+    public List<String> problems() {
+        final List<String> out = new ArrayList<>();
+        for (GribVariable variable : variables) {
+            final List<GribLevel> known = GribCatalog.standardLevels(variable);
+            if (known.isEmpty()) continue;
+
+            final boolean served = levels.stream().anyMatch(known::contains);
+            if (!served) {
+                out.add(variable.displayName() + " is not published at "
+                        + (levels.size() == 1 ? levels.iterator().next().displayName()
+                                              : "any selected level")
+                        + " - add " + GribCatalog.defaultLevel(variable).displayName());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Adds whatever levels the selected variables need.
+     *
+     * <p>Additive on purpose: a level the user chose is never removed, because
+     * one they added for a variable this does not know about would vanish.</p>
+     *
+     * @return the levels that were added
+     */
+    public List<GribLevel> addMissingLevels() {
+        final List<GribLevel> added = new ArrayList<>();
+        for (GribVariable variable : variables) {
+            final List<GribLevel> known = GribCatalog.standardLevels(variable);
+            if (known.isEmpty() || levels.stream().anyMatch(known::contains)) continue;
+            final GribLevel wanted = GribCatalog.defaultLevel(variable);
+            if (levels.add(wanted)) added.add(wanted);
+        }
+        return added;
+    }
+
     /** @return one composited PNG per forecast hour. */
     public int outputCount() { return forecastHours.size(); }
 

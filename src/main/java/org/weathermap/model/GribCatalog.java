@@ -1,6 +1,7 @@
 package org.weathermap.model;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * The variables and levels the UI offers, and the defaults.
@@ -80,6 +81,58 @@ public final class GribCatalog {
     public static final List<GribLevel> LEVELS = List.of(
             LEVEL_SURFACE, LEVEL_MSL, LEVEL_2M, LEVEL_10M,
             LEVEL_850MB, LEVEL_700MB, LEVEL_500MB, LEVEL_300MB, LEVEL_ENTIRE_ATMOSPHERE);
+
+    // ---- which levels a variable actually exists at ----------------------
+
+    /**
+     * The levels each variable is published at, for the ones we can be sure of.
+     *
+     * <p>This exists because the failure it prevents is silent and baffling.
+     * NOMADS applies the level filter across <em>all</em> requested variables,
+     * so asking for wind and precipitation with only {@code 2_m_above_ground}
+     * selected matches no records at all - wind lives at 10 m and precipitation
+     * at the surface - and the service answers with an empty body and HTTP 200.
+     * The download then fails with "matched no GRIB records", which is true and
+     * useless.</p>
+     *
+     * <p>Not exhaustive and not authoritative: only each model's own filter form
+     * knows the full set, and a variable absent from this map is simply not
+     * checked. It is here to catch the combinations that can never work, not to
+     * police the ones that might.</p>
+     */
+    private static final Map<String, List<GribLevel>> STANDARD_LEVELS = Map.of(
+            "UGRD", List.of(LEVEL_10M, LEVEL_850MB, LEVEL_700MB, LEVEL_500MB, LEVEL_300MB),
+            "VGRD", List.of(LEVEL_10M, LEVEL_850MB, LEVEL_700MB, LEVEL_500MB, LEVEL_300MB),
+            "TMP", List.of(LEVEL_2M, LEVEL_SURFACE, LEVEL_850MB, LEVEL_700MB, LEVEL_500MB),
+            "DPT", List.of(LEVEL_2M),
+            "RH", List.of(LEVEL_2M, LEVEL_850MB, LEVEL_700MB, LEVEL_500MB),
+            "APCP", List.of(LEVEL_SURFACE),
+            "PRMSL", List.of(LEVEL_MSL),
+            "TCDC", List.of(LEVEL_ENTIRE_ATMOSPHERE),
+            "HGT", List.of(LEVEL_500MB, LEVEL_850MB, LEVEL_700MB, LEVEL_300MB));
+
+    /** The levels {@code variable} is known to exist at, or empty if unknown. */
+    public static List<GribLevel> standardLevels(GribVariable variable) {
+        return STANDARD_LEVELS.getOrDefault(variable.code(), List.of());
+    }
+
+    /** The level to reach for when a variable has been selected and none suits it. */
+    public static GribLevel defaultLevel(GribVariable variable) {
+        final List<GribLevel> levels = standardLevels(variable);
+        return levels.isEmpty() ? LEVEL_SURFACE : levels.get(0);
+    }
+
+    /**
+     * True when {@code level} is known <em>not</em> to carry {@code variable}.
+     *
+     * <p>Deliberately one-sided: an unknown pairing is allowed through, because
+     * being wrong about what exists should never stop a download that would have
+     * worked.</p>
+     */
+    public static boolean isKnownUnavailable(GribVariable variable, GribLevel level) {
+        final List<GribLevel> levels = standardLevels(variable);
+        return !levels.isEmpty() && !levels.contains(level);
+    }
 
     /** @return the catalogued variable with this NOMADS code, or a bare one if unknown. */
     public static GribVariable variable(String code) {

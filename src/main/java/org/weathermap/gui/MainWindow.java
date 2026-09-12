@@ -2,6 +2,7 @@ package org.weathermap.gui;
 
 import org.weathermap.MapService;
 import org.weathermap.model.BoundingBox;
+import org.weathermap.model.GribLevel;
 import org.weathermap.model.GribSelection;
 import org.weathermap.model.Preferences;
 import org.weathermap.model.RenderSpec;
@@ -281,6 +282,12 @@ public final class MainWindow extends JFrame {
             setStatus("Fix the data selection first");
             return;
         }
+        // Checked here rather than in the panel, because it is only wrong in
+        // combination: each variable and each level is individually fine, and
+        // it is the pairing that matches nothing.
+        final List<String> problems = selection.problems();
+        if (!problems.isEmpty() && !resolveLevelProblems(selection, problems)) return;
+
         final BoundingBox typed = areaPanel.area();
         if (typed != null) area = typed;
 
@@ -293,6 +300,57 @@ public final class MainWindow extends JFrame {
         progress.setVisible(true);
         worker = new DownloadWorker(area, selection, renderSpec.copy(), preferences.outputDir());
         worker.execute();
+    }
+
+    /**
+     * Offers to add the levels the selected variables are actually published at.
+     *
+     * <p>Asks rather than silently repairing, because the desktop user can see
+     * the lists and a selection that changes itself underneath them is worse
+     * than one that explains itself. The command-line tool takes the opposite
+     * view for the opposite reason - nobody is watching it.</p>
+     *
+     * <p>"Download anyway" is offered because this catalogue is not
+     * authoritative: it knows the common levels, not every level every model
+     * publishes, and being wrong about what exists must never be able to stop a
+     * download that would have worked.</p>
+     *
+     * @return {@code true} if the download should go ahead
+     */
+    private boolean resolveLevelProblems(GribSelection selection, List<String> problems) {
+        final StringBuilder message = new StringBuilder(
+                "<html><body style='width: 340px'>"
+                + "<p>This selection will match no records:</p><ul>");
+        for (String problem : problems) {
+            message.append("<li>").append(problem).append("</li>");
+        }
+        message.append("</ul><p>NOMADS filters every variable by the same set of "
+                + "levels, so one variable at a level it is not published at "
+                + "empties the whole request - not just its own part of it.</p>"
+                + "</body></html>");
+
+        final Object[] choices = {"Add the levels", "Download anyway", "Cancel"};
+        final int choice = JOptionPane.showOptionDialog(
+                this, message.toString(), "Levels needed",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE,
+                null, choices, choices[0]);
+
+        if (choice != 0) {
+            // Anything but an explicit "anyway" - Cancel, or the dialog being
+            // closed - stops here.
+            return choice == 1;
+        }
+
+        final List<GribLevel> added = selection.addMissingLevels();
+        dataPanel.setSelection(selection);
+        final StringBuilder names = new StringBuilder();
+        for (GribLevel level : added) {
+            if (names.length() > 0) names.append(", ");
+            names.append(level.displayName());
+        }
+        setStatus(added.isEmpty() ? "No level could be added automatically"
+                                  : "Added " + names + " to the selection");
+        return true;
     }
 
     private void savePreferences() {

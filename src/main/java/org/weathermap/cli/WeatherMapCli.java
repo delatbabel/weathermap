@@ -88,9 +88,24 @@ public final class WeatherMapCli {
         final RenderSpec spec = buildRenderSpec(prefs, options);
         final Path outputDir = (options.outputDir != null) ? options.outputDir : prefs.outputDir();
 
+        // Repair the selection rather than report it. A variable asked for at a
+        // level it is not published at makes the whole request match nothing -
+        // NOMADS applies the level filter across every variable - and the
+        // service answers that with an empty body and HTTP 200. Unattended, in
+        // a crontab, "matched no GRIB records" at 00:10 is not a thing anyone
+        // is going to debug; quietly adding the level that was always meant is.
+        final List<GribLevel> added = selection.addMissingLevels();
+
         if (!options.quiet) {
             System.out.println("area      " + area);
             System.out.println("selection " + selection);
+            if (!added.isEmpty()) {
+                final List<String> names = new ArrayList<>();
+                for (GribLevel level : added) names.add(level.displayName());
+                System.out.println("added     " + String.join(", ", names)
+                        + " - the selected variables are not published at the "
+                        + "levels that were stored");
+            }
             System.out.println("output    " + outputDir);
         }
 

@@ -73,6 +73,30 @@ public final class OverpassClient implements OsmSource {
     private static final int QUERY_TIMEOUT_SECONDS = 180;
 
     /**
+     * The widest box worth asking Overpass about at all, in degrees.
+     *
+     * <p>Above this the query is not merely slow, it is pointless. Cost grows
+     * with the area of the box while the benefit shrinks with its scale: across
+     * twenty degrees rendered into sixteen hundred pixels, full-resolution OSM
+     * coastline lands several nodes to the pixel, so tens of megabytes are spent
+     * drawing something indistinguishable from the bundled Natural Earth
+     * outline. Asking a donated server for that is rude as well as useless.</p>
+     *
+     * <p>A 56 degree box over South-East Asia is what prompted this: it timed
+     * out through all three instances in turn - about ninety seconds - and then
+     * fell back to the outline it should have started from.</p>
+     *
+     * <p>This is a floor on quality, not a ceiling on ambition: the real fix for
+     * a large area is to tile the request, which is the TODO above.</p>
+     */
+    public static final double MAX_SERVABLE_SPAN = 20.0;
+
+    /** True when {@code bbox} is too large for Overpass to be worth asking. */
+    public static boolean isTooLarge(org.weathermap.model.BoundingBox bbox) {
+        return Math.max(bbox.widthDegrees(), bbox.heightDegrees()) > MAX_SERVABLE_SPAN;
+    }
+
+    /**
      * Server-side memory ceiling for one query, in bytes.
      *
      * <p>Was 512 MB, which was simply asking for trouble: it invites the server

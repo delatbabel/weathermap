@@ -111,10 +111,15 @@ public final class MapService {
 
             final BufferedImage image =
                     compositor.render(bbox, features, grids, selection.model().displayName());
-            final Grid primary = grids.get(0);
+
+            // The same field the chart is titled for, and the same instant it is
+            // captioned with. Taking grids.get(0) here instead named the file
+            // after a wind component the title never mentions, and stamped it
+            // with that component's time rather than the chart's.
+            final Grid primary = Compositor.primaryOf(grids);
             final Path png = outputDir.resolve(PngWriter.fileName(
                     selection.model().id(), primary.variable().code(),
-                    primary.level().code(), primary.validTime()));
+                    primary.level().code(), Compositor.validTimeOf(grids)));
             PngWriter.write(image, png);
             results.add(new Result(image, primary, png));
         }
@@ -138,6 +143,22 @@ public final class MapService {
         if (spec.isEnabled(RenderSpec.LayerKind.BOUNDARIES)) kinds.add(FeatureKind.BOUNDARY);
         if (spec.isEnabled(RenderSpec.LayerKind.PLACE_LABELS)) kinds.add(FeatureKind.PLACE);
         if (kinds.isEmpty()) return List.of();
+
+        // Asked before the request is built, not after it fails. Overpass
+        // answers an impossible box by timing out, which costs the full retry
+        // budget across every instance - ninety seconds to arrive at the
+        // outline we would have chosen instantly.
+        if (OverpassClient.isTooLarge(bbox)) {
+            LOG.info(() -> String.format(
+                    "area spans %.1f deg, beyond the %.0f deg Overpass is worth asking "
+                    + "for; using the bundled world outline",
+                    Math.max(bbox.widthDegrees(), bbox.heightDegrees()),
+                    OverpassClient.MAX_SERVABLE_SPAN));
+            p.stage(String.format(
+                    "Area wider than %.0f\u00b0 - using the coarse world outline",
+                    OverpassClient.MAX_SERVABLE_SPAN));
+            return org.weathermap.osm.WorldBaseMap.features();
+        }
 
         try {
             final List<Feature> features = osm.fetch(bbox, kinds);
