@@ -131,6 +131,17 @@ public final class RenderSpec {
                 : new EquirectangularProjection(bbox, size[0], size[1]);
     }
 
+    /**
+     * A copy that the renderer can hold while the window keeps being edited.
+     *
+     * <p>Field by field, which is a liability: anything added to this class and
+     * not added here is a setting that works from the command line - which does
+     * not copy - and silently does nothing in the window. That has happened
+     * twice, most recently to the chart time zone, which meant every chart from
+     * the window was stamped in the machine's zone whatever the menu said.
+     * {@code CopyCompletenessTest} now compares every declared field after a
+     * copy, so the next omission fails a test rather than shipping.</p>
+     */
     public RenderSpec copy() {
         final RenderSpec c = new RenderSpec();
         c.maxWidth = maxWidth;
@@ -138,6 +149,7 @@ public final class RenderSpec {
         c.mercator = mercator;
         c.gribOpacity = gribOpacity;
         c.autoScaleRamp = autoScaleRamp;
+        c.zone = zone;
         c.layers.clear();
         c.layers.addAll(layers);
         return c;

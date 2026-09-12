@@ -45,7 +45,7 @@ public final class DataPanel extends JPanel {
     private final JTextField forecastHours = new JTextField("0,6,12", 12);
     private final JCheckBox latestRun = new JCheckBox("Use the latest published run", true);
 
-    private final JCheckBox series = new JCheckBox("Series from now");
+    private final JCheckBox series = new JCheckBox("Series");
     private final javax.swing.JSpinner seriesStep = new javax.swing.JSpinner(
             new javax.swing.SpinnerNumberModel(GribSelection.DEFAULT_SERIES_STEP_HOURS, 1, 24, 1));
     private final javax.swing.JSpinner seriesBack = new javax.swing.JSpinner(
@@ -91,19 +91,21 @@ public final class DataPanel extends JPanel {
      * sentence.</p>
      */
     private JPanel seriesRow() {
+        series.setToolTipText("A chart at each step across the window, instead of "
+                + "the listed forecast hours");
         seriesBack.setToolTipText("Hours before now. Past charts come from the runs "
                 + "of the time, so their lead is short - often zero, the model's "
                 + "own analysis of that moment.");
         seriesSpan.setToolTipText("Hours after now, as far as the model reaches");
         final JPanel row = new JPanel();
         row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        // Reads as one sentence, in the order the charts run: "Series from 48 h
+        // back to 48 h ahead, every 6 h". It said "Series from now" before,
+        // which contradicted the control immediately to its right the moment
+        // anyone asked for the past.
         row.add(series);
-        row.add(javax.swing.Box.createHorizontalStrut(6));
-        row.add(new JLabel("every"));
-        row.add(javax.swing.Box.createHorizontalStrut(4));
-        row.add(seriesStep);
-        row.add(javax.swing.Box.createHorizontalStrut(4));
-        row.add(new JLabel("h, from"));
+        row.add(javax.swing.Box.createHorizontalStrut(8));
+        row.add(new JLabel("from"));
         row.add(javax.swing.Box.createHorizontalStrut(4));
         row.add(seriesBack);
         row.add(javax.swing.Box.createHorizontalStrut(4));
@@ -111,7 +113,11 @@ public final class DataPanel extends JPanel {
         row.add(javax.swing.Box.createHorizontalStrut(4));
         row.add(seriesSpan);
         row.add(javax.swing.Box.createHorizontalStrut(4));
-        row.add(new JLabel("h ahead"));
+        row.add(new JLabel("h ahead, every"));
+        row.add(javax.swing.Box.createHorizontalStrut(4));
+        row.add(seriesStep);
+        row.add(javax.swing.Box.createHorizontalStrut(4));
+        row.add(new JLabel("h"));
         row.add(javax.swing.Box.createHorizontalGlue());
         return row;
     }

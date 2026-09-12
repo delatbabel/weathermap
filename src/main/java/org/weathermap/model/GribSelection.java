@@ -430,8 +430,15 @@ public final class GribSelection {
         c.setForecastHours(forecastHours());
         c.setVariables(variables());
         c.setLevels(levels());
-        c.seriesStepHours = seriesStepHours;
+
+        // Through the setter, not field by field. Copying the fields by hand is
+        // how the backward leg got lost: the series gained hoursBack, copy()
+        // was not extended to match, and the desktop application - which runs on
+        // a copy - silently dropped every chart of the past while the
+        // command-line tool, which does not copy, kept working.
         c.seriesSpanHours = seriesSpanHours;
+        c.seriesHoursBack = seriesHoursBack;
+        if (hasSeries()) c.setSeries(seriesStepHours, seriesHoursBack, seriesSpanHours);
         return c;
     }
 

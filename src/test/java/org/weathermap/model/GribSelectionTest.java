@@ -202,15 +202,35 @@ class GribSelectionTest {
         assertEquals(12, sel.seriesSpanHours());
     }
 
+    /**
+     * Every part of the series, not just the parts that existed when this test
+     * was written. The desktop application runs on a copy, so anything copy()
+     * forgets is a feature that works from the command line and silently does
+     * not work in the window - which is how the backward leg was lost.
+     */
     @Test
     void aSeriesSurvivesBeingCopied() {
         final GribSelection sel = new GribSelection();
-        sel.setSeries(6, 72);
+        sel.setSeries(6, 24, 72);
         final GribSelection copy = sel.copy();
 
         assertTrue(copy.hasSeries());
         assertEquals(6, copy.seriesStepHours());
+        assertEquals(24, copy.seriesHoursBack());
         assertEquals(72, copy.seriesSpanHours());
+        assertEquals(sel.toString(), copy.toString());
+    }
+
+    /** A copy asked for the same charts as the original, which is the real test. */
+    @Test
+    void aCopyResolvesToTheSameChartsAsTheOriginal() {
+        final GribSelection sel = new GribSelection();
+        sel.useLatestRun();
+        sel.setSeries(6, 48, 48);
+
+        final ZonedDateTime now = ZonedDateTime.parse("2026-09-12T15:24:00Z");
+        assertEquals(sel.chartRequests(now), sel.copy().chartRequests(now));
+        assertEquals(16, sel.chartRequests(now).size());
     }
 
     @Test
