@@ -25,4 +25,12 @@ class ThemeTest {
     void theIdIsCaseAndSpaceInsensitive() {
         assertEquals(Theme.DARK, Theme.byId("  DARK "));
     }
+
+    @Test
+    void theSystemLookAndFeelIsOneOfTheChoices() {
+        assertEquals(Theme.SYSTEM, Theme.byId("system"));
+        assertEquals(3, Theme.values().length,
+                     "the Appearance menu is built from values(), so a fourth "
+                     + "entry here is a fourth menu item");
+    }
 }

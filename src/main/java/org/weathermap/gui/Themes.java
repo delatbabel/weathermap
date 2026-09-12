@@ -2,7 +2,6 @@ package org.weathermap.gui;
 
 import org.weathermap.model.Theme;
 
-import javax.swing.JDialog;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import java.awt.Window;
@@ -53,26 +52,26 @@ public final class Themes {
     /**
      * Installs a theme, before any window is created.
      *
-     * @return true if the theme was applied; false if the platform look and feel
+     * @return true if the requested theme was applied; false if something else
      *         is in use instead
      */
     public static boolean install(Theme theme) {
         current = theme;
-        final String className = (theme == Theme.DARK) ? DARK_CLASS : LIGHT_CLASS;
         try {
-            // Rounded corners on the controls, and a window title bar drawn by
-            // the look and feel rather than by the desktop, so the dark theme is
-            // dark all the way to the edge instead of stopping at a grey frame.
+            if (theme == Theme.SYSTEM) {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+                return true;
+            }
+            // Softer corners than FlatLaf's default and no scrollbar end
+            // buttons. Ignored by any other look and feel, which is why they can
+            // be left set when the user switches to the platform one.
             UIManager.put("Component.arc", 8);
             UIManager.put("Button.arc", 8);
             UIManager.put("ProgressBar.arc", 8);
             UIManager.put("TextComponent.arc", 6);
             UIManager.put("ScrollBar.showButtons", false);
-            UIManager.put("TitlePane.unifiedBackground", true);
-            System.setProperty("flatlaf.useWindowDecorations", "true");
-            System.setProperty("flatlaf.menuBarEmbedded", "true");
 
-            UIManager.setLookAndFeel(className);
+            UIManager.setLookAndFeel(theme == Theme.DARK ? DARK_CLASS : LIGHT_CLASS);
             return true;
         }
         catch (NoClassDefFoundError | ClassNotFoundException e) {
@@ -82,33 +81,47 @@ public final class Themes {
         catch (Exception e) {
             LOG.log(Level.WARNING, "Could not install the " + theme.id() + " theme", e);
         }
-        return installFallback();
+        return installFallback(theme);
     }
 
     /**
      * Switches theme on a running application.
      *
-     * <p>Every open window is rebuilt, including dialogs, because a file chooser
-     * left over from the old theme is the one thing a user will notice.</p>
+     * <p>Every open window is rebuilt, including ones that are not showing,
+     * because a file chooser left over from the old theme is the one thing a
+     * user will notice.</p>
+     *
+     * <p>Each is revalidated afterwards rather than only repainted. Between the
+     * two FlatLaf themes that settles the borders which cache their insets;
+     * to or from {@link Theme#SYSTEM} it matters more, since the platform look
+     * and feel has its own fonts and insets and controls genuinely change the
+     * size they ask for.</p>
      */
     public static void apply(Theme theme) {
         if (!install(theme)) return;
         for (Window window : Window.getWindows()) {
             SwingUtilities.updateComponentTreeUI(window);
-            if (window instanceof JDialog || window.isVisible()) {
-                // Layout metrics are identical between the two themes, so this
-                // only settles borders that cache their insets.
-                window.validate();
-            }
+            window.invalidate();
+            window.validate();
+            window.repaint();
         }
     }
 
-    private static boolean installFallback() {
+    /**
+     * Whatever can still be installed once the wanted theme could not be.
+     *
+     * <p>The platform look and feel, except when that is the one that just
+     * failed - trying it twice would report the same failure as a fallback.</p>
+     */
+    private static boolean installFallback(Theme failed) {
         try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            UIManager.setLookAndFeel(failed == Theme.SYSTEM
+                    ? UIManager.getCrossPlatformLookAndFeelClassName()
+                    : UIManager.getSystemLookAndFeelClassName());
         }
         catch (Exception e) {
-            LOG.log(Level.FINE, "Platform look and feel unavailable too", e);
+            LOG.log(Level.FINE, "No look and feel could be installed; Swing will "
+                    + "use its own default", e);
         }
         return false;
     }

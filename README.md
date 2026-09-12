@@ -153,11 +153,18 @@ value is dropped individually rather than discarding the file.
 
 ### Themes
 
-FlatLaf, light or dark, switchable from the **Appearance** menu without a
-restart — the two themes share their metrics, so only colours change and no
-window has to be rebuilt. The choice is saved as soon as it is made rather than
-on close, since someone who switches theme and then kills the window has still
+Three choices in the **Appearance** menu, switchable without a restart: FlatLaf
+**Light**, FlatLaf **Dark**, and **System** — the platform look and feel, for
+anyone who would rather the application stopped having opinions and matched the
+rest of their desktop. The choice is saved as soon as it is made rather than on
+close, since someone who switches theme and then kills the window has still
 expressed a preference.
+
+The two FlatLaf themes share their metrics, so switching between them changes
+only colours. System does not: the platform look and feel has its own fonts and
+insets, and controls genuinely change the size they ask for. Every open window
+is therefore revalidated after a switch, not just repainted — which works
+because the panels use layout managers rather than absolute positions.
 
 **The map does not follow the theme, and that is deliberate.** It is drawn by
 the same `Compositor` that writes the PNG, so theming it would either fork the

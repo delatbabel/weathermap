@@ -11,14 +11,27 @@ import java.util.Locale;
  * choice; {@code gui.Themes} is the only thing that knows what a
  * {@code FlatLaf} is.</p>
  *
- * <p>Two, deliberately. A theme picker with a dozen entries is a settings screen;
- * light and dark is a decision someone makes once about the room they are
- * sitting in.</p>
+ * <p>Three, and no more. A theme picker with a dozen entries is a settings
+ * screen; light or dark is a decision someone makes once about the room they
+ * are sitting in, and {@link #SYSTEM} is for the people who would rather the
+ * application stopped having opinions and matched the rest of their
+ * desktop.</p>
  */
 public enum Theme {
 
     LIGHT("light", "Light"),
-    DARK("dark", "Dark");
+    DARK("dark", "Dark"),
+
+    /**
+     * Whatever the desktop itself uses.
+     *
+     * <p>Not a third set of colours but a refusal to choose: the platform look
+     * and feel, which on a well-set-up desktop already matches the other windows
+     * on it. It is the only option whose appearance this application does not
+     * control, so it is also the only one that can look different on two
+     * machines - which is the point of asking for it.</p>
+     */
+    SYSTEM("system", "System");
 
     private final String id;
     private final String displayName;
