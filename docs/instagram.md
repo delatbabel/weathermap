@@ -94,13 +94,30 @@ business login* → **Business login settings**. Here you will find, and set:
   Keep the **app secret out of this application**. It is needed only to exchange
   or refresh a token, from somewhere you control.
 
-**5. Generate a token for your own account.** Still under *API setup with
-Instagram login*, in step 1 — **Generate token** beside your account. Log in to
-Instagram and approve. The token it hands back is **already long-lived: 60
-days**. That is the whole point of this path; there is no short-lived token to
-exchange, and no flow to implement.
+**5. Give the account the Instagram Tester role, and accept it.** The dashboard
+will not offer to generate a token for an account the app cannot see, and in
+development that means the account needs the tester role — even when it is your
+own account and your own app. The dashboard says so beside *Generate access
+tokens*, and it is easy to read past.
 
-**6. Find the Instagram user ID.** Ask the API who the token belongs to:
+  - App Dashboard → left sidebar → **App roles → Roles** → **Add people**.
+  - In the dialog, scroll to **Additional roles** and tick **Instagram Tester**.
+  - Type the Instagram username, **Add**. The account appears as **Pending**.
+  - Now accept it *from Instagram*, as the account: Instagram app → **Settings
+    and privacy → Apps and websites → Tester invites → Accept**. On the web:
+    [instagram.com/accounts/manage_connections](https://www.instagram.com/accounts/manage_connections/).
+  - Back in the dashboard the status becomes **Active**.
+
+  You are inviting yourself, so both halves are yours to do — but the
+  acceptance is the half that gets forgotten, because nothing in the dashboard
+  prompts for it and the token button simply stays unhelpful until it is done.
+
+**6. Add the account and generate the token.** Back in *API setup with Instagram
+login*, step 2 — **Add account**, then **Generate token** beside it. Log in and
+approve. The token it hands back is **already long-lived: 60 days**. That is the
+point of this path: no short-lived token to exchange, and no flow to implement.
+
+**7. Find the Instagram user ID.** Ask the API who the token belongs to:
 
 ```
 GET https://graph.instagram.com/v25.0/me?fields=user_id,username
@@ -110,8 +127,33 @@ GET https://graph.instagram.com/v25.0/me?fields=user_id,username
 The `user_id` is what goes in the dialog. Not the handle, and not the Facebook
 Page ID.
 
-**7. Paste both into the dialog** — *Token from: Instagram Login*, the user ID,
+**8. Paste both into the dialog** — *Token from: Instagram Login*, the user ID,
 and the token.
+
+### What you can skip
+
+The API setup page has a step 4, **Set up Instagram business login**, with
+redirect URIs, an embed URL and a permissions list. **You do not need to
+complete it to post to your own account.** That section configures the OAuth
+flow by which *other* businesses would grant your app access — it exists for
+apps that serve accounts they do not own. You are not running a flow; you
+generated a token directly.
+
+The one thing worth taking from that area is the **Instagram app ID and app
+secret**, which is where they live.
+
+And you may well never need the secret. It is required only to *exchange* a
+short-lived token for a long-lived one, and the dashboard hands you a long-lived
+one already. Refreshing does not use it:
+
+```
+GET https://graph.instagram.com/refresh_access_token
+    ?grant_type=ig_refresh_token
+    &access_token=<current-token>
+```
+
+Store the secret somewhere safe anyway — if you later build the login flow, that
+is when it is needed.
 
 ### Keeping it alive
 
