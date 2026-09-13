@@ -1,0 +1,8 @@
+#!/bin/bash
+#
+# Launcher for the Weather Map .app bundle.
+# Runs the bundled JRE against the fat JAR shipped in Resources/Java.
+#
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$DIR/jre/bin/java" -Xdock:name="Weather Map" \
+    -jar "$DIR/../Resources/Java/@JARFILE@" "$@"

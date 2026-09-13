@@ -15,9 +15,9 @@ The image written to disk is the image on screen: one `Compositor`, called by
 both front ends, so what is seen and what is saved cannot drift apart.
 
 ```bash
-./mvnw package
-./run.sh                                   # the desktop application
-./run.sh --cli --profile "Western Approaches"
+make help                                  # every target
+make run                                   # the desktop application
+make run ARGS="--cli --profile 'Western Approaches'"
 ```
 
 ## The code
@@ -32,6 +32,7 @@ The same pages are in the application: **Help → User's Guide** (F1) and
 | Page | What is in it |
 |---|---|
 | [Basic usage](docs/basic-usage.md) | Choosing an area, choosing data, reading the chart, stepping a series |
+| [Packaging](docs/packaging.md) | Installable packages for Linux, Windows and macOS; the version scheme |
 | [Build and run](docs/build-and-run.md) | Building, the two front ends, the CLI options, the optional NetCDF-Java profile |
 | [How it works](docs/how-it-works.md) | The rectangle, the vector base map, the bundled gazetteer, persistence, caching |
 | [Rendering](docs/rendering.md) | The layer stack, field treatments, wind barbs, isobars, highs and lows |

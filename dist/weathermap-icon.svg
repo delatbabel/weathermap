@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <title>Weather Map</title>
+  <!-- Chart ground: the pale paper a marine chart is printed on. -->
+  <rect width="512" height="512" rx="96" fill="#f7f4ec"/>
+  <!-- Sea, with a coastline across the lower third. -->
+  <path d="M0 300 C 90 276, 150 320, 240 306 C 330 292, 380 330, 512 312 L512 512 L0 512 Z"
+        fill="#c6dbef"/>
+  <path d="M0 300 C 90 276, 150 320, 240 306 C 330 292, 380 330, 512 312"
+        fill="none" stroke="#284668" stroke-width="9" stroke-linecap="round"/>
+  <!-- Isobars: the brown lines a synoptic chart is read by. -->
+  <g fill="none" stroke="#8a4a2c" stroke-width="7" stroke-linecap="round" opacity=".8">
+    <path d="M36 120 C 150 86, 300 150, 476 104"/>
+    <path d="M36 186 C 150 152, 300 216, 476 170"/>
+  </g>
+  <!-- A wind barb: staff into the wind, two full ticks and a half — 25 knots. -->
+  <g stroke="#12121c" stroke-width="17" stroke-linecap="round" fill="none">
+    <path d="M188 404 L292 208"/>
+    <path d="M292 208 L390 232"/>
+    <path d="M274 242 L372 266"/>
+    <path d="M256 276 L305 288"/>
+  </g>
+</svg>

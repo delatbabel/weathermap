@@ -13,6 +13,14 @@ maps/
 # repository keeps is the source JSON and the exported SVG and Markdown.
 docs/architecture/html/
 
+# Cross-build toolchain fetched by `make bootstrap`: per-platform JDKs, Launch4j,
+# cmake and libdmg-hfsplus. Hundreds of megabytes, all reproducible.
+dist/jdks/
+dist/tools/
+
+# Built packages
+tmp/
+
 # IDE
 .idea/
 *.iml

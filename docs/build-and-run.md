@@ -6,7 +6,7 @@ about a megabyte, and only the window uses it. Everything else is in the JDK.
 
 ```bash
 ./mvnw package                                               # jars + tests
-./run.sh                                                     # the desktop application
+make run                                                     # the desktop application
 java -jar target/weathermap-0.1.0-SNAPSHOT-jar-with-dependencies.jar
 ```
 

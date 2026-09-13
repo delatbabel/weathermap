@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Launch4j configuration template for the Weather Map.
+  Placeholders (@NAME@) are substituted by the Makefile at build time.
+  The wrapped fat JAR is launched by a JRE bundled next to the .exe at @JREPATH@.
+-->
+<launch4jConfig>
+  <headerType>gui</headerType>
+  <jar>@JAR@</jar>
+  <outfile>@OUTFILE@</outfile>
+  <errTitle>Weather Map</errTitle>
+  <downloadUrl>https://adoptium.net/</downloadUrl>
+  <chdir>.</chdir>
+  <priority>normal</priority>
+  <stayAlive>false</stayAlive>
+  <restartOnCrash>false</restartOnCrash>
+  <icon>@ICON@</icon>
+  <jre>
+    <path>@JREPATH@</path>
+    <bundledJreAsFallback>false</bundledJreAsFallback>
+    <requiresJdk>false</requiresJdk>
+    <requires64Bit>false</requires64Bit>
+  </jre>
+  <versionInfo>
+    <fileVersion>@NUMVERSION4@</fileVersion>
+    <txtFileVersion>@VERSION@</txtFileVersion>
+    <fileDescription>Weather Map</fileDescription>
+    <copyright>Weather Map contributors</copyright>
+    <productVersion>@NUMVERSION4@</productVersion>
+    <txtProductVersion>@VERSION@</txtProductVersion>
+    <productName>Weather Map</productName>
+    <internalName>weathermap</internalName>
+    <originalFilename>@OUTNAME@</originalFilename>
+  </versionInfo>
+</launch4jConfig>
