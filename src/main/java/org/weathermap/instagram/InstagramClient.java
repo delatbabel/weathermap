@@ -142,8 +142,8 @@ public final class InstagramClient {
                             java.util.function.Consumer<String> progress)
             throws IOException, InterruptedException {
 
-        final java.time.Instant deadline = java.time.Instant.now().plus(READY_WAIT);
-        boolean waited = false;
+        final java.time.Instant started = java.time.Instant.now();
+        final java.time.Instant deadline = started.plus(READY_WAIT);
         while (true) {
             final String json = get("/" + containerId, "fields=status_code,status");
             final String code = field(json, "status_code");
@@ -161,10 +161,12 @@ public final class InstagramClient {
                         + READY_WAIT.toMinutes() + " minutes. Instagram had not finished "
                         + "fetching it, so the post was not published.");
             }
-            if (!waited) {
-                progress.accept("Waiting for Instagram to fetch " + what);
-                waited = true;
-            }
+            // Fetching ten images can take minutes, and a message that never
+            // changes is indistinguishable from a hung window.
+            final long seconds = java.time.Duration.between(started, java.time.Instant.now())
+                    .toSeconds();
+            progress.accept("Waiting for Instagram to fetch " + what
+                            + (seconds < 5 ? "" : " (" + seconds + "s)"));
             LOG.fine(() -> "container " + containerId + " is " + code);
             Thread.sleep(READY_POLL.toMillis());
         }
@@ -198,6 +200,24 @@ public final class InstagramClient {
         return idFrom(post("/" + account.igUserId() + "/media_publish",
                            "creation_id=" + Http.encode(creationId)),
                       "publish");
+    }
+
+    /**
+     * The address of a published post, if it can be read.
+     *
+     * <p>Returns empty rather than failing: the post has already succeeded by
+     * the time this is asked, and losing a convenience link is not a reason to
+     * report success as an error.</p>
+     */
+    public java.util.Optional<String> permalink(String mediaId) {
+        try {
+            return java.util.Optional.ofNullable(
+                    field(get("/" + mediaId, "fields=permalink"), "permalink"));
+        }
+        catch (Exception e) {
+            LOG.fine(() -> "Could not read the permalink for " + mediaId + ": " + e);
+            return java.util.Optional.empty();
+        }
     }
 
     /**

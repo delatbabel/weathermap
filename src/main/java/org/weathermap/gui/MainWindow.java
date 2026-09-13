@@ -765,7 +765,10 @@ public final class MainWindow extends JFrame {
     }
 
     /** Writes the images and posts them, off the event thread. */
-    private final class PostWorker extends SwingWorker<String, String> {
+    /** What a finished post produced: the media, and where to look at it. */
+    private record Posted(String mediaId, String permalink, int charts) { }
+
+    private final class PostWorker extends SwingWorker<Posted, String> {
 
         private final InstagramDialog.Request request;
 
@@ -776,7 +779,7 @@ public final class MainWindow extends JFrame {
         }
 
         @Override
-        protected String doInBackground() throws Exception {
+        protected Posted doInBackground() throws Exception {
             final List<MapService.Result> charts =
                     org.weathermap.instagram.ChartPublisher.selectFrom(
                             results, resultIndex, request.chartCount());
@@ -792,7 +795,12 @@ public final class MainWindow extends JFrame {
             publish("Posting to Instagram");
             final var client =
                     new org.weathermap.instagram.InstagramClient(request.account());
-            return client.postCarousel(images, request.caption(), this::publish);
+            final String mediaId =
+                    client.postCarousel(images, request.caption(), this::publish);
+            // Asked for here rather than on the event thread: the post has
+            // already succeeded and this is one more network round trip.
+            return new Posted(mediaId, client.permalink(mediaId).orElse(null),
+                              images.size());
         }
 
         @Override
@@ -805,7 +813,7 @@ public final class MainWindow extends JFrame {
             progress.setVisible(false);
             progress.setIndeterminate(false);
             try {
-                setStatus("Posted to Instagram as media " + get());
+                announce(get());
             }
             catch (java.util.concurrent.CancellationException e) {
                 setStatus("Cancelled");
@@ -818,6 +826,50 @@ public final class MainWindow extends JFrame {
                         String.valueOf(cause.getMessage()),
                         "Instagram post failed", JOptionPane.ERROR_MESSAGE);
             }
+        }
+
+        /**
+         * Says so, in a dialog.
+         *
+         * <p>A failure opened a dialog and a success wrote one line into the
+         * status bar. Posting takes minutes - Meta fetches every image before it
+         * will publish - so by the time it finishes nobody is watching the
+         * status bar, and a post that had worked perfectly looked like nothing
+         * had happened at all. Both outcomes are worth interrupting for.</p>
+         */
+        private void announce(Posted posted) {
+            final String where = request.account().profile().isBlank()
+                    ? "Instagram" : request.account().profile();
+            setStatus("Posted " + posted.charts() + " charts to " + where);
+
+            final String message = "Posted " + posted.charts() + " charts to " + where
+                    + ".\n\nMedia ID " + posted.mediaId()
+                    + (posted.permalink() == null ? "" : "\n" + posted.permalink());
+
+            if (posted.permalink() == null) {
+                JOptionPane.showMessageDialog(MainWindow.this, message,
+                        "Posted to Instagram", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            final Object[] options = {"View the post", "Close"};
+            final int chosen = JOptionPane.showOptionDialog(MainWindow.this, message,
+                    "Posted to Instagram", JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+            if (chosen == 0) browse(posted.permalink());
+        }
+    }
+
+    /** Opens a URL in the desktop browser, quietly if there is none. */
+    private void browse(String url) {
+        try {
+            if (java.awt.Desktop.isDesktopSupported()
+                    && java.awt.Desktop.getDesktop()
+                            .isSupported(java.awt.Desktop.Action.BROWSE)) {
+                java.awt.Desktop.getDesktop().browse(java.net.URI.create(url));
+            }
+        }
+        catch (Exception e) {
+            LOG.log(Level.FINE, "Could not open " + url, e);
         }
     }
 

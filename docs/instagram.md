@@ -317,6 +317,12 @@ container is checked, and then the carousel container.
 `ERROR` and `EXPIRED` are final and are reported at once; waiting out the
 five-minute timeout to say an image could not be fetched helps nobody.
 
+Expect the whole post to take **minutes, not seconds** — Meta fetches every
+image in the carousel before it will publish, and that is the bulk of the time.
+The status bar counts the seconds while it waits, and a dialog confirms the
+finished post with a link to it, because by the time it completes nobody is
+still watching the window.
+
 > Meta files a great many unrelated failures under `type: OAuthException`,
 > including this one. The type alone does not mean the token is wrong, and
 > treating it as though it did sends you to check credentials that are working
