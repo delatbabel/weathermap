@@ -90,6 +90,27 @@
 
     <build>
         <finalName>weathermap-${project.version}</finalName>
+
+        <!--
+          The Help window shows the same Markdown that docs/ holds, rather than a
+          second copy written for the application. One source means the two
+          cannot drift, and the pages were already written to be read.
+        -->
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>docs</directory>
+                <targetPath>help</targetPath>
+                <includes>
+                    <include>*.md</include>
+                    <include>architecture/*.md</include>
+                    <!-- Raster copies of the diagrams: the Help window cannot draw SVG. -->
+                    <include>diagrams/png/*.png</include>
+                </includes>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

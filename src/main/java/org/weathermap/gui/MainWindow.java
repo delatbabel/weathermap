@@ -415,6 +415,18 @@ public final class MainWindow extends JFrame {
         bar.add(appearance);
 
         final JMenu help = new JMenu("Help");
+
+        final JMenuItem userGuide = new JMenuItem("User's Guide");
+        userGuide.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
+                java.awt.event.KeyEvent.VK_F1, 0));
+        userGuide.addActionListener(e -> HelpWindow.showUserGuide(this));
+        help.add(userGuide);
+
+        final JMenuItem developerGuide = new JMenuItem("Developer's Guide");
+        developerGuide.addActionListener(e -> HelpWindow.showDeveloperGuide(this));
+        help.add(developerGuide);
+        help.addSeparator();
+
         final JMenuItem about = new JMenuItem("About");
         about.addActionListener(e -> JOptionPane.showMessageDialog(this,
                 "Weather Map\n\n"
