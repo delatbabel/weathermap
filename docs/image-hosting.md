@@ -181,6 +181,27 @@ take milliseconds. The unit sets `1s`, which is the right trade here: the files
 are small and nothing else writes to this bucket, so there is no batching worth
 preserving.
 
+### Deleting through the mount does not work
+
+`rclone deletefile weathermap-r2:weathermap-charts/<key>` removes an object
+normally. Deleting the same object **through the mount** fails with
+`Input/output error`, and the mount's log gives the reason:
+
+```
+ERROR : IO error: NotImplemented: versionId not implemented
+	status code: 501
+```
+
+It is the versioning gap again, on a path `no_head` does not cover. R2 returns a
+version ID when a file is written; rclone keeps it on the cached object and sends
+it back with the delete; R2 has no versioned delete. The command-line delete is
+unaffected because it looks the object up fresh, with no version ID to send.
+
+Writing and reading are the operations that matter here and both work, so this
+is a wart rather than a blocker — but anything that tidies up after itself has
+to do it through `rclone deletefile`, not through the mount. It is fixed in
+later rclone; the version this was found on is `v1.60.1`.
+
 ### Put mount flags on the command line, not in `rclone.conf`
 
 A remote stanza in `rclone.conf` holds **backend** options — for WebDAV that is
