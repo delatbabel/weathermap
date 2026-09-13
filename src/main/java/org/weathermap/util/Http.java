@@ -171,6 +171,25 @@ public final class Http {
         return send(uri, HttpResponse.BodyHandlers.ofString()).body();
     }
 
+    /**
+     * GETs a URL as text, authenticated with a bearer token.
+     *
+     * <p>The token goes in a header rather than the query string, which is the
+     * only difference that matters: a URL is written to the server's access log
+     * and a header is not, and an access token in a log is a credential someone
+     * else can post with.</p>
+     */
+    public static String getString(URI uri, String bearerToken)
+            throws IOException, InterruptedException {
+        final HttpRequest request = HttpRequest.newBuilder(uri)
+                .header("User-Agent", USER_AGENT)
+                .header("Authorization", "Bearer " + bearerToken)
+                .timeout(REQUEST_TIMEOUT)
+                .GET()
+                .build();
+        return sendWithRetry(request, HttpResponse.BodyHandlers.ofString()).body();
+    }
+
     /** POSTs a form body and reads the response as text - how Overpass is queried. */
     public static String postForm(URI uri, String body) throws IOException, InterruptedException {
         final HttpRequest request = HttpRequest.newBuilder(uri)

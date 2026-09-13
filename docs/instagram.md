@@ -296,10 +296,36 @@ allows it. **It holds a bearer token in plain text**: anything that can read the
 file can post as that account until the token is revoked. The application never
 writes the token to a log or into an error message.
 
-## What has not been exercised
+## A container is not ready when its ID comes back
 
-The publishing calls have not been run against Meta's servers — that needs a
-real app, a real token and a real account. The request construction, the image
-handling, the chart selection and the credential storage are covered by tests;
-the three-step conversation with the API is written to the documented contract
-but is unproven until you post with it.
+Creating a container returns an ID straight away, and then Meta goes off to
+fetch the image from the public URL. Publishing before it has finished is
+refused:
+
+```
+publish failed: Media ID is not available - Phương tiện này chưa sẵn sàng đăng,
+vui lòng chờ trong giây lát
+```
+
+The Vietnamese half is Meta's `error_user_msg`, returned in the account's own
+language: *this media is not ready to publish, please wait a moment*. It reads
+like a failure and is an instruction — so each container is polled on
+`GET /{container-id}?fields=status_code` until it reports `FINISHED`, rather
+than being published on the assumption that an ID means readiness. Every image
+container is checked, and then the carousel container.
+
+`ERROR` and `EXPIRED` are final and are reported at once; waiting out the
+five-minute timeout to say an image could not be fetched helps nobody.
+
+> Meta files a great many unrelated failures under `type: OAuthException`,
+> including this one. The type alone does not mean the token is wrong, and
+> treating it as though it did sends you to check credentials that are working
+> perfectly. Only a message that is itself about the token says so.
+
+## What has been exercised, and what has not
+
+Posting has now been run against Meta's servers with a real app, token and
+account: the images are written, uploaded, fetched by Meta and assembled into
+containers. The request construction, image handling, chart selection,
+credential storage, container readiness and error reporting are covered by
+tests.

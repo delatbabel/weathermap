@@ -792,7 +792,7 @@ public final class MainWindow extends JFrame {
             publish("Posting to Instagram");
             final var client =
                     new org.weathermap.instagram.InstagramClient(request.account());
-            return client.postCarousel(images, request.caption());
+            return client.postCarousel(images, request.caption(), this::publish);
         }
 
         @Override

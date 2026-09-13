@@ -356,4 +356,121 @@ class InstagramTest {
                 "the chart is still open on fd " + stillOpen + " - on an rclone mount "
                 + "that means it is never uploaded: " + target);
     }
+
+    // ---- the container is not ready when its id comes back -----------------
+
+    /**
+     * Meta answers the container call with an ID and then goes off to fetch the
+     * image. Publishing before it has finished is refused with "Media ID is not
+     * available", in the account's own language - which for a Vietnamese account
+     * arrives as text no English-reading log reader can act on, attached to a
+     * step that looked like it had already succeeded.
+     */
+    @Test
+    void aContainerIsWaitedForRatherThanPublishedImmediately() throws Exception {
+        final var states = new java.util.ArrayDeque<>(List.of(
+                "{\"status_code\":\"IN_PROGRESS\"}",
+                "{\"status_code\":\"FINISHED\"}"));
+        final var polls = new java.util.concurrent.atomic.AtomicInteger();
+
+        final var server = com.sun.net.httpserver.HttpServer.create(
+                new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            final String path = exchange.getRequestURI().getPath();
+            final String body;
+            if ("GET".equals(exchange.getRequestMethod())) {
+                polls.incrementAndGet();
+                body = states.size() > 1 ? states.poll() : states.peek();
+            }
+            else if (path.endsWith("/media_publish")) {
+                body = "{\"id\":\"published-1\"}";
+            }
+            else {
+                body = "{\"id\":\"container-" + polls.get() + "\"}";
+            }
+            final byte[] out = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            try (var os = exchange.getResponseBody()) { os.write(out); }
+        });
+        server.start();
+        try {
+            final String base = "http://127.0.0.1:" + server.getAddress().getPort();
+            final var client = new InstagramClient(
+                    new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t",
+                            Path.of("/tmp"), "https://h", "", ""), base);
+
+            final String id = client.postCarousel(List.of(
+                    new InstagramClient.CarouselImage("https://h/a.jpg", ""),
+                    new InstagramClient.CarouselImage("https://h/b.jpg", "")), "hello");
+
+            assertEquals("published-1", id);
+            assertTrue(polls.get() >= 3,
+                       "each image container and the carousel are checked: " + polls.get());
+        }
+        finally {
+            server.stop(0);
+        }
+    }
+
+    /** An unfetchable image is final, and saying so beats waiting out the timeout. */
+    @Test
+    void aRejectedContainerFailsAtOnceInsteadOfWaiting() throws Exception {
+        final var server = com.sun.net.httpserver.HttpServer.create(
+                new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            final String body = "GET".equals(exchange.getRequestMethod())
+                    ? "{\"status_code\":\"ERROR\",\"status\":\"Media could not be fetched\"}"
+                    : "{\"id\":\"c1\"}";
+            final byte[] out = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            try (var os = exchange.getResponseBody()) { os.write(out); }
+        });
+        server.start();
+        try {
+            final var client = new InstagramClient(
+                    new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t",
+                            Path.of("/tmp"), "https://h", "", ""),
+                    "http://127.0.0.1:" + server.getAddress().getPort());
+
+            final var thrown = assertThrows(java.io.IOException.class, () ->
+                    client.postCarousel(List.of(
+                            new InstagramClient.CarouselImage("https://h/a.jpg", ""),
+                            new InstagramClient.CarouselImage("https://h/b.jpg", "")), ""));
+
+            assertTrue(thrown.getMessage().contains("Media could not be fetched"),
+                       thrown.getMessage());
+        }
+        finally {
+            server.stop(0);
+        }
+    }
+
+    /**
+     * Meta files many unrelated failures under OAuthException, so the type alone
+     * does not mean the token is wrong. Saying so over "Media ID is not
+     * available" sent someone to check credentials that were working.
+     */
+    @Test
+    void onlyATokenErrorBlamesTheToken() throws Exception {
+        final var notReady = InstagramClient.explain(
+                "{\"error\":{\"message\":\"Media ID is not available\","
+                + "\"type\":\"OAuthException\"}}", "publish");
+        assertFalse(notReady.contains("Token from"), notReady);
+        assertTrue(notReady.contains("Media ID is not available"), notReady);
+
+        final var badToken = InstagramClient.explain(
+                "{\"error\":{\"message\":\"Invalid OAuth access token\","
+                + "\"type\":\"OAuthException\"}}", "publish");
+        assertTrue(badToken.contains("Token from"), badToken);
+    }
+
+    /** The account's own language carries the detail; both halves are shown. */
+    @Test
+    void aLocalisedExplanationIsNotDiscarded() {
+        final var said = InstagramClient.explain(
+                "{\"error\":{\"message\":\"Media ID is not available\","
+                + "\"error_user_msg\":\"Phuong tien nay chua san sang dang\"}}", "publish");
+        assertTrue(said.contains("Media ID is not available"), said);
+        assertTrue(said.contains("Phuong tien nay chua san sang dang"), said);
+    }
 }
