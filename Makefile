@@ -436,16 +436,13 @@ $(TMPDIR)/windows-%-build/Weather-Map.exe: $(DISTJAR) $(DISTDIR)/windows/launch4
 $(TMPDIR)/windows-%-build/stage: \
 		$(TMPDIR)/windows-%-build/Weather-Map.exe \
 		$(TMPDIR)/windows-%-build/jre \
-		CHANGES.md README.md
+		CHANGES.md LICENSE README.md
 	rm -rf $@
 	mkdir -p $@
 	cp -a $(TMPDIR)/windows-$*-build/Weather-Map.exe $@/
 	cp -a $(TMPDIR)/windows-$*-build/jre $@/jre
 	cp -a CHANGES.md README.md $@/
-	@# The project has no LICENSE file yet. Ship one the moment it does: a
-	@# Windows installer that states no terms is a gap, not a simplification.
-	@[ -f LICENSE ] && cp -a LICENSE $@/LICENSE.txt || \
-	  echo "NOTE: no LICENSE file — the package will not carry one"
+	cp -a LICENSE $@/LICENSE.txt
 	find $@ -type f -exec chmod 644 \{\} \+
 	find $@ -type d -exec chmod 755 \{\} \+
 	chmod 755 $@/Weather-Map.exe

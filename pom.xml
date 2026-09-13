@@ -100,6 +100,14 @@
             <resource>
                 <directory>src/main/resources</directory>
             </resource>
+            <!-- The licence, shown by Help > License and shipped in the jar. -->
+            <resource>
+                <directory>${project.basedir}</directory>
+                <targetPath>help</targetPath>
+                <includes>
+                    <include>LICENSE</include>
+                </includes>
+            </resource>
             <resource>
                 <directory>docs</directory>
                 <targetPath>help</targetPath>

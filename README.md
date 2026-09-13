@@ -43,7 +43,15 @@ The same pages are in the application: **Help → User's Guide** (F1) and
 | [What is not done yet](docs/not-done-yet.md) | The gaps, ordered by how much they matter |
 | [Architecture diagrams](docs/architecture/) | C4 context and containers, the pipeline, the data structures |
 
-## Data and licensing
+## Licence
+
+Weather Map is free software under the **GNU General Public License, version 3
+or later** — see [LICENSE](LICENSE), or **Help → User's Guide → License** in the
+application. It comes with absolutely no warranty.
+
+Application by Saigon Weather © Del 2026.
+
+### The data it uses
 
 | Source | Licence | Obligation |
 |---|---|---|

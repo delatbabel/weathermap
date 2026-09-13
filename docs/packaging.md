@@ -89,10 +89,11 @@ make clean-release         # remove tmp/
 make clean                 # that, plus mvn clean
 ```
 
+Every package carries the `LICENSE` file; the Windows staging step renames it
+`LICENSE.txt` so Windows opens it with a click.
+
 ## Not yet covered
 
-- **No `LICENSE` file.** The Windows staging step notes its absence and carries
-  on; a released installer should state its terms.
 - **Nothing is signed.** Windows will warn about an unknown publisher and macOS
   will refuse to open the bundle without a right-click, until the packages are
   signed and — on macOS — notarised.

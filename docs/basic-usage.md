@@ -88,7 +88,8 @@ image, ready to paste into a message.
 **Help → User's Guide** (F1) is this page and the ones beside it; **Help →
 Developer's Guide** is the rest of the documentation, including the architecture
 diagrams. Both are the same Markdown the repository holds, so neither can go
-stale against the other.
+stale against the other. **Help → License** shows the full GPL text, and
+**Help → About** names the application, its licence and the data it draws on.
 
 ## The command line
 

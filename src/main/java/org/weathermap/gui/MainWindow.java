@@ -14,6 +14,7 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JEditorPane;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -31,6 +32,7 @@ import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -50,6 +52,12 @@ import java.util.logging.Logger;
 public final class MainWindow extends JFrame {
 
     private static final Logger LOG = Logger.getLogger(MainWindow.class.getName());
+
+    private static final String WEATHER_PAGE = "https://www.facebook.com/saigonweather/";
+
+    /** From the jar manifest; empty in a development run from classes. */
+    private static final String VERSION = java.util.Objects.requireNonNullElse(
+            MainWindow.class.getPackage().getImplementationVersion(), "");
 
     private static final java.time.format.DateTimeFormatter CHART_TIME =
             java.time.format.DateTimeFormatter.ofPattern("EEE d MMM HH:mm");
@@ -121,6 +129,7 @@ public final class MainWindow extends JFrame {
         baseMap.setOnLoaded(mapPanel::setFeatures);
         baseMap.setOnStatus(mapStatus::setText);
 
+        setIconImages(appIcons());
         bindSeriesKeys();
         setJMenuBar(buildMenuBar());
         setContentPane(buildContent());
@@ -140,6 +149,93 @@ public final class MainWindow extends JFrame {
                 : "No stored area - showing the default. Shift-drag on the map to choose one.");
         // Deferred so the panel has a size, which is what decides the view.
         SwingUtilities.invokeLater(() -> baseMap.viewChanged(mapPanel.viewBounds()));
+    }
+
+    /**
+     * The About box.
+     *
+     * <p>Rendered as HTML in a pane rather than as a plain message, so the
+     * weather page is a link someone can click instead of a URL they have to
+     * retype. The licence line is here because section 5 of the GPL asks an
+     * interactive program to carry the notice where a user will meet it.</p>
+     */
+    private void showAbout() {
+        final JEditorPane pane = new JEditorPane("text/html",
+                aboutHtml(VERSION, service.reader().description()));
+        pane.setEditable(false);
+        pane.setOpaque(false);
+        pane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        pane.addHyperlinkListener(event -> {
+            if (event.getEventType() != javax.swing.event.HyperlinkEvent.EventType.ACTIVATED) {
+                return;
+            }
+            try {
+                if (Desktop.isDesktopSupported()
+                        && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                    Desktop.getDesktop().browse(java.net.URI.create(WEATHER_PAGE));
+                }
+            }
+            catch (Exception e) {
+                // A missing browser is not worth a second dialog.
+                LOG.log(Level.FINE, "Could not open " + WEATHER_PAGE, e);
+            }
+        });
+
+        JOptionPane.showMessageDialog(this, pane, "About",
+                JOptionPane.INFORMATION_MESSAGE, iconAt(64));
+    }
+
+    /**
+     * The About text.
+     *
+     * <p>Separate from the dialog so it can be asserted. What it says is not
+     * decoration: the attribution and the licence notice are the two things a
+     * released build is expected to carry, and a silent edit that dropped
+     * either would be invisible until someone looked.</p>
+     */
+    static String aboutHtml(String version, String decoder) {
+        return """
+                <html><body style="font-family: sans-serif; font-size: 10pt; width: 360px">
+                <p style="font-size: 13pt"><b>Weather Map%s</b></p>
+                <p>Application by Saigon Weather &copy; Del 2026.<br>
+                Our weather page:
+                <a href="%s">facebook.com/saigonweather</a></p>
+                <p>Licensed under the GNU General Public License, version 3 or
+                later. This program comes with <b>absolutely no warranty</b>.
+                See Help &gt; User's Guide &gt; License.</p>
+                <p style="color: #777">
+                Base map: OpenStreetMap via Overpass (ODbL)<br>
+                Place names: Natural Earth (public domain)<br>
+                Forecast data: NOAA NOMADS<br>
+                GRIB decoder: %s</p>
+                </body></html>
+                """.formatted(version.isEmpty() ? "" : " " + version, WEATHER_PAGE, decoder);
+    }
+
+    private static javax.swing.ImageIcon iconAt(int size) {
+        final java.net.URL url =
+                MainWindow.class.getResource("/icons/weathermap-" + size + ".png");
+        return url == null ? null : new javax.swing.ImageIcon(url);
+    }
+
+    /**
+     * The window icon, at every size the toolkit might ask for.
+     *
+     * <p>A list rather than one image: the title bar, the task switcher and the
+     * dock want different sizes, and handing over a single large one leaves the
+     * toolkit to downscale it badly at 16 pixels. Missing icons are skipped
+     * rather than failing - a window without an icon is a smaller problem than
+     * a window that will not open.</p>
+     */
+    private static List<java.awt.Image> appIcons() {
+        final List<java.awt.Image> icons = new java.util.ArrayList<>();
+        for (int size : new int[]{16, 32, 48, 64, 128, 256}) {
+            final java.net.URL url =
+                    MainWindow.class.getResource("/icons/weathermap-" + size + ".png");
+            if (url != null) icons.add(new javax.swing.ImageIcon(url).getImage());
+        }
+        if (icons.isEmpty()) LOG.fine("No bundled window icons found");
+        return icons;
     }
 
     // ---- layout ---------------------------------------------------------
@@ -428,12 +524,7 @@ public final class MainWindow extends JFrame {
         help.addSeparator();
 
         final JMenuItem about = new JMenuItem("About");
-        about.addActionListener(e -> JOptionPane.showMessageDialog(this,
-                "Weather Map\n\n"
-                        + "Base map: OpenStreetMap via Overpass (ODbL)\n"
-                        + "Forecast data: NOAA NOMADS\n"
-                        + "GRIB decoder: " + service.reader().description(),
-                "About", JOptionPane.INFORMATION_MESSAGE));
+        about.addActionListener(e -> showAbout());
         help.add(about);
         bar.add(help);
 

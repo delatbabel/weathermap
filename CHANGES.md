@@ -40,6 +40,11 @@ that repeats a stored selection or a named profile.
 - The documentation is in the application: **Help → User's Guide** (F1) and
   **Help → Developer's Guide**.
 
+**Licensing**
+
+- Released under the GNU General Public License, version 3 or later. The text
+  ships in every package and is readable from **Help → License**.
+
 **Packaging**
 
 - Installable packages for Debian/Ubuntu, RHEL/CentOS/Alma, Windows and macOS,
