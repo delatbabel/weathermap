@@ -68,7 +68,7 @@ class InstagramTest {
         final InstagramAccount account = new InstagramAccount(
                 InstagramAccount.Login.INSTAGRAM,
                 "@saigonweather", "17841400000000000", "token",
-                dir, "https://example.test/charts/");
+                dir, "https://example.test/charts/", "");
 
         final List<InstagramClient.CarouselImage> images =
                 new ChartPublisher(account).publish(series(3));
@@ -101,30 +101,30 @@ class InstagramTest {
 
     @Test
     void anAccountIsOnlyCompleteWithEverythingTheApiNeeds(@TempDir Path dir) {
-        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "", "t", dir, "https://h").isComplete(),
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "", "t", dir, "https://h", "").isComplete(),
                     "no account id");
-        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "", dir, "https://h").isComplete(),
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "", dir, "https://h", "").isComplete(),
                     "no token");
-        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", null, "https://h").isComplete(),
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", null, "https://h", "").isComplete(),
                     "no publish folder");
-        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", dir, "").isComplete(),
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", dir, "", "").isComplete(),
                     "no public URL - Instagram fetches every image");
-        assertTrue(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", dir, "https://h").isComplete());
+        assertTrue(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", dir, "https://h", "").isComplete());
     }
 
     @Test
     void theUrlJoinsCleanlyWhicheverWayTheBaseWasTyped(@TempDir Path dir) {
         assertEquals("https://h/c/chart.jpg",
-                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h/c").urlFor("chart.jpg"));
+                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h/c", "").urlFor("chart.jpg"));
         assertEquals("https://h/c/chart.jpg",
-                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h/c///").urlFor("chart.jpg"));
+                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h/c///", "").urlFor("chart.jpg"));
     }
 
     /** A token in a log or a crash report is a token someone else can post with. */
     @Test
     void theTokenIsNeverPrinted(@TempDir Path dir) {
         final String secret = "EAAG-super-secret-token";
-        final String shown = new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", secret, dir, "https://h").toString();
+        final String shown = new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", secret, dir, "https://h", "").toString();
 
         assertFalse(shown.contains(secret), shown);
         assertTrue(shown.contains("token present"), shown);
@@ -136,7 +136,8 @@ class InstagramTest {
         final InstagramAccount saved = new InstagramAccount(
                 InstagramAccount.Login.INSTAGRAM,
                 "@saigonweather", "17841400000000000", "EAAG-token",
-                dir.resolve("charts"), "https://example.test/charts");
+                dir.resolve("charts"), "https://example.test/charts",
+                "rclone sync . r2:charts");
         saved.save(file);
 
         final InstagramAccount back = InstagramAccount.load(file).orElseThrow();
@@ -158,7 +159,7 @@ class InstagramTest {
     @Test
     void aCarouselIsTwoToTenImages(@TempDir Path dir) {
         final var client = new InstagramClient(
-                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h"));
+                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h", ""));
         final var one = List.of(new InstagramClient.CarouselImage("https://h/a.jpg", ""));
         final var eleven = new ArrayList<InstagramClient.CarouselImage>();
         for (int i = 0; i < 11; i++) {
@@ -199,7 +200,7 @@ class InstagramTest {
     void thePathIsStoredAndComesBack(@TempDir Path dir) throws Exception {
         final Path file = dir.resolve("instagram.properties");
         new InstagramAccount(InstagramAccount.Login.FACEBOOK, "@x", "1", "t",
-                             dir, "https://h").save(file);
+                             dir, "https://h", "").save(file);
 
         assertEquals(InstagramAccount.Login.FACEBOOK,
                      InstagramAccount.load(file).orElseThrow().login());
@@ -224,5 +225,29 @@ class InstagramTest {
                 .contains("instagram_business_content_publish"));
         assertTrue(InstagramAccount.Login.FACEBOOK.scopes()
                 .contains("instagram_content_publish"));
+    }
+
+    /**
+     * Writing the files and posting are one action to the user and two events
+     * on the internet. A synced folder is not live the moment it is written, and
+     * posting then makes Meta fetch a URL that does not exist yet.
+     */
+    @Test
+    void aSyncedFolderIsRecognisedAsNeedingAStepBeforePosting(@TempDir Path dir) {
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t",
+                dir, "https://h", "").hasSyncCommand(),
+                "a directly served folder needs nothing");
+        assertTrue(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t",
+                dir, "https://h", "rclone sync . r2:charts").hasSyncCommand());
+    }
+
+    @Test
+    void theSyncCommandIsStoredWithTheRest(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("instagram.properties");
+        new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t",
+                dir, "https://h", "rclone sync . r2:charts").save(file);
+
+        assertEquals("rclone sync . r2:charts",
+                     InstagramAccount.load(file).orElseThrow().syncCommand());
     }
 }

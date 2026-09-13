@@ -43,9 +43,13 @@ import java.util.logging.Logger;
  *                      does not expire
  * @param publishDir    where the application writes images to be fetched
  * @param publicBaseUrl the URL that {@code publishDir} is served at
+ * @param syncCommand   run after the images are written and before they are
+ *                      posted, for a folder that is uploaded rather than served
+ *                      directly; may be blank
  */
 public record InstagramAccount(Login login, String profile, String igUserId,
-                               String accessToken, Path publishDir, String publicBaseUrl) {
+                               String accessToken, Path publishDir, String publicBaseUrl,
+                               String syncCommand) {
 
     /**
      * The two ways Meta issues a publishing token, which are not interchangeable.
@@ -108,6 +112,7 @@ public record InstagramAccount(Login login, String profile, String igUserId,
     private static final String KEY_TOKEN = "instagram.accessToken";
     private static final String KEY_DIR = "instagram.publishDir";
     private static final String KEY_URL = "instagram.publicBaseUrl";
+    private static final String KEY_SYNC = "instagram.syncCommand";
 
     public InstagramAccount {
         login = login == null ? Login.INSTAGRAM : login;
@@ -115,6 +120,7 @@ public record InstagramAccount(Login login, String profile, String igUserId,
         igUserId = igUserId == null ? "" : igUserId.trim();
         accessToken = accessToken == null ? "" : accessToken.trim();
         publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.trim().replaceAll("/+$", "");
+        syncCommand = syncCommand == null ? "" : syncCommand.trim();
     }
 
     /** True when every field needed to post is present. */
@@ -122,6 +128,9 @@ public record InstagramAccount(Login login, String profile, String igUserId,
         return !igUserId.isEmpty() && !accessToken.isEmpty()
                 && publishDir != null && !publicBaseUrl.isEmpty();
     }
+
+    /** True when the images have to be pushed somewhere before they are fetched. */
+    public boolean hasSyncCommand() { return !syncCommand.isEmpty(); }
 
     /** The public URL a file written into {@link #publishDir} will be served at. */
     public String urlFor(String fileName) {
@@ -149,7 +158,8 @@ public record InstagramAccount(Login login, String profile, String igUserId,
                 props.getProperty(KEY_USER_ID, ""),
                 props.getProperty(KEY_TOKEN, ""),
                 dir.isBlank() ? null : Path.of(dir),
-                props.getProperty(KEY_URL, "")));
+                props.getProperty(KEY_URL, ""),
+                props.getProperty(KEY_SYNC, "")));
     }
 
     /**
@@ -168,6 +178,7 @@ public record InstagramAccount(Login login, String profile, String igUserId,
         props.setProperty(KEY_TOKEN, accessToken);
         props.setProperty(KEY_DIR, publishDir == null ? "" : publishDir.toString());
         props.setProperty(KEY_URL, publicBaseUrl);
+        props.setProperty(KEY_SYNC, syncCommand);
 
         final Path parent = file.getParent();
         if (parent != null) Files.createDirectories(parent);

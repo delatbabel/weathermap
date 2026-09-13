@@ -38,6 +38,9 @@ final class InstagramPublishCheck {
         }
 
         try {
+            if (account.hasSyncCommand()) {
+                org.weathermap.instagram.PublishGate.sync(account, m -> { });
+            }
             final String fetched = Http.getString(URI.create(account.urlFor(marker)));
             if (!fetched.contains(token)) {
                 return "That URL answered, but with something else.\n\n"

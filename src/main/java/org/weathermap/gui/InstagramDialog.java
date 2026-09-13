@@ -54,6 +54,7 @@ public final class InstagramDialog extends JDialog {
     private final JPasswordField token = new JPasswordField(22);
     private final JTextField publishDir = new JTextField(22);
     private final JTextField publicUrl = new JTextField(22);
+    private final JTextField syncCommand = new JTextField(22);
     private final JSpinner chartCount;
     private final JTextArea caption = new JTextArea(4, 22);
 
@@ -73,6 +74,7 @@ public final class InstagramDialog extends JDialog {
             token.setText(existing.accessToken());
             publishDir.setText(existing.publishDir() == null ? "" : existing.publishDir().toString());
             publicUrl.setText(existing.publicBaseUrl());
+            syncCommand.setText(existing.syncCommand());
         }
 
         setContentPane(buildContent(available));
@@ -100,6 +102,9 @@ public final class InstagramDialog extends JDialog {
                   "Where the images are written for Instagram to fetch.");
         row = add(fields, c, row, "Public URL of that folder", publicUrl,
                   "Instagram fetches every image; nothing local can be posted.");
+        row = add(fields, c, row, "Sync command", syncCommand,
+                  "Optional. Run after writing, before posting — e.g. "
+                  + "rclone sync . r2:charts. Leave empty if the folder is served directly.");
         row = add(fields, c, row, "Charts to post", chartCount,
                   "The chart on screen, then the next in the series. "
                   + available + " available from here.");
@@ -208,7 +213,8 @@ public final class InstagramDialog extends JDialog {
                 (InstagramAccount.Login) login.getSelectedItem(),
                 profile.getText(), userId.getText(),
                 new String(token.getPassword()),
-                dir.isEmpty() ? null : Path.of(dir), publicUrl.getText());
+                dir.isEmpty() ? null : Path.of(dir), publicUrl.getText(),
+                syncCommand.getText());
     }
 
     private int add(JPanel panel, GridBagConstraints c, int row,

@@ -786,6 +786,9 @@ public final class MainWindow extends JFrame {
                     new org.weathermap.instagram.ChartPublisher(request.account());
             final var images = publisher.publish(charts);
 
+            org.weathermap.instagram.PublishGate.sync(request.account(), this::publish);
+            org.weathermap.instagram.PublishGate.awaitReachable(images, this::publish);
+
             publish("Posting to Instagram");
             final var client =
                     new org.weathermap.instagram.InstagramClient(request.account());

@@ -59,11 +59,62 @@ that Meta's servers fetch for themselves. A chart on your disk cannot be posted;
 it has to be somewhere on the public internet first.
 
 So you need a folder this application can write to that is also served over
-HTTP — a directory on your web host, a synced folder, a bucket, anything that
-gives a stable public address. The dialog's **Check settings** writes one small
-file and fetches it back over HTTP, because a mismatched folder and URL is the
-commonest mistake here and the hardest to diagnose: the images write perfectly,
-and the failure arrives later from Meta as "the media could not be retrieved".
+HTTP at a **predictable path** — `https://host/folder/name.jpg`, where the name
+is the one the application chose.
+
+That last part rules out most consumer sync services. **Dropbox, pCloud, Google
+Drive, OneDrive and Nextcloud all mint an opaque share link per file or per
+folder**, so the address of a file is not derivable from its name. They are
+built to share a link to a file, not to serve a directory, and no amount of
+configuration turns one into the other.
+
+### What does work
+
+| Option | URL you get | Notes |
+|---|---|---|
+| **Cloudflare R2** + custom domain | `https://files.yoursite/charts/x.jpg` | S3-compatible, generous free tier, no egress charge. The best fit for this. |
+| **Backblaze B2** (public bucket) | `https://f000.backblazeb2.com/file/bucket/x.jpg` | Cheapest raw storage; put Cloudflare in front for a tidy domain. |
+| **Amazon S3**, **DigitalOcean Spaces**, **Wasabi** | `https://bucket.host/charts/x.jpg` | Same pattern; S3 charges for egress. |
+| **Any web host you already have** | `https://yoursite/charts/x.jpg` | The simplest answer if you have one. SFTP or rsync into `public_html`. |
+| **GitLab / GitHub Pages** | `https://you.gitlab.io/charts/x.jpg` | Free and path-based, but every chart is a commit. |
+
+All of them need the object to be **publicly readable** and served as
+`image/jpeg`. Meta fetches anonymously; a signed or expiring URL will not do.
+
+### Getting the files there
+
+[**rclone**](https://rclone.org) is the piece that replaces Dropbox in this
+arrangement. It talks to R2, B2, S3, Spaces, SFTP and dozens more, and one
+command uploads the folder:
+
+```bash
+rclone sync /home/you/weathermap-charts r2:charts
+```
+
+Two ways to wire it in:
+
+- **Mount the bucket** with `rclone mount`, point the publish folder at the
+  mount, and writing *is* uploading. Nothing else to configure.
+- **Or set a sync command** in the dialog, and the application runs it after
+  writing and before posting.
+
+### The timing this creates
+
+A synced folder is not live the moment a file is written, and that matters here
+in a way it usually does not. Writing the images and posting them is one action
+to you and two events on the internet: if Instagram is asked to fetch a URL
+before the upload finishes, it reports that the media could not be retrieved —
+which reads as a wrong URL, and by the time you check by hand the sync has
+finished and the URL works perfectly.
+
+So the application does not post the moment it has written the files. It runs
+the sync command if there is one, then **polls every image until it really
+answers over HTTP**, and only then posts. If an image is still unreachable after
+three minutes it stops and says which one, rather than spending part of the
+day's quota on a carousel that will fail halfway.
+
+A directly served folder needs no sync command; the check costs one request per
+image and passes immediately.
 
 ## Getting the token — Instagram Login
 
@@ -123,19 +174,25 @@ tokens*, and it is easy to read past.
   > is because the URL outlived the menu path.
 
 **6. Add the account and generate the token.** Back in *API setup with Instagram
-login*, step 2 — **Add account**, then **Generate token** beside it. Log in and
-approve. The token it hands back is **already long-lived: 60 days**. That is the
-point of this path: no short-lived token to exchange, and no flow to implement.
+login*, step 2 — **Add account**, then **Generate token** beside the account.
+Expect to log in to Instagram a second time here, even though you just accepted
+the invite; that is normal.
 
-**7. Find the Instagram user ID.** Ask the API who the token belongs to:
+  The account now shows its handle with a long number beneath it. **That number
+  is the Instagram user ID** — the same value step 7 returns, so you can copy it
+  straight from the screen and use step 7 only to confirm it.
 
+  The token it hands back is **already long-lived: 60 days**. That is the point
+  of this path: no short-lived token to exchange, and no flow to implement.
+
+**7. Confirm the Instagram user ID.** Ask the API who the token belongs to:
+
+```bash
+curl -s "https://graph.instagram.com/v25.0/me?fields=user_id,username&access_token=YOUR_TOKEN"
 ```
-GET https://graph.instagram.com/v25.0/me?fields=user_id,username
-    &access_token=<your-token>
-```
 
-The `user_id` is what goes in the dialog. Not the handle, and not the Facebook
-Page ID.
+The `user_id` should match the number shown under the account in step 6. That is
+what goes in the dialog — not the handle, and not a Facebook Page ID.
 
 **8. Paste both into the dialog** — *Token from: Instagram Login*, the user ID,
 and the token.
@@ -170,14 +227,13 @@ is when it is needed.
 A 60-day token can be refreshed for another 60, any time after it is 24 hours
 old, as long as it is still valid:
 
-```
-GET https://graph.instagram.com/refresh_access_token
-    ?grant_type=ig_refresh_token
-    &access_token=<current-token>
+```bash
+curl -s "https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=YOUR_TOKEN"
 ```
 
-Let it lapse and you repeat step 5, which is a minute's work. Set a reminder for
-about day 50.
+The response is a JSON object whose `access_token` is the renewed one — use
+that from then on. Let it lapse instead and you repeat step 6, which is a
+minute's work. Set a reminder for about day 50.
 
 If you ever start from a short-lived token instead, exchange it first:
 
