@@ -78,38 +78,80 @@ secret_access_key = <secret access key>
 region = auto
 endpoint = https://<account-id>.r2.cloudflarestorage.com
 acl = private
+no_check_bucket = true
+no_head = true
 ```
 
 `acl = private` is right even though the bucket is public: the objects are not
 world-readable through the S3 API, they are served by the custom domain. Public
 access is a property of the domain binding, not of the object.
 
-Check it before going further — **inside the bucket**, not at the account level:
+**The last two lines are not tuning. Without them nothing can be written at
+all**, and each fails in a way that points at something else entirely. Both are
+backend options, so they belong here rather than on the mount command line.
+
+### `no_check_bucket = true` — otherwise every write is 403
+
+Before its first write rclone checks that the bucket exists. That check is an
+account-level operation, and a token scoped to a single bucket cannot perform
+it, so it fails — and the failure is attributed to the write:
+
+```
+ERROR : hostname: Failed to copy: AccessDenied: Access Denied
+	status code: 403
+```
+
+A 403 naming no operation reads as a permissions problem with the write, which
+is how this first got diagnosed as an Object Read only token. It was not; the
+token had already been recreated as **Object Read & Write** and behaved
+identically. The tell is that `rclone lsd weathermap-r2:weathermap-charts`
+succeeds at the same moment — a token that can list inside the bucket has the
+keys and endpoint right.
+
+### `no_head = true` — otherwise every write is 501
+
+R2 answers a successful `PUT` with an `X-Amz-Version-Id` header. rclone reads
+that as a versioned bucket and re-reads the object by version id to verify what
+it just uploaded. R2 does not implement versioning, so that request returns
+`501 NotImplemented`:
+
+```
+PUT  /weathermap-charts/chart.jpg          -> 200 OK   (X-Amz-Version-Id: 7e5f…)
+HEAD /weathermap-charts/chart.jpg?versionId=7e5f…  -> 501 Not Implemented
+ERROR : chart.jpg: Failed to copy: NotImplemented: Not Implemented
+```
+
+**The upload has already succeeded when this happens.** The object is in the
+bucket and `rclone ls` will show it, while rclone reports the transfer as
+failed and exits non-zero — so a publish script that checks the exit status
+aborts on a file that is actually there. What is given up is the post-upload
+verifying read; the ETag returned by the `PUT` is still checked against what
+was sent.
+
+Set both at once without hand-editing the file:
+
+```bash
+rclone config update weathermap-r2 no_check_bucket true no_head true --non-interactive
+```
+
+### Checking it
+
+**Inside the bucket**, not at the account level:
 
 ```bash
 rclone lsd weathermap-r2:weathermap-charts
 rclone copy /etc/hostname weathermap-r2:weathermap-charts/
 curl -I https://charts.example.com/hostname
-rclone delete weathermap-r2:weathermap-charts/hostname
+rclone deletefile weathermap-r2:weathermap-charts/hostname
 ```
 
 The `curl` should return `200`. If it returns 404 the domain is not connected
 yet; if it never resolves, DNS has not propagated.
 
-### Reading a 403 from R2
+`rclone lsd weathermap-r2:` — with no bucket — returns 403 and **nothing is
+wrong**. Listing every bucket in the account is an account-level operation that
+a bucket-scoped token cannot do. Always list inside the bucket.
 
-`AccessDenied` means different things depending on which command produced it,
-and the distinction saves a lot of time:
-
-| Command | 403 means |
-|---|---|
-| `rclone lsd weathermap-r2:` | **Nothing is wrong.** Listing every bucket is an account-level operation, and a token scoped to one bucket cannot do it. Always list inside the bucket. |
-| `rclone lsd weathermap-r2:bucket` | The token is scoped to a different bucket, or the endpoint has the wrong account ID. |
-| `rclone copy ... weathermap-r2:bucket/` **after a successful list** | The token is **Object Read only**. Recreate it as **Object Read & Write**. |
-
-That middle-of-the-night one is the trap: a read-only token lists perfectly and
-fails only when something is written, which is long after the setup looked
-finished.
 
 ## 5. Mount it with systemd
 
@@ -123,6 +165,14 @@ ordinary WebDAV mount unit with two changes that object storage requires:
 - **`--dir-cache-time 10s`** instead of the five-minute default. Nothing else
   writes to this bucket, so a short cache costs nothing and a new chart shows up
   in a listing almost at once.
+
+**A file written to the mount is not in the bucket yet.** With
+`--vfs-cache-mode writes` rclone queues the upload about five seconds after the
+file is closed, so it is readable through the mount immediately and returns 404
+from the public URL for several seconds longer. Nothing is wrong; the write has
+simply not left the machine. This is what `PublishGate.awaitReachable()` is
+for — it polls every image URL before the post is submitted, because Instagram
+fetches the images itself and a 404 at that moment fails the whole carousel.
 
 ### Put mount flags on the command line, not in `rclone.conf`
 

@@ -23,6 +23,26 @@
 #     Charts are hundreds of kilobytes. A large read-ahead buffer is for large
 #     sequential files and only costs memory here.
 #
+# TWO BACKEND OPTIONS THIS MOUNT DEPENDS ON, both set in rclone.conf because
+# they are backend options rather than mount flags:
+#
+#   no_check_bucket = true
+#     Before its first write rclone checks the bucket exists, which is an
+#     account-level call. A token scoped to one bucket cannot make it, so the
+#     check fails with 403 AccessDenied and the write never starts. The 403
+#     names no operation, so it reads exactly like a read-only token - which is
+#     what it was first diagnosed as, wrongly, after the token had already been
+#     recreated once with the right permissions.
+#
+#   no_head = true
+#     R2 answers a PUT with an X-Amz-Version-Id header. rclone takes that as a
+#     versioned bucket and re-reads the object by version id to verify what it
+#     just uploaded - and R2 does not implement versioning, so that HEAD returns
+#     501 NotImplemented. The upload has already succeeded at that point: the
+#     object is in the bucket and rclone reports the transfer as failed anyway.
+#     Skipping the verifying HEAD costs the post-upload integrity check; the
+#     ETag in the PUT response is still checked against what was sent.
+#
 # Install:
 #   mkdir -p ~/weathermap-charts.saigonweather.online
 #   sudo cp dist/r2/rclone-weathermap-r2.service /etc/systemd/system/
