@@ -71,6 +71,13 @@ Documentation=man:rclone(1)
 After=network-online.target
 Wants=network-online.target
 
+# These belong in [Unit]. In [Service] systemd ignores them with a warning, so
+# the limit that actually applied was the default - which is what produced
+# "Start request repeated too quickly" after two failures, and a unit that then
+# refuses to start until systemctl reset-failed.
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
 # No AssertPathIsDirectory here, deliberately. If the rclone process dies
 # without unmounting, the FUSE mount survives it: /proc/mounts still lists the
 # path and every stat of it returns ENOTCONN. The assertion is evaluated before
@@ -87,6 +94,14 @@ Group=del
 # leading "-" makes the usual case, where there is nothing to clear, a no-op.
 ExecStartPre=-/bin/fusermount -uz /home/del/weathermap-charts.saigonweather.online
 ExecStartPre=/bin/mkdir -p /home/del/weathermap-charts.saigonweather.online
+# rclone refuses to mount over a directory that is not empty, and it is right
+# to: anything already there would be hidden by the mount, and a write landing
+# in the shadowed directory while the mount is down never reaches R2 - a chart
+# that looks published and is not. An empty subdirectory is the harmless half of
+# that, left behind when a mount goes away, and is cleared here. Real files are
+# deliberately not: the mount then fails loudly, which is the only way anyone
+# finds out something was written while it was down.
+ExecStartPre=-/usr/bin/find /home/del/weathermap-charts.saigonweather.online -mindepth 1 -type d -empty -delete
 ExecStart=/usr/local/bin/rclone mount weathermap-r2:weathermap-charts /home/del/weathermap-charts.saigonweather.online \
     --config=/home/del/.config/rclone/rclone.conf \
     --vfs-cache-mode writes \
@@ -106,8 +121,6 @@ TimeoutStopSec=20
 KillMode=process
 Restart=on-failure
 RestartSec=30
-StartLimitInterval=300
-StartLimitBurst=3
 
 [Install]
 WantedBy=multi-user.target

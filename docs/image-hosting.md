@@ -213,6 +213,31 @@ rather than the mount.
 Both are fixed by `v1.75.1`: writes need no `no_head`, and `rm` through the mount
 removes the object with no 501 in the log.
 
+### The mount will not start over a non-empty directory
+
+```
+Fatal error: failed to mount FUSE fs: "/home/del/weathermap-charts..." is not
+empty, use --allow-non-empty to mount anyway
+```
+
+**Do not add `--allow-non-empty`.** rclone is refusing for a good reason. The
+mount hides whatever is already in the directory, so a chart written while the
+mount is down lands on local disk, is hidden the moment the mount comes back,
+and never reaches R2 — published as far as the application is concerned, and
+absent from the URL Instagram will fetch. The refusal is the only thing that
+makes that visible.
+
+The harmless half is an empty subdirectory left behind when a mount goes away,
+which the unit clears in `ExecStartPre`. Files are deliberately left alone so
+the mount still fails loudly. If it does, look at what is in the directory
+before deleting any of it — it may be a chart that never got published.
+
+A related trap: after two failed starts the unit hits its rate limit and reports
+`Start request repeated too quickly` instead of the real error. Clear it with
+`systemctl reset-failed rclone-weathermap-r2.service` before starting again, and
+read the failure from `journalctl -u rclone-weathermap-r2.service`, not from
+`systemctl status`, which truncates the command line.
+
 ### Put mount flags on the command line, not in `rclone.conf`
 
 A remote stanza in `rclone.conf` holds **backend** options — for WebDAV that is
