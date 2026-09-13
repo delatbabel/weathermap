@@ -527,6 +527,29 @@ Ordered by how much they matter.
 | Cache eviction is never called | `Cache.evictTo` | Implemented but unwired; needs a configured budget. |
 | Elevation | — | Left out by decision. OSM has `ele` tags on peaks but no terrain model; shaded relief needs SRTM or Copernicus DEM as a separate source. |
 
+### The User-Agent is load-bearing
+
+Overpass instances police it, and a placeholder is worse than a plain string.
+Ours carried `example.invalid`, and two of the three instances refused **every**
+request with `HTTP 429` and the body:
+
+> Please include a meaningful User-Agent string with your requests to avoid
+> rate-limiting.
+
+A 429 reads as rate limiting, so it was diagnosed as load and waited out — which
+could never have worked, since the same request would have been refused a week
+later. Verified by posting an identical query with and without the placeholder:
+429 with, 200 without, on both instances.
+
+So the default names the application and what it does and claims nothing untrue.
+Set `-Dweathermap.userAgent=...` to add a contact address if you run it hard;
+inventing a URL on the user's behalf is what caused this. A test fails the build
+if a placeholder reappears in the string.
+
+A 429 now quotes the server's own response body rather than asserting a cause.
+The status code alone cannot distinguish "you are asking too often" from "I do
+not like your User-Agent", and the body says which.
+
 ## Before pointing this at the public services
 
 - **Set a real `Http.USER_AGENT`.** It currently names `example.invalid`. Both

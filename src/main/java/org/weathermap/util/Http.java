@@ -15,18 +15,34 @@ import java.util.logging.Logger;
  * The one place HTTP happens: a shared {@link HttpClient}, a User-Agent that
  * identifies the application, retries, and downloads that land atomically.
  *
- * <p><b>The User-Agent is not decoration.</b> Both services this application
- * talks to police it. The OSM Foundation's Overpass instances and tile servers
- * block requests from clients that do not identify themselves, and NOMADS
- * throttles by client. A real contact address belongs in
- * {@link #USER_AGENT} before this is pointed at a public endpoint.</p>
+ * <p><b>The User-Agent is not decoration, and a placeholder is worse than a
+ * plain one.</b> Overpass instances police it: two of the three in use rejected
+ * every request with {@code 429} and the body "Please include a meaningful
+ * User-Agent string with your requests to avoid rate-limiting", because the
+ * string carried {@code example.invalid}. A rejection that arrives as a 429
+ * reads as rate limiting, so it was diagnosed as load and waited out, which of
+ * course never helped - the same request would have failed a week later.</p>
+ *
+ * <p>So the default names the application and what it does and claims nothing
+ * that is not true. Anyone running it hard enough to need a contact address can
+ * set {@code -Dweathermap.userAgent=...}, which is what a courteous heavy user
+ * should do; inventing a URL on their behalf is what caused this.</p>
  */
 public final class Http {
 
     private static final Logger LOG = Logger.getLogger(Http.class.getName());
 
-    /** TODO: put a real project URL or contact address here before public use. */
-    public static final String USER_AGENT = "weathermap/0.1 (+https://example.invalid/weathermap)";
+    /**
+     * How this application identifies itself.
+     *
+     * <p>Override with {@code -Dweathermap.userAgent=...} to add a contact
+     * address. Verified against all four Overpass instances in
+     * {@code OverpassClient.DEFAULT_ENDPOINTS}: this string is accepted by every
+     * one of them, and the same request with {@code example.invalid} in it is
+     * refused by two.</p>
+     */
+    public static final String USER_AGENT = System.getProperty("weathermap.userAgent",
+            "weathermap/0.1 (desktop GRIB charting; OSM data via Overpass)");
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration REQUEST_TIMEOUT = Duration.ofMinutes(5);
@@ -74,8 +90,31 @@ public final class Http {
         private static final long serialVersionUID = 1L;
 
         public RateLimitedException(String host) {
-            super("rate limited by " + host + " - ask for a smaller area, "
-                    + "or wait a few minutes");
+            this(host, null);
+        }
+
+        /**
+         * @param explanation the server's own response body, if it sent one
+         *
+         * <p>Quoted rather than summarised. A 429 is not always about load:
+         * Overpass returns one for a User-Agent it does not like, and the body
+         * says so plainly while the status code does not. Guessing "ask for a
+         * smaller area, or wait a few minutes" over the top of that sent someone
+         * off to wait for a condition that was never going to pass.</p>
+         */
+        public RateLimitedException(String host, String explanation) {
+            super(message(host, explanation));
+        }
+
+        private static String message(String host, String explanation) {
+            final String said = explanation == null ? "" : explanation.strip();
+            if (said.isEmpty()) {
+                return "refused by " + host + " with HTTP 429 and no explanation - "
+                        + "ask for a smaller area, or wait a few minutes";
+            }
+            // Kept short: this reaches a status bar as well as a log.
+            final String trimmed = said.length() > 300 ? said.substring(0, 300) + "…" : said;
+            return host + " refused the request (HTTP 429): " + trimmed;
         }
     }
 
@@ -120,7 +159,7 @@ public final class Http {
                 FAILOVER_CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
         final int status = response.statusCode();
         if (status >= 200 && status < 300) return response.body();
-        if (status == 429) throw new RateLimitedException(uri.getHost());
+        if (status == 429) throw new RateLimitedException(uri.getHost(), response.body());
         throw new IOException("HTTP " + status + " from " + uri);
     }
 

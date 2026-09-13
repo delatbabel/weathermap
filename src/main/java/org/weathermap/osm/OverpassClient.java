@@ -59,11 +59,18 @@ public final class OverpassClient implements OsmSource {
      * with Overpass at all.</p>
      *
      * <p>Whichever endpoint answers is remembered and tried first next time.</p>
+     *
+     * <p>A fourth was added after all of them appeared to fail at once. That
+     * turned out to be the User-Agent rather than the instances - see
+     * {@link org.weathermap.util.Http#USER_AGENT} - but the incident showed how
+     * little headroom three leaves when one of them is also resolving to a dead
+     * address half the time.</p>
      */
     public static final List<String> DEFAULT_ENDPOINTS = List.of(
             "https://overpass-api.de/api/interpreter",
             "https://overpass.private.coffee/api/interpreter",
-            "https://overpass.kumi.systems/api/interpreter");
+            "https://overpass.kumi.systems/api/interpreter",
+            "https://overpass.osm.ch/api/interpreter");
 
     /** @deprecated prefer {@link #DEFAULT_ENDPOINTS}; kept for single-endpoint callers. */
     @Deprecated
