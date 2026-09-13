@@ -7,6 +7,8 @@ import org.weathermap.model.GribLevel;
 import org.weathermap.model.GribModel;
 import org.weathermap.model.GribSelection;
 import org.weathermap.model.Preferences;
+import org.weathermap.model.ProfileStore;
+import org.weathermap.model.Profile;
 import org.weathermap.model.RenderSpec;
 
 import java.nio.file.Path;
@@ -63,6 +65,10 @@ public final class WeatherMapCli {
               --mercator            use Mercator instead of equirectangular
               --timezone ZONE       write chart times in this zone, e.g.
                                     Asia/Bangkok or UTC (default: this machine's)
+              --profile NAME        download the named saved profile - its area,
+                                    model, hours or series, variables and levels.
+                                    Other options still override it.
+              --list-profiles       print the saved profile names and exit
               --config FILE         a preferences file other than the default
               --save                store the overrides as the new defaults
               --dry-run             report what would be fetched, fetch nothing
@@ -89,11 +95,42 @@ public final class WeatherMapCli {
             return 0;
         }
 
+        final ProfileStore profiles = new ProfileStore();
+        if (options.listProfiles) {
+            final List<String> names = profiles.names();
+            if (names.isEmpty()) {
+                System.out.println("no saved profiles in " + profiles.directory());
+            }
+            else {
+                names.forEach(System.out::println);
+            }
+            return 0;
+        }
+
         final Preferences prefs = (options.configFile == null)
                 ? new Preferences() : new Preferences(options.configFile);
 
-        final BoundingBox area = (options.area != null) ? options.area : prefs.area();
-        final GribSelection selection = buildSelection(prefs, options);
+        // A profile stands in for the stored preferences, and the command line
+        // still overrides it - which is what makes "the usual area, but tomorrow
+        // as well" a one-flag change rather than a new profile.
+        Profile profile = null;
+        if (options.profile != null) {
+            profile = profiles.load(options.profile).orElse(null);
+            if (profile == null) {
+                System.err.println("weathermap: no profile called \"" + options.profile
+                        + "\" in " + profiles.directory());
+                final List<String> names = profiles.names();
+                if (!names.isEmpty()) {
+                    System.err.println("  saved profiles: " + String.join(", ", names));
+                }
+                return 1;
+            }
+        }
+
+        final BoundingBox area = (options.area != null) ? options.area
+                : (profile != null ? profile.area() : prefs.area());
+        final GribSelection selection = buildSelection(
+                profile != null ? profile.selection() : prefs.selection(), options);
         final RenderSpec spec = buildRenderSpec(prefs, options);
         final Path outputDir = (options.outputDir != null) ? options.outputDir : prefs.outputDir();
 
@@ -109,6 +146,7 @@ public final class WeatherMapCli {
                 selection.chartRequests(java.time.ZonedDateTime.now());
 
         if (!options.quiet) {
+            if (profile != null) System.out.println("profile   " + profile.name());
             System.out.println("area      " + area);
             System.out.println("selection " + selection);
             if (selection.hasSeries()) {
@@ -191,8 +229,8 @@ public final class WeatherMapCli {
                 + " (" + analyses + " analyses, longest lead f" + worstLead + ")";
     }
 
-    private static GribSelection buildSelection(Preferences prefs, Options options) {
-        final GribSelection selection = prefs.selection();
+    private static GribSelection buildSelection(GribSelection stored, Options options) {
+        final GribSelection selection = stored;
 
         if (options.model != null) selection.setModel(options.model);
         if (!options.variables.isEmpty()) {
@@ -245,6 +283,8 @@ public final class WeatherMapCli {
         int height = -1;
         float opacity = -1;
         boolean mercator;
+        String profile;
+        boolean listProfiles;
         java.time.ZoneId zone;
         int seriesStep;
         int seriesBack;
@@ -279,6 +319,8 @@ public final class WeatherMapCli {
                                     "--series takes whole hours, e.g. 3,24,48");
                         }
                     }
+                    case "--profile" -> o.profile = next(args, ++i, a);
+                    case "--list-profiles" -> o.listProfiles = true;
                     case "--mercator" -> o.mercator = true;
                     case "--timezone", "--tz" -> {
                         final String id = next(args, ++i, a);

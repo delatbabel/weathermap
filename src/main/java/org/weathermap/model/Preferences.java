@@ -124,14 +124,37 @@ public final class Preferences {
     /** Writes the file, creating {@code ~/.weathermap} if needed. Never throws. */
     public void save() {
         try {
-            Files.createDirectories(file.getParent());
-            try (OutputStream out = Files.newOutputStream(file)) {
-                props.store(out, "weathermap - last selected area and GRIB data set");
-            }
+            saveOrThrow();
         }
         catch (IOException e) {
+            // The preferences are a convenience: failing to store them must not
+            // interrupt whatever the user was actually doing.
             LOG.log(Level.WARNING, "Could not write " + file, e);
         }
+    }
+
+    /**
+     * Writes the file and reports a failure.
+     *
+     * <p>Used where the write <em>is</em> the action rather than a side effect
+     * of one - saving a named profile, where silently not saving would be worse
+     * than an error.</p>
+     */
+    public void saveOrThrow() throws IOException {
+        final Path parent = file.getParent();
+        if (parent != null) Files.createDirectories(parent);
+        try (OutputStream out = Files.newOutputStream(file)) {
+            props.store(out, "weathermap - last selected area and GRIB data set");
+        }
+    }
+
+    /** One stored value, for keys this class does not otherwise know about. */
+    public String property(String key) {
+        return props.getProperty(key);
+    }
+
+    public void setProperty(String key, String value) {
+        props.setProperty(key, value);
     }
 
     // ---- the area -------------------------------------------------------

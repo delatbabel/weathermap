@@ -427,6 +427,42 @@ a document. The accelerator avoids Ctrl-C deliberately: a menu accelerator fires
 wherever the focus is, and taking Ctrl-C would break copying out of the latitude
 and longitude fields.
 
+### Saved profiles
+
+A profile is a named answer to *what to fetch*: the area, the model and run, the
+forecast hours or series, the variables and the levels. **Save profile** and
+**Recall profile** on the toolbar; `--profile NAME` on the command line, with
+`--list-profiles` to see what there is.
+
+It deliberately holds nothing about how the chart is drawn. Someone who works a
+home coastline and an ocean passage wants to switch between those two questions
+without losing their theme, their time zone or the size of their window, so the
+rendering settings stay where they are. A test asserts that no `render.` or
+`ui.` key ever reaches a profile file.
+
+One file each under `~/.weathermap/profiles`, in the same format as the
+preferences — which is not laziness but the point: a profile *is* an area and a
+`GribSelection`, and reusing the codec means one implementation of bounding
+boxes, variable lists and series definitions rather than two that drift. A
+directory of small files can also be listed, copied to another machine, deleted
+with `rm` and put under version control, and a corrupt profile costs one profile
+instead of all of them.
+
+The file name is sanitised and lower-cased while the name you typed is stored
+inside it, so a profile can be called `Ushant → Finisterre` and still live on a
+filesystem that would rather it did not. Names differing only in case are the
+same profile. The listing is collated rather than compared by code point, so
+`Åland` sorts with the other A's instead of after Z.
+
+On the command line a profile stands in for the stored preferences and
+everything else still overrides it, which makes "the usual area, but tomorrow as
+well" a one-flag change rather than a new profile:
+
+```bash
+weathermap --cli --profile "Western Approaches"
+weathermap --cli --profile "Western Approaches" --hours 0,6   # overrides its series
+```
+
 ### Chart times
 
 Two labels, top right and much larger than the title: **VALID AT**, the instant

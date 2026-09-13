@@ -78,6 +78,12 @@ public final class MainWindow extends JFrame {
     private final JButton copyChart = new JButton("Copy");
     private final JLabel chartPosition = new JLabel(" ");
 
+    private final org.weathermap.model.ProfileStore profiles =
+            new org.weathermap.model.ProfileStore();
+
+    /** The profile last saved or recalled, offered as the default next time. */
+    private String lastProfileName;
+
     /** The composited series, in time order, and which one is on screen. */
     private List<MapService.Result> results = List.of();
     private int resultIndex;
@@ -249,6 +255,19 @@ public final class MainWindow extends JFrame {
         loadDetail.setToolTipText("Fetch OSM coastline and place names for the visible area now");
         loadDetail.addActionListener(e -> baseMap.loadNow(mapPanel.viewBounds()));
         bar.add(loadDetail);
+
+        bar.add(Box.createHorizontalStrut(18));
+        final JButton saveProfile = new JButton("Save profile");
+        saveProfile.setToolTipText("Store the area, model, hours or series, "
+                + "variables and levels under a name");
+        saveProfile.addActionListener(e -> saveProfile());
+        bar.add(saveProfile);
+
+        bar.add(Box.createHorizontalStrut(6));
+        final JButton recallProfile = new JButton("Recall profile");
+        recallProfile.setToolTipText("Load a saved profile");
+        recallProfile.addActionListener(e -> recallProfile());
+        bar.add(recallProfile);
 
         bar.add(Box.createHorizontalStrut(18));
         final JButton download = new JButton("Download and composite");
@@ -592,6 +611,94 @@ public final class MainWindow extends JFrame {
                 showChart(resultIndex + 1);
             }
         });
+    }
+
+    // ---- profiles --------------------------------------------------------
+
+    /**
+     * Stores what is on screen under a name.
+     *
+     * <p>Saves the selection as the panel reports it rather than the last one
+     * downloaded, so a profile can be built and stored without fetching
+     * anything - which is the point of having them.</p>
+     */
+    private void saveProfile() {
+        final GribSelection selection = dataPanel.selection();
+        if (selection == null) {
+            setStatus("Fix the data selection before saving a profile");
+            return;
+        }
+        final BoundingBox typed = areaPanel.area();
+        final BoundingBox toSave = (typed != null) ? typed : area;
+
+        final String name = JOptionPane.showInputDialog(this,
+                "Name for this area and data selection:",
+                lastProfileName == null ? "" : lastProfileName);
+        if (name == null || name.isBlank()) return;
+
+        if (profiles.exists(name)
+                && JOptionPane.showConfirmDialog(this,
+                        "\"" + name.trim() + "\" already exists. Replace it?",
+                        "Replace profile", JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE) != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        try {
+            profiles.save(name, toSave, selection);
+            lastProfileName = name.trim();
+            setStatus("Saved profile \"" + lastProfileName + "\"");
+        }
+        catch (java.io.IOException e) {
+            LOG.log(Level.WARNING, "Could not save profile " + name, e);
+            JOptionPane.showMessageDialog(this,
+                    "Could not save the profile:\n" + e.getMessage(),
+                    "Save failed", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Loads a saved profile into the controls.
+     *
+     * <p>It fills the panels rather than starting a download: recalling is for
+     * getting ready, and someone switching to a stored area usually wants to
+     * look at it, or change the hours, before fetching anything.</p>
+     */
+    private void recallProfile() {
+        final List<String> names = profiles.names();
+        if (names.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "No profiles saved yet.\n\nSet up an area and a data selection, "
+                    + "then use Save profile.",
+                    "No profiles", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        final javax.swing.JList<String> list =
+                new javax.swing.JList<>(names.toArray(new String[0]));
+        list.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        list.setSelectedValue(lastProfileName, true);
+        if (list.getSelectedIndex() < 0) list.setSelectedIndex(0);
+        list.setVisibleRowCount(Math.min(12, names.size()));
+
+        final int choice = JOptionPane.showConfirmDialog(this,
+                new javax.swing.JScrollPane(list), "Recall profile",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (choice != JOptionPane.OK_OPTION) return;
+
+        final String name = list.getSelectedValue();
+        if (name == null) return;
+
+        profiles.load(name).ifPresentOrElse(profile -> {
+            setArea(profile.area());
+            areaPanel.setArea(profile.area());
+            mapPanel.setSelection(profile.area());
+            mapPanel.showArea(profile.area());
+            showResult.setSelected(false);
+            dataPanel.setSelection(profile.selection());
+            lastProfileName = profile.name();
+            setStatus("Recalled profile \"" + profile.name() + "\" - " + profile.area());
+        }, () -> setStatus("Profile \"" + name + "\" could not be read"));
     }
 
     // ---- the series on screen -------------------------------------------
