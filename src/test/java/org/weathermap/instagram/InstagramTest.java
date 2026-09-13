@@ -66,6 +66,7 @@ class InstagramTest {
     @Test
     void chartsAreWrittenAsJpegAtTheConfiguredUrl(@TempDir Path dir) throws Exception {
         final InstagramAccount account = new InstagramAccount(
+                InstagramAccount.Login.INSTAGRAM,
                 "@saigonweather", "17841400000000000", "token",
                 dir, "https://example.test/charts/");
 
@@ -100,30 +101,30 @@ class InstagramTest {
 
     @Test
     void anAccountIsOnlyCompleteWithEverythingTheApiNeeds(@TempDir Path dir) {
-        assertFalse(new InstagramAccount("@x", "", "t", dir, "https://h").isComplete(),
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "", "t", dir, "https://h").isComplete(),
                     "no account id");
-        assertFalse(new InstagramAccount("@x", "1", "", dir, "https://h").isComplete(),
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "", dir, "https://h").isComplete(),
                     "no token");
-        assertFalse(new InstagramAccount("@x", "1", "t", null, "https://h").isComplete(),
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", null, "https://h").isComplete(),
                     "no publish folder");
-        assertFalse(new InstagramAccount("@x", "1", "t", dir, "").isComplete(),
+        assertFalse(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", dir, "").isComplete(),
                     "no public URL - Instagram fetches every image");
-        assertTrue(new InstagramAccount("@x", "1", "t", dir, "https://h").isComplete());
+        assertTrue(new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", "t", dir, "https://h").isComplete());
     }
 
     @Test
     void theUrlJoinsCleanlyWhicheverWayTheBaseWasTyped(@TempDir Path dir) {
         assertEquals("https://h/c/chart.jpg",
-                new InstagramAccount("", "1", "t", dir, "https://h/c").urlFor("chart.jpg"));
+                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h/c").urlFor("chart.jpg"));
         assertEquals("https://h/c/chart.jpg",
-                new InstagramAccount("", "1", "t", dir, "https://h/c///").urlFor("chart.jpg"));
+                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h/c///").urlFor("chart.jpg"));
     }
 
     /** A token in a log or a crash report is a token someone else can post with. */
     @Test
     void theTokenIsNeverPrinted(@TempDir Path dir) {
         final String secret = "EAAG-super-secret-token";
-        final String shown = new InstagramAccount("@x", "1", secret, dir, "https://h").toString();
+        final String shown = new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "@x", "1", secret, dir, "https://h").toString();
 
         assertFalse(shown.contains(secret), shown);
         assertTrue(shown.contains("token present"), shown);
@@ -133,6 +134,7 @@ class InstagramTest {
     void anAccountSurvivesBeingStored(@TempDir Path dir) throws Exception {
         final Path file = dir.resolve("instagram.properties");
         final InstagramAccount saved = new InstagramAccount(
+                InstagramAccount.Login.INSTAGRAM,
                 "@saigonweather", "17841400000000000", "EAAG-token",
                 dir.resolve("charts"), "https://example.test/charts");
         saved.save(file);
@@ -156,7 +158,7 @@ class InstagramTest {
     @Test
     void aCarouselIsTwoToTenImages(@TempDir Path dir) {
         final var client = new InstagramClient(
-                new InstagramAccount("", "1", "t", dir, "https://h"));
+                new InstagramAccount(InstagramAccount.Login.INSTAGRAM, "", "1", "t", dir, "https://h"));
         final var one = List.of(new InstagramClient.CarouselImage("https://h/a.jpg", ""));
         final var eleven = new ArrayList<InstagramClient.CarouselImage>();
         for (int i = 0; i < 11; i++) {
@@ -176,5 +178,51 @@ class InstagramTest {
                 InstagramClient.field(
                         "{\"error\":{\"message\":\"The image could not be fetched\"}}", "message"));
         assertNull(InstagramClient.field("{\"error\":{}}", "id"));
+    }
+
+    // ---- the two login paths ----------------------------------------------
+
+    /**
+     * A token from one path is refused by the other's host, and the failure
+     * reads like a bad token rather than a wrong address - so the host has to
+     * follow the token, not a constant.
+     */
+    @Test
+    void theApiHostFollowsWhereTheTokenCameFrom() {
+        assertEquals("https://graph.instagram.com/v25.0",
+                     InstagramAccount.Login.INSTAGRAM.apiBase());
+        assertEquals("https://graph.facebook.com/v21.0",
+                     InstagramAccount.Login.FACEBOOK.apiBase());
+    }
+
+    @Test
+    void thePathIsStoredAndComesBack(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("instagram.properties");
+        new InstagramAccount(InstagramAccount.Login.FACEBOOK, "@x", "1", "t",
+                             dir, "https://h").save(file);
+
+        assertEquals(InstagramAccount.Login.FACEBOOK,
+                     InstagramAccount.load(file).orElseThrow().login());
+    }
+
+    /** An older file, or a hand-edited one, opens on the simpler path. */
+    @Test
+    void anUnknownOrMissingPathDefaultsToInstagramLogin(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("instagram.properties");
+        Files.writeString(file, "instagram.userId=1\ninstagram.accessToken=t\n"
+                + "instagram.publishDir=" + dir + "\ninstagram.publicBaseUrl=https://h\n"
+                + "instagram.login=something-else\n");
+
+        assertEquals(InstagramAccount.Login.INSTAGRAM,
+                     InstagramAccount.load(file).orElseThrow().login());
+    }
+
+    /** Each path needs its own scopes; naming the wrong set wastes a setup. */
+    @Test
+    void eachPathNamesItsOwnScopes() {
+        assertTrue(InstagramAccount.Login.INSTAGRAM.scopes()
+                .contains("instagram_business_content_publish"));
+        assertTrue(InstagramAccount.Login.FACEBOOK.scopes()
+                .contains("instagram_content_publish"));
     }
 }

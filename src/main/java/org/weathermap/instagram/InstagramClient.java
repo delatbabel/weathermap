@@ -40,17 +40,22 @@ public final class InstagramClient {
 
     private static final Logger LOG = Logger.getLogger(InstagramClient.class.getName());
 
-    /** The Graph API version this was written against. */
-    public static final String API_VERSION = "v21.0";
-
     /** Instagram's own limit on one carousel. */
     public static final int MAX_CAROUSEL = 10;
 
     private final InstagramAccount account;
     private final String base;
 
+    /**
+     * Calls the host the account's token belongs to.
+     *
+     * <p>Not one host with a version: Instagram Login tokens are accepted only
+     * by {@code graph.instagram.com} and Facebook Login tokens only by
+     * {@code graph.facebook.com}. Crossing them fails as an authentication
+     * error, which looks like a bad token and is really a wrong address.</p>
+     */
     public InstagramClient(InstagramAccount account) {
-        this(account, "https://graph.facebook.com/" + API_VERSION);
+        this(account, account.login().apiBase());
     }
 
     /** @param base the API root, so a test can point this somewhere else */

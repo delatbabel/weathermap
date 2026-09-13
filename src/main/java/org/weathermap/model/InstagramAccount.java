@@ -35,6 +35,8 @@ import java.util.logging.Logger;
  * surfaces as an opaque error from Meta rather than anything local, so the
  * dialog checks it before posting.</p>
  *
+ * @param login         which of Meta's two paths the token came from, which
+ *                      decides the host the API is called on
  * @param profile       the @handle, for display only
  * @param igUserId      the Instagram professional account's numeric ID
  * @param accessToken   a long-lived user token, or better a Page token, which
@@ -42,14 +44,65 @@ import java.util.logging.Logger;
  * @param publishDir    where the application writes images to be fetched
  * @param publicBaseUrl the URL that {@code publishDir} is served at
  */
-public record InstagramAccount(String profile, String igUserId, String accessToken,
-                               Path publishDir, String publicBaseUrl) {
+public record InstagramAccount(Login login, String profile, String igUserId,
+                               String accessToken, Path publishDir, String publicBaseUrl) {
+
+    /**
+     * The two ways Meta issues a publishing token, which are not interchangeable.
+     *
+     * <p>They differ in more than branding: the token comes from a different
+     * dashboard, carries different scopes, identifies the account by a different
+     * ID, and - the part that actually breaks things - is accepted by a
+     * different host. A token from one used against the other's host fails as an
+     * authentication error, which reads like a bad token rather than a wrong
+     * address.</p>
+     */
+    public enum Login {
+
+        /**
+         * Instagram Login. No Facebook Page, no login flow to build: the token
+         * is generated in the App Dashboard for an account you own, which is all
+         * Standard Access allows and all a single-account publisher needs.
+         */
+        INSTAGRAM("Instagram Login", "https://graph.instagram.com/v25.0",
+                  "instagram_business_basic, instagram_business_content_publish"),
+
+        /**
+         * Facebook Login. The Instagram account is linked to a Facebook Page and
+         * the token is a Page token, which does not expire - worth the extra
+         * setup only if you already work through a Page.
+         */
+        FACEBOOK("Facebook Login", "https://graph.facebook.com/v21.0",
+                 "instagram_basic, instagram_content_publish, pages_show_list, "
+                 + "pages_read_engagement");
+
+        private final String label;
+        private final String apiBase;
+        private final String scopes;
+
+        Login(String label, String apiBase, String scopes) {
+            this.label = label;
+            this.apiBase = apiBase;
+            this.scopes = scopes;
+        }
+
+        public String label() { return label; }
+
+        /** The only host that will accept a token issued down this path. */
+        public String apiBase() { return apiBase; }
+
+        public String scopes() { return scopes; }
+
+        @Override
+        public String toString() { return label; }
+    }
 
     private static final Logger LOG = Logger.getLogger(InstagramAccount.class.getName());
 
     /** Separate from the preferences, because this file holds a bearer token. */
     public static final String FILE = "instagram.properties";
 
+    private static final String KEY_LOGIN = "instagram.login";
     private static final String KEY_PROFILE = "instagram.profile";
     private static final String KEY_USER_ID = "instagram.userId";
     private static final String KEY_TOKEN = "instagram.accessToken";
@@ -57,6 +110,7 @@ public record InstagramAccount(String profile, String igUserId, String accessTok
     private static final String KEY_URL = "instagram.publicBaseUrl";
 
     public InstagramAccount {
+        login = login == null ? Login.INSTAGRAM : login;
         profile = profile == null ? "" : profile.trim();
         igUserId = igUserId == null ? "" : igUserId.trim();
         accessToken = accessToken == null ? "" : accessToken.trim();
@@ -90,6 +144,7 @@ public record InstagramAccount(String profile, String igUserId, String accessTok
         }
         final String dir = props.getProperty(KEY_DIR, "");
         return Optional.of(new InstagramAccount(
+                loginFrom(props.getProperty(KEY_LOGIN)),
                 props.getProperty(KEY_PROFILE, ""),
                 props.getProperty(KEY_USER_ID, ""),
                 props.getProperty(KEY_TOKEN, ""),
@@ -107,6 +162,7 @@ public record InstagramAccount(String profile, String igUserId, String accessTok
      */
     public void save(Path file) throws IOException {
         final Properties props = new Properties();
+        props.setProperty(KEY_LOGIN, login.name());
         props.setProperty(KEY_PROFILE, profile);
         props.setProperty(KEY_USER_ID, igUserId);
         props.setProperty(KEY_TOKEN, accessToken);
@@ -120,6 +176,18 @@ public record InstagramAccount(String profile, String igUserId, String accessTok
                     + "Contains an access token: keep it private.");
         }
         restrictPermissions(file);
+    }
+
+    /** An unreadable or unknown value falls back to the simpler path. */
+    private static Login loginFrom(String stored) {
+        if (stored == null) return Login.INSTAGRAM;
+        try {
+            return Login.valueOf(stored.trim().toUpperCase(java.util.Locale.ROOT));
+        }
+        catch (IllegalArgumentException e) {
+            LOG.warning("Unknown login type " + stored + "; assuming Instagram Login");
+            return Login.INSTAGRAM;
+        }
     }
 
     private static void restrictPermissions(Path file) {
@@ -138,6 +206,7 @@ public record InstagramAccount(String profile, String igUserId, String accessTok
     @Override
     public String toString() {
         return "InstagramAccount[" + (profile.isEmpty() ? igUserId : profile)
+                + ", " + login.label()
                 + ", token " + (accessToken.isEmpty() ? "absent" : "present") + "]";
     }
 }

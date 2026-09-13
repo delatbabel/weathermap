@@ -47,6 +47,8 @@ public final class InstagramDialog extends JDialog {
     private static final String SETUP_URL =
             "https://developers.facebook.com/docs/instagram-platform/content-publishing";
 
+    private final javax.swing.JComboBox<InstagramAccount.Login> login =
+            new javax.swing.JComboBox<>(InstagramAccount.Login.values());
     private final JTextField profile = new JTextField(22);
     private final JTextField userId = new JTextField(22);
     private final JPasswordField token = new JPasswordField(22);
@@ -65,6 +67,7 @@ public final class InstagramDialog extends JDialog {
         chartCount = new JSpinner(new SpinnerNumberModel(Math.min(4, max), 2, max, 1));
 
         if (existing != null) {
+            login.setSelectedItem(existing.login());
             profile.setText(existing.profile());
             userId.setText(existing.igUserId());
             token.setText(existing.accessToken());
@@ -84,6 +87,9 @@ public final class InstagramDialog extends JDialog {
         c.anchor = GridBagConstraints.WEST;
         int row = 0;
 
+        row = add(fields, c, row, "Token from", login,
+                  "Instagram Login needs no Facebook Page and no login flow. "
+                  + "The two are not interchangeable.");
         row = add(fields, c, row, "Profile", profile,
                   "The @handle. Shown here only; the API identifies the account by ID.");
         row = add(fields, c, row, "Instagram user ID", userId,
@@ -117,8 +123,11 @@ public final class InstagramDialog extends JDialog {
         final JLabel note = new JLabel("<html><body style='width: 380px'>"
                 + "<b>Instagram has no password-based posting.</b> Publishing goes "
                 + "through Meta's Content Publishing API, which needs an access token "
-                + "and a professional account linked to a Facebook Page. It also fetches "
-                + "every image from a public URL rather than accepting an upload."
+                + "and a professional account. It also fetches every image from a "
+                + "public URL rather than accepting an upload.<br><br>"
+                + "For one account you own, <b>Instagram Login</b> with Standard Access "
+                + "is enough: generate a token in the App Dashboard, with no login flow "
+                + "to build and no Facebook Page required."
                 + "</body></html>");
         note.setBorder(BorderFactory.createEmptyBorder(0, 0, 6, 0));
 
@@ -195,7 +204,9 @@ public final class InstagramDialog extends JDialog {
 
     private InstagramAccount read() {
         final String dir = publishDir.getText().trim();
-        return new InstagramAccount(profile.getText(), userId.getText(),
+        return new InstagramAccount(
+                (InstagramAccount.Login) login.getSelectedItem(),
+                profile.getText(), userId.getText(),
                 new String(token.getPassword()),
                 dir.isEmpty() ? null : Path.of(dir), publicUrl.getText());
     }

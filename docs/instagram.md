@@ -21,13 +21,36 @@ So the credentials are:
 
 | Field | What it is |
 |---|---|
+| **Token from** | Which of Meta's two paths issued the token — they are not interchangeable |
 | **Instagram user ID** | The numeric ID of the professional account — not the handle |
-| **Access token** | A long-lived user token (~60 days) or, better, a Page token, which does not expire |
+| **Access token** | A long-lived token |
 | **Publish folder** | Where this application writes the images |
 | **Public URL of that folder** | The address that same folder is served at |
 
 The handle is stored too, but only so the dialog can show you which account is
 configured.
+
+## Which path, and why it matters
+
+Meta offers two. For **one account that you own**, take the first:
+
+| | Instagram Login | Facebook Login |
+|---|---|---|
+| Facebook Page needed | no | yes |
+| Login flow to build | **no** | yes |
+| Access level | **Standard** | Standard for your own account |
+| Token lifetime | 60 days, refreshable | Page token does not expire |
+| API host | `graph.instagram.com` | `graph.facebook.com` |
+| Scopes | `instagram_business_basic`, `instagram_business_content_publish` | `instagram_basic`, `instagram_content_publish`, `pages_show_list`, `pages_read_engagement` |
+
+**The host is the part that bites.** A token from one path is rejected by the
+other's host, and the rejection reads as an authentication error — so it looks
+like a bad token when it is a wrong address. The dialog's *Token from* field
+picks the host, which is the only reason the application needs to know.
+
+Standard Access is enough either way if the app serves only accounts you own or
+manage. Advanced Access is for serving other people's accounts, and needs App
+Review.
 
 ## Why a public URL is one of the credentials
 
@@ -42,49 +65,95 @@ file and fetches it back over HTTP, because a mismatched folder and URL is the
 commonest mistake here and the hardest to diagnose: the images write perfectly,
 and the failure arrives later from Meta as "the media could not be retrieved".
 
-## Getting the token
+## Getting the token — Instagram Login
 
-You do this once. The result is a token you paste into the dialog.
+You do this once, in a browser. There is no login flow to write.
 
-1. **Make the Instagram account professional** (Business or Creator) and link it
-   to a Facebook Page — Instagram app → Settings → Account type and tools.
-2. **Create a Meta app** at [developers.facebook.com](https://developers.facebook.com/apps)
-   — type *Business*. Add the **Facebook Login** product.
-3. **Get a user token with the right scopes.** In the
-   [Graph API Explorer](https://developers.facebook.com/tools/explorer), select
-   your app and request:
-   `instagram_basic`, `instagram_content_publish`, `pages_show_list`,
+**1. Make the account professional.** Instagram app → Settings and privacy →
+Account type and tools → Switch to professional account. Business or Creator
+both work.
+
+**2. Create a Meta app.** [developers.facebook.com/apps](https://developers.facebook.com/apps)
+→ Create app. Choose the **Business** type. You do not need to connect a
+Business portfolio for Standard Access.
+
+**3. Add the Instagram product.** In the app, add **Instagram** → *API setup
+with Instagram login*. This is the section the whole setup lives in.
+
+**4. Configure business login settings.** Step 3 of that page, *Set up Instagram
+business login* → **Business login settings**. Here you will find, and set:
+
+  - **Instagram app ID** and **Instagram app secret** — generated for you. These
+    are *not* the same as the Facebook app ID and secret on the app's main
+    settings page, which is a genuinely easy mistake to make.
+  - **OAuth redirect URI** — required even though you will not use the flow.
+    Anything you control will do; `https://localhost/` is accepted. It must
+    match exactly if you ever do use it, and the dashboard may append a trailing
+    slash.
+
+  Keep the **app secret out of this application**. It is needed only to exchange
+  or refresh a token, from somewhere you control.
+
+**5. Generate a token for your own account.** Still under *API setup with
+Instagram login*, in step 1 — **Generate token** beside your account. Log in to
+Instagram and approve. The token it hands back is **already long-lived: 60
+days**. That is the whole point of this path; there is no short-lived token to
+exchange, and no flow to implement.
+
+**6. Find the Instagram user ID.** Ask the API who the token belongs to:
+
+```
+GET https://graph.instagram.com/v25.0/me?fields=user_id,username
+    &access_token=<your-token>
+```
+
+The `user_id` is what goes in the dialog. Not the handle, and not the Facebook
+Page ID.
+
+**7. Paste both into the dialog** — *Token from: Instagram Login*, the user ID,
+and the token.
+
+### Keeping it alive
+
+A 60-day token can be refreshed for another 60, any time after it is 24 hours
+old, as long as it is still valid:
+
+```
+GET https://graph.instagram.com/refresh_access_token
+    ?grant_type=ig_refresh_token
+    &access_token=<current-token>
+```
+
+Let it lapse and you repeat step 5, which is a minute's work. Set a reminder for
+about day 50.
+
+If you ever start from a short-lived token instead, exchange it first:
+
+```
+GET https://graph.instagram.com/access_token
+    ?grant_type=ig_exchange_token
+    &client_secret=<instagram-app-secret>
+    &access_token=<short-lived-token>
+```
+
+## The other path — Facebook Login
+
+Worth it only if you already work through a Facebook Page, because a Page token
+does not expire. The Instagram account must be linked to a Page.
+
+1. Add **Facebook Login** to the app.
+2. In the [Graph API Explorer](https://developers.facebook.com/tools/explorer),
+   request `instagram_basic`, `instagram_content_publish`, `pages_show_list`,
    `pages_read_engagement`.
-4. **Make it long-lived.** A token from the Explorer lasts an hour or two:
+3. Exchange the short-lived token:
+   `GET https://graph.facebook.com/v21.0/oauth/access_token?grant_type=fb_exchange_token&client_id=<app-id>&client_secret=<app-secret>&fb_exchange_token=<token>`
+4. `GET https://graph.facebook.com/v21.0/me/accounts` — each Page's
+   `access_token` is the non-expiring one.
+5. `GET https://graph.facebook.com/v21.0/<page-id>?fields=instagram_business_account`
+   gives the Instagram user ID.
 
-   ```
-   GET https://graph.facebook.com/v21.0/oauth/access_token
-       ?grant_type=fb_exchange_token
-       &client_id=<app-id>
-       &client_secret=<app-secret>
-       &fb_exchange_token=<short-lived-token>
-   ```
-
-   The result lasts about 60 days.
-5. **Get a Page token, which does not expire.** With the long-lived user token:
-
-   ```
-   GET https://graph.facebook.com/v21.0/me/accounts
-   ```
-
-   The response gives each Page's `id` and its `access_token`. That Page token
-   is the one worth storing — a long-lived *user* token still has to be renewed
-   every couple of months.
-6. **Find the Instagram user ID:**
-
-   ```
-   GET https://graph.facebook.com/v21.0/<page-id>?fields=instagram_business_account
-   ```
-
-   The `instagram_business_account.id` is what goes in the dialog.
-
-Keep the app secret out of this application; it is only needed for step 4, and
-that call should be made from somewhere you control.
+Set *Token from: Facebook Login* in the dialog so the calls go to the right
+host.
 
 ## What gets posted
 
