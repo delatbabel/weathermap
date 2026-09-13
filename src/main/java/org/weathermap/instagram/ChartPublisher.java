@@ -12,6 +12,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.ZoneId;
@@ -137,7 +138,21 @@ public final class ChartPublisher {
         }
 
         final ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
-        try (ImageOutputStream out = ImageIO.createImageOutputStream(Files.newOutputStream(file))) {
+        // Both streams are closed, and the underlying one has to be named to be
+        // closed at all. Closing an ImageOutputStream flushes its cache to the
+        // stream beneath it and leaves that stream open - so the descriptor from
+        // Files.newOutputStream, written inline here, survived every chart.
+        //
+        // On an ordinary filesystem that is an invisible leak: the bytes are
+        // flushed and the file is complete. On the rclone mount the charts are
+        // published through it is not. With --vfs-cache-mode writes the upload
+        // is what close() triggers, so a file nobody closed is written, listed,
+        // readable - and never uploaded. Every chart sat in the VFS cache until
+        // the application exited and the kernel reaped the descriptors, which is
+        // why the images appeared in the bucket the moment the window was shut,
+        // and why posting failed on a URL that began working shortly afterwards.
+        try (OutputStream raw = Files.newOutputStream(file);
+             ImageOutputStream out = ImageIO.createImageOutputStream(raw)) {
             writer.setOutput(out);
             final ImageWriteParam params = writer.getDefaultWriteParam();
             params.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);

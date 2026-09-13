@@ -309,4 +309,51 @@ class InstagramTest {
         assertFalse(new org.weathermap.util.Http.HttpStatusException(
                 503, java.net.URI.create("https://h/x"), "").isPermanent());
     }
+
+    /**
+     * The image file must be closed, not merely written.
+     *
+     * <p>Closing an {@code ImageOutputStream} flushes its cache into the stream
+     * beneath it and leaves that stream open, so a stream created inline in the
+     * {@code createImageOutputStream(...)} call is never closed by anything. On
+     * an ordinary filesystem that is invisible - the bytes are all there and the
+     * file reads back perfectly, which is why it survived the tests above.</p>
+     *
+     * <p>On the rclone mount these charts are published through it decides the
+     * feature. With {@code --vfs-cache-mode writes} the upload is triggered by
+     * {@code close()}: an unclosed file is written, listed and readable locally
+     * and never reaches the bucket. Instagram fetches every image from a public
+     * URL, so the post failed on a URL that started working the moment the
+     * application was shut down and the kernel reaped the descriptors.</p>
+     *
+     * <p>Checked through {@code /proc/self/fd}, which is the only way to see a
+     * descriptor that is open but harmless locally.</p>
+     */
+    @Test
+    void theImageFileIsClosedAndNotJustWritten(@TempDir Path dir) throws Exception {
+        final Path proc = Path.of("/proc/self/fd");
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                Files.isDirectory(proc), "needs /proc to see open descriptors");
+
+        final Path file = dir.resolve("closed.jpg");
+        ChartPublisher.writeJpeg(new BufferedImage(32, 32, BufferedImage.TYPE_INT_RGB), file);
+
+        final String target = file.toRealPath().toString();
+        final List<String> stillOpen = new ArrayList<>();
+        try (var fds = Files.list(proc)) {
+            for (Path fd : fds.toList()) {
+                try {
+                    if (Files.readSymbolicLink(fd).toString().equals(target)) {
+                        stillOpen.add(fd.getFileName().toString());
+                    }
+                }
+                catch (java.io.IOException ignored) {
+                    // The descriptor closed while we were looking, which is fine.
+                }
+            }
+        }
+        assertTrue(stillOpen.isEmpty(),
+                "the chart is still open on fd " + stillOpen + " - on an rclone mount "
+                + "that means it is never uploaded: " + target);
+    }
 }
