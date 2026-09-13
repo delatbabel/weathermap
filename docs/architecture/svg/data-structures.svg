@@ -1,0 +1,592 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="560" viewBox="0 0 860 560" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="archify-diagram-title">Weather Map — Data Structures</title>
+<style>
+:root{
+      --bg: #f8fafc;
+      --grid: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --text-dim: #94a3b8;
+      --text-faint: #64748b;
+
+      --panel: #ffffff;
+      --panel-border: #e2e8f0;
+      --lane-fill: rgba(248, 250, 252, 0.65);
+      --lane-stroke: #cbd5e1;
+
+      --arrow: #94a3b8;
+      --arrow-emphasis: #059669;
+
+      --mask: #ffffff;
+
+      --frontend-fill:    rgba(34, 211, 238, 0.15);
+      --frontend-stroke:  #0891b2;
+      --backend-fill:     rgba(52, 211, 153, 0.18);
+      --backend-stroke:   #059669;
+      --database-fill:    rgba(167, 139, 250, 0.2);
+      --database-stroke:  #7c3aed;
+      --cloud-fill:       rgba(251, 191, 36, 0.18);
+      --cloud-stroke:     #d97706;
+      --security-fill:    rgba(251, 113, 133, 0.15);
+      --security-stroke:  #e11d48;
+      --messagebus-fill:  rgba(251, 146, 60, 0.15);
+      --messagebus-stroke:#ea580c;
+      --external-fill:    rgba(148, 163, 184, 0.18);
+      --external-stroke:  #64748b;
+
+      --toolbar-bg:       rgba(255, 255, 255, 0.92);
+      --toolbar-border:   #cbd5e1;
+      --toolbar-text:     #334155;
+      --toolbar-hover:    #ffffff;
+      --toolbar-menu-bg:  #ffffff;
+    }
+@media (prefers-color-scheme: dark){:root{}}
+text{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+svg {
+      width: 100%;
+      min-width: min(900px, 100%);
+      display: block;
+      transform-origin: 0 0;
+      transition: transform 0.18s ease;
+    }
+svg[data-chapter-handoff] [data-node-id][data-chapter-role="stay"] { opacity: 1; }
+svg[data-chapter-handoff] [data-node-id][data-chapter-role="enter"] { opacity: 0.78; }
+svg[data-chapter-handoff] [data-node-id][data-chapter-role="leave"] { opacity: 0.26; }
+/* ==========================================================
+       SVG SEMANTIC CLASSES — use these instead of inline fill/stroke
+       ========================================================== */
+    .c-grid { stroke: var(--grid); fill: none; }
+.c-mask { fill: var(--mask); stroke: none; }
+.c-backend { fill: var(--backend-fill);    stroke: var(--backend-stroke); }
+.c-database { fill: var(--database-fill);   stroke: var(--database-stroke); }
+/* Text helpers */
+    .t-primary { fill: var(--text); }
+.t-muted { fill: var(--text-muted); }
+.t-backend { fill: var(--backend-stroke); }
+.t-database { fill: var(--database-stroke); }
+.t-messagebus { fill: var(--messagebus-stroke); }
+/* Semantic Sigils are small authored role stamps, not icons from a brand
+       pack and not viewer controls. Prefix selectors with svg so the canonical
+       export's SVG-only stylesheet collector keeps them automatically. */
+    svg .semantic-sigil {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.35;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.76;
+      pointer-events: none;
+    }
+svg .semantic-sigil > * { vector-effect: non-scaling-stroke; }
+svg .semantic-sigil .sigil-fill { fill: currentColor; stroke: none; }
+svg .s-backend { color: var(--backend-stroke); }
+svg .s-database { color: var(--database-stroke); }
+svg [data-detail-anchor] {
+      transform-box: fill-box;
+      transform-origin: center;
+      transition: transform 160ms ease;
+    }
+/* Focus, lens, preview, route, and story states are stronger reader intent than
+       the global zoom level. Reveal only their exact semantic matches. */
+    svg[data-focus-active] [data-focus-match][data-detail],
+    svg[data-focus-active] [data-focus-match] [data-detail],
+    svg[data-reach-active] [data-reach-match][data-detail],
+    svg[data-reach-active] [data-reach-match] [data-detail],
+    svg[data-lens-active] [data-lens-match][data-detail],
+    svg[data-lens-active] [data-lens-match] [data-detail],
+    svg[data-legend-preview-active] [data-legend-preview-match][data-detail],
+    svg[data-legend-preview-active] [data-legend-preview-match] [data-detail],
+    svg[data-intent-trace-active] [data-intent-trace-match][data-detail],
+    svg[data-intent-trace-active] [data-intent-trace-match] [data-detail],
+    svg[data-route-active] [data-route-match][data-detail],
+    svg[data-route-active] [data-route-match] [data-detail],
+    svg[data-story-active] [data-story-step][data-detail],
+    svg[data-story-active] [data-story-step] [data-detail],
+    svg[data-relationship-preview-active] [data-relationship-preview][data-detail],
+    svg[data-relationship-preview-active] [data-relationship-preview] [data-detail],
+    svg [data-node-id]:hover [data-detail],
+    svg [data-node-id]:focus-visible [data-detail] {
+      opacity: 1;
+      pointer-events: auto;
+    }
+svg[data-focus-active] [data-focus-match] [data-detail-anchor],
+    svg[data-reach-active] [data-reach-match] [data-detail-anchor],
+    svg[data-lens-active] [data-lens-match] [data-detail-anchor],
+    svg[data-legend-preview-active] [data-legend-preview-match] [data-detail-anchor],
+    svg[data-intent-trace-active] [data-intent-trace-match] [data-detail-anchor],
+    svg[data-route-active] [data-route-match] [data-detail-anchor],
+    svg[data-story-active] [data-story-step] [data-detail-anchor],
+    svg [data-node-id]:hover [data-detail-anchor],
+    svg [data-node-id]:focus-visible [data-detail-anchor] { transform: none; }
+/* Arrows */
+    .a-default { stroke: var(--arrow); fill: none; }
+.a-emphasis { stroke: var(--arrow-emphasis); fill: none; }
+.a-dashed { stroke: var(--database-stroke); fill: none; stroke-dasharray: 4,4; }
+/* Arrowhead markers reference these */
+    .m-default { fill: var(--arrow); }
+.m-emphasis { fill: var(--arrow-emphasis); }
+.m-security { fill: var(--security-stroke); }
+.m-dashed { fill: var(--database-stroke); }
+svg [data-edge-from] { transition: opacity 0.18s ease, filter 0.18s ease; }
+svg [data-node-id]:hover,
+    svg [data-node-id]:focus-visible {
+      filter: drop-shadow(0 0 7px var(--frontend-stroke));
+      outline: none;
+    }
+svg [data-legend-kind][role="button"] { cursor: pointer; }
+svg [data-legend-kind]:focus { outline: none; }
+svg [data-legend-hit] {
+      fill: transparent;
+      stroke: transparent;
+      stroke-width: 1.4;
+      pointer-events: all;
+      vector-effect: non-scaling-stroke;
+      transition: stroke 150ms ease, stroke-width 150ms ease, filter 150ms ease;
+    }
+svg [data-legend-count-badge] { pointer-events: none; }
+svg [data-legend-kind][role="button"]:hover [data-legend-hit] {
+      stroke: color-mix(in srgb, var(--database-stroke) 58%, transparent);
+    }
+svg [data-legend-kind][role="button"]:focus-visible [data-legend-hit] {
+      stroke: var(--frontend-stroke);
+      stroke-width: 1.8;
+      filter: drop-shadow(0 0 3px var(--frontend-stroke));
+    }
+svg [data-legend-kind][data-legend-selected] [data-legend-hit] {
+      stroke: var(--database-stroke);
+      stroke-width: 2.2;
+      stroke-dasharray: 3 2;
+    }
+svg [data-legend-kind][data-legend-zero] { opacity: 0.44; }
+svg[data-legend-kind][data-legend-selected] [data-legend-hit] {
+      filter: drop-shadow(0 0 4px var(--database-stroke));
+    }
+svg[data-legend-hit],
+    svg[data-legend-count-badge] rect { rx: 0; filter: none; }
+svg[data-legend-preview-active] [data-node-id],
+    svg[data-legend-preview-active] [data-edge-from] { opacity: 0.11; }
+svg[data-legend-preview-active] [data-legend-preview-match] { opacity: 1; }
+svg[data-legend-preview-active] [data-legend-preview-peer] { opacity: 0.62; }
+svg[data-legend-preview-active] [data-legend-preview-selected] {
+      filter: drop-shadow(0 0 8px var(--database-stroke));
+    }
+svg[data-lens-active] [data-node-id],
+    svg[data-lens-active] [data-edge-from] { opacity: 0.11; }
+svg[data-lens-active] [data-lens-match] { opacity: 1; }
+svg[data-lens-active] [data-lens-peer] { opacity: 0.62; }
+svg[data-lens-active] [data-lens-selected] {
+      filter: drop-shadow(0 0 10px var(--database-stroke));
+    }
+svg[data-focus-active] [data-node-id],
+    svg[data-focus-active] [data-edge-from] { opacity: 0.13; }
+svg[data-focus-active] [data-focus-match] { opacity: 1; }
+svg[data-focus-active] [data-focus-selected] {
+      filter: drop-shadow(0 0 10px var(--frontend-stroke));
+    }
+/* Authored Reachability is a bounded graph query over the relationships
+       already present in the artifact. Upstream walks incoming edges;
+       downstream walks outgoing edges. It never claims runtime causality and
+       changes only viewer emphasis, not canonical geometry or export bytes. */
+    svg[data-reach-active] [data-node-id],
+    svg[data-reach-active] [data-edge-from] { opacity: 0.09; }
+svg[data-reach-active] [data-reach-match] { opacity: 1; }
+svg[data-reach-active="upstream"] [data-reach-origin] {
+      filter: drop-shadow(0 0 11px var(--database-stroke));
+    }
+svg[data-reach-active="downstream"] [data-reach-origin] {
+      filter: drop-shadow(0 0 11px var(--backend-stroke));
+    }
+svg[data-reach-active="upstream"] [data-edge-from][data-reach-match] {
+      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--database-stroke) 72%, transparent));
+    }
+svg[data-reach-active="downstream"] [data-edge-from][data-reach-match] {
+      filter: drop-shadow(0 0 4px color-mix(in srgb, var(--backend-stroke) 72%, transparent));
+    }
+svg[data-reach-active] [data-reach-origin],
+    svg[data-reach-active] [data-edge-from][data-reach-match] {
+      filter: none;
+    }
+svg[data-relationship-direct-active] [data-node-id],
+    svg[data-relationship-direct-active] [data-edge-from] { opacity: 0.16; }
+svg[data-relationship-direct-active] [data-relationship-preview],
+    svg[data-relationship-direct-active] [data-relationship-preview-node] { opacity: 1; }
+svg[data-relationship-preview-active] [data-relationship-preview],
+    svg[data-relationship-preview-active] [data-relationship-preview-node] { opacity: 1; }
+svg[data-relationship-preview-active] [data-relationship-preview] {
+      filter: drop-shadow(0 0 5px var(--arrow-emphasis));
+    }
+svg[data-relationship-preview-active] [data-relationship-preview-source] {
+      filter: drop-shadow(0 0 7px var(--frontend-stroke));
+    }
+svg[data-relationship-preview-active] [data-relationship-preview-target] {
+      filter: drop-shadow(0 0 7px var(--database-stroke));
+    }
+/* Intent Trace is a temporary, pre-click exploration layer. Related
+       topology stays readable while a short viewer-only signal runs over
+       cloned edge geometry; the authored edge remains untouched underneath. */
+    svg[data-intent-trace-active] [data-node-id],
+    svg[data-intent-trace-active] [data-edge-from] { opacity: 0.2; }
+svg[data-intent-trace-active] [data-intent-trace-match] { opacity: 1; }
+svg[data-intent-trace-active] [data-intent-trace-selected] {
+      filter: drop-shadow(0 0 10px var(--frontend-stroke));
+    }
+svg[data-intent-trace-selected],
+    svg.intent-trace-flow {
+      filter: none;
+      stroke-linecap: square;
+    }
+svg[data-intent-trace-selected],
+    svg.intent-trace-flow { filter: none; }
+svg[data-route-picking="target"] [data-route-candidate],
+    svg[data-route-picking="target"] [data-route-start] { opacity: 1; }
+svg[data-route-picking] [data-node-id] { cursor: crosshair; }
+svg[data-route-picking] [data-route-start] {
+      filter: drop-shadow(0 0 10px var(--frontend-stroke));
+    }
+svg[data-route-active] [data-node-id],
+    svg[data-route-active] [data-edge-from] { opacity: 0.11; }
+svg[data-route-active] [data-route-match] { opacity: 1; }
+svg[data-route-active] [data-route-start] {
+      filter: drop-shadow(0 0 11px var(--frontend-stroke));
+    }
+svg[data-route-active] [data-route-end] {
+      filter: drop-shadow(0 0 11px var(--security-stroke));
+    }
+svg[data-route-active] [data-route-step]:not([data-route-start]):not([data-route-end]) {
+      filter: drop-shadow(0 0 7px var(--backend-stroke));
+    }
+svg[data-route-journey] [data-route-match][data-route-journey-state="past"] { opacity: 0.62; }
+svg[data-route-journey] [data-route-match][data-route-journey-state="future"] { opacity: 0.34; }
+svg[data-route-journey] [data-route-match][data-route-journey-state="current"] { opacity: 1; }
+svg[data-route-journey] [data-node-id][data-route-journey-current] {
+      filter: drop-shadow(0 0 10px var(--backend-stroke));
+    }
+svg[data-route-journey] [data-edge-from][data-route-journey-current] {
+      opacity: 1;
+      filter: drop-shadow(0 0 6px var(--backend-stroke));
+    }
+svg[data-route-start],
+    svg[data-route-end],
+    svg[data-route-step],
+    svg.route-probe-flow {
+      filter: none;
+      stroke-linecap: square;
+    }
+svg[data-route-start],
+    svg[data-route-end],
+    svg[data-route-step],
+    svg.route-probe-flow,
+    svg.route-journey-flow { filter: none; }
+svg.c-grid {
+      stroke-dasharray: 1 4;
+      opacity: 0.48;
+    }
+svg[data-node-id]:hover,
+    svg[data-node-id]:focus-visible,
+    svg[data-focus-active] [data-focus-selected] {
+      filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--text) 18%, transparent));
+    }
+svg.c-grid {
+      stroke-dasharray: 1 3;
+      opacity: 0.78;
+    }
+svg[data-node-id]:hover,
+    svg[data-node-id]:focus-visible {
+      filter: drop-shadow(0 0 3px var(--frontend-stroke));
+    }
+svg[data-focus-active] [data-focus-selected] {
+      filter: drop-shadow(0 0 3px var(--frontend-stroke));
+    }
+svg[data-focus-active][data-reach-active] [data-focus-selected][data-reach-origin] {
+      filter: none;
+    }
+svg[data-relationship-preview-active] [data-relationship-preview],
+    svg[data-relationship-preview-active] [data-relationship-preview-source],
+    svg[data-relationship-preview-active] [data-relationship-preview-target] {
+      filter: drop-shadow(0 0 3px var(--frontend-stroke));
+    }
+/* Story Trail is a viewer-only overlay derived from the ordered focus IDs
+       of the active guided view. The authored edge stays underneath with its
+       original color, dash pattern, marker, and geometry intact. */
+    .story-trail-overlay { pointer-events: none; }
+svg[data-story-beat] [data-story-step] {
+      opacity: 0.22;
+      filter: saturate(0.42);
+      transition: opacity 180ms ease, filter 180ms ease;
+    }
+svg[data-story-beat] [data-story-step][data-story-beat-state="past"] {
+      opacity: 0.72;
+      filter: saturate(0.82);
+    }
+svg[data-story-beat] [data-story-step][data-story-beat-state="next"] {
+      opacity: 0.5;
+      filter: saturate(0.66);
+    }
+svg[data-story-beat] [data-story-step][data-story-beat-state="active"] {
+      opacity: 1;
+      filter: drop-shadow(0 0 7px var(--frontend-stroke));
+      animation: archify-story-beat-node 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+svg[data-story-beat] [data-edge-from][data-story-beat-step] {
+      opacity: 0.16;
+      transition: opacity 160ms ease;
+    }
+svg[data-story-beat] [data-edge-from][data-story-beat-step][data-story-beat-state="past"] { opacity: 0.58; }
+svg[data-story-beat] [data-edge-from][data-story-beat-step][data-story-beat-state="next"] { opacity: 0.34; }
+svg[data-story-beat] [data-edge-from][data-story-beat-step][data-story-beat-state="active"] { opacity: 1; }
+svg[data-story-beat] [data-story-step][data-story-beat-state="active"] {
+      filter: none;
+      animation: none;
+    }
+svg[data-story-beat] [data-story-step][data-story-beat-state="active"] {
+      filter: drop-shadow(0 2px 2px color-mix(in srgb, var(--text) 16%, transparent));
+    }
+/* Chapter Delta Preview is a static, pre-commit comparison between two
+       chapter focus sets. Symbols in the rail carry the meaning without color;
+       these SVG rules only make exact stable-ID membership easier to scan. */
+    svg[data-chapter-preview] [data-node-id],
+    svg[data-chapter-preview] [data-edge-from] {
+      opacity: 0.1 !important;
+      filter: none !important;
+      transition: none !important;
+    }
+svg[data-chapter-preview] [data-node-id][data-chapter-preview-role="stay"] {
+      opacity: 0.76 !important;
+      filter: saturate(0.7) !important;
+    }
+svg[data-chapter-preview] [data-node-id][data-chapter-preview-role="enter"] {
+      opacity: 1 !important;
+      filter: saturate(1.2) !important;
+    }
+svg[data-chapter-preview] [data-node-id][data-chapter-preview-role="leave"] {
+      opacity: 0.28 !important;
+      filter: grayscale(0.72) !important;
+    }
+svg[data-chapter-preview] [data-node-id] { filter: none !important; }
+svg[data-animation="trace"] [data-animate="edge"] {
+      stroke-linecap: round;
+      filter: drop-shadow(0 0 3px var(--arrow-emphasis));
+      animation-duration: 1.75s;
+    }
+svg[data-animation="trace"] [data-animate="node"] {
+      animation-duration: 3.1s;
+    }
+svg[data-animation="trace"] [data-animate="edge"] {
+      stroke-linecap: square;
+      filter: none;
+      animation-duration: 2.15s;
+    }
+svg[data-animation="trace"] [data-animate="node"] {
+      animation-name: archify-blueprint-node-pulse;
+      animation-duration: 3.8s;
+    }
+svg[data-animation="trace"] [data-animate="edge"] {
+      filter: none;
+      animation-duration: 2.2s;
+    }
+svg[data-animation="trace"] [data-animate="node"] {
+      animation-name: archify-editorial-node-pulse;
+      animation-duration: 3.5s;
+    }
+</style>
+        <desc id="archify-diagram-description">An architecture diagram generated by Archify.</desc>
+        <!-- Definitions -->
+        <defs>
+          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-default" />
+          </marker>
+          <marker id="arrowhead-emphasis" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-emphasis" />
+          </marker>
+          <marker id="arrowhead-security" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-security" />
+          </marker>
+          <marker id="arrowhead-dashed" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" class="m-dashed" />
+          </marker>
+          <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" class="c-grid" stroke-width="0.5"/>
+          </pattern>
+        </defs>
+
+        <!-- Background Grid -->
+        <rect width="100%" height="100%" fill="url(#grid)" />
+
+        <!-- Boundaries (behind everything) -->
+
+
+        <!-- Connection paths (before components for correct z-order) -->
+        <path data-edge-from="profile" data-edge-to="bbox" data-edge-label="the area" data-edge-key="0" data-edge-id="profile-area" data-composition-points="145,124;145,230" d="M 145 124 L 145 230" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="profile" data-edge-to="selection" data-edge-label="what to fetch" data-edge-key="1" data-edge-id="profile-selection" data-composition-points="230,92;340,92" d="M 230 92 L 340 92" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="selection" data-edge-to="request" data-edge-label="resolves to one per chart" data-edge-key="2" data-edge-id="selection-request" data-composition-points="520,96;640,96" d="M 520 96 L 640 96" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="request" data-edge-to="grid" data-edge-label="decodes to" data-edge-key="3" data-edge-id="request-grid" data-composition-points="730,132;730,240" d="M 730 132 L 730 240" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="grid" data-edge-to="layer" data-edge-label="drawn by" data-edge-key="4" data-edge-id="grid-layer" data-composition-points="730,312;730,420" d="M 730 312 L 730 420" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="feature" data-edge-to="layer" data-edge-label="drawn by" data-edge-key="5" data-edge-id="feature-layer" data-composition-points="430,312;430,336;616,336;616,456;640,456" d="M 430 312 L 430 328 Q 430 336 438 336 L 608 336 Q 616 336 616 344 L 616 448 Q 616 456 624 456 L 640 456" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="spec" data-edge-to="layer" data-edge-label="which layers, how strongly" data-edge-key="6" data-edge-id="spec-layer" data-composition-points="520,456;640,456" d="M 520 456 L 640 456" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="bbox" data-edge-to="projection" data-edge-label="sized into" data-edge-key="7" data-edge-id="bbox-projection" data-composition-points="145,294;145,420" d="M 145 294 L 145 420" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="projection" data-edge-to="layer" data-edge-label="every layer draws through it" data-edge-key="8" data-edge-id="projection-layer" data-composition-points="145,492;145,516;730,516;730,492" d="M 145 492 L 145 508 Q 145 516 153 516 L 722 516 Q 730 516 730 508 L 730 492" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+
+        <!-- Components -->
+        <g id="node-profile" data-node-id="profile" data-node-label="Profile" tabindex="0" role="button" aria-label="Focus Profile, name + what to fetch, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="name + what to fetch" data-node-tag="saved by name" data-node-context="Architecture component">
+          <title>Profile · name + what to fetch · Architecture component · saved by name</title>
+          <rect x="60" y="60" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="60" y="60" width="170" height="64" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(66 66) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="145" y="90" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Profile</text>
+        <text data-detail="context" x="145" y="106" class="t-muted" font-size="9" text-anchor="middle">name + what to fetch</text>
+        <text data-detail="fine" x="145" y="116" class="t-database" font-size="7" text-anchor="middle">saved by name</text>
+        </g>
+
+        <g id="node-bbox" data-node-id="bbox" data-node-label="BoundingBox" tabindex="0" role="button" aria-label="Focus BoundingBox, S, W, N, E degrees, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="S, W, N, E degrees" data-node-tag="no antimeridian" data-node-context="Architecture component">
+          <title>BoundingBox · S, W, N, E degrees · Architecture component · no antimeridian</title>
+          <rect x="60" y="230" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="60" y="230" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 236) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="145" y="260" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">BoundingBox</text>
+        <text data-detail="context" x="145" y="276" class="t-muted" font-size="9" text-anchor="middle">S, W, N, E degrees</text>
+        <text data-detail="fine" x="145" y="286" class="t-backend" font-size="7" text-anchor="middle">no antimeridian</text>
+        </g>
+
+        <g id="node-selection" data-node-id="selection" data-node-label="GribSelection" tabindex="0" role="button" aria-label="Focus GribSelection, model, run, hours, series, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="model, run, hours, series" data-node-context="Architecture component">
+          <title>GribSelection · model, run, hours, series · Architecture component</title>
+          <rect x="340" y="60" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="340" y="60" width="180" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(346 66) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="430" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">GribSelection</text>
+        <text data-detail="context" x="430" y="110" class="t-muted" font-size="9" text-anchor="middle">model, run, hours, series</text>
+        </g>
+
+        <g id="node-request" data-node-id="request" data-node-label="ChartRequest" tabindex="0" role="button" aria-label="Focus ChartRequest, run date, cycle, lead, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="run date, cycle, lead" data-node-tag="one per chart" data-node-context="Architecture component">
+          <title>ChartRequest · run date, cycle, lead · Architecture component · one per chart</title>
+          <rect x="640" y="60" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="640" y="60" width="180" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(646 66) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="730" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ChartRequest</text>
+        <text data-detail="context" x="730" y="110" class="t-muted" font-size="9" text-anchor="middle">run date, cycle, lead</text>
+        <text data-detail="fine" x="730" y="124" class="t-backend" font-size="7" text-anchor="middle">one per chart</text>
+        </g>
+
+        <g id="node-grid" data-node-id="grid" data-node-label="Grid" tabindex="0" role="button" aria-label="Focus Grid, one decoded field, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="one decoded field" data-node-tag="float[] w x h" data-node-context="Architecture component">
+          <title>Grid · one decoded field · Architecture component · float[] w x h</title>
+          <rect x="640" y="240" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="640" y="240" width="180" height="72" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(646 246) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="730" y="274" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Grid</text>
+        <text data-detail="context" x="730" y="290" class="t-muted" font-size="9" text-anchor="middle">one decoded field</text>
+        <text data-detail="fine" x="730" y="304" class="t-database" font-size="7" text-anchor="middle">float[] w x h</text>
+        </g>
+
+        <g id="node-feature" data-node-id="feature" data-node-label="Feature" tabindex="0" role="button" aria-label="Focus Feature, points + tags, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="points + tags" data-node-tag="coastline, place, marine" data-node-context="Architecture component">
+          <title>Feature · points + tags · Architecture component · coastline, place, marine</title>
+          <rect x="340" y="240" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="340" y="240" width="180" height="72" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(346 246) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="430" y="274" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Feature</text>
+        <text data-detail="context" x="430" y="290" class="t-muted" font-size="9" text-anchor="middle">points + tags</text>
+        <text data-detail="fine" x="430" y="304" class="t-database" font-size="7" text-anchor="middle">coastline, place, marine</text>
+        </g>
+
+        <g id="node-spec" data-node-id="spec" data-node-label="RenderSpec" tabindex="0" role="button" aria-label="Focus RenderSpec, layers, zone, opacity, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="layers, zone, opacity" data-node-context="Architecture component">
+          <title>RenderSpec · layers, zone, opacity · Architecture component</title>
+          <rect x="340" y="420" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="340" y="420" width="180" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(346 426) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="430" y="454" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">RenderSpec</text>
+        <text data-detail="context" x="430" y="470" class="t-muted" font-size="9" text-anchor="middle">layers, zone, opacity</text>
+        </g>
+
+        <g id="node-layer" data-node-id="layer" data-node-label="Layer" tabindex="0" role="button" aria-label="Focus Layer, draws on the projection, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="draws on the projection" data-node-tag="stacked bottom to top" data-node-context="Architecture component">
+          <title>Layer · draws on the projection · Architecture component · stacked bottom to top</title>
+          <rect x="640" y="420" width="180" height="72" rx="6" class="c-mask"/>
+          <rect x="640" y="420" width="180" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(646 426) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="730" y="454" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Layer</text>
+        <text data-detail="context" x="730" y="470" class="t-muted" font-size="9" text-anchor="middle">draws on the projection</text>
+        <text data-detail="fine" x="730" y="484" class="t-backend" font-size="7" text-anchor="middle">stacked bottom to top</text>
+        </g>
+
+        <g id="node-projection" data-node-id="projection" data-node-label="MapProjection" tabindex="0" role="button" aria-label="Focus MapProjection, degrees to pixels, Architecture component" aria-pressed="false" data-node-kind="backend" data-node-sublabel="degrees to pixels" data-node-tag="equirect or Mercator" data-node-context="Architecture component">
+          <title>MapProjection · degrees to pixels · Architecture component · equirect or Mercator</title>
+          <rect x="60" y="420" width="170" height="72" rx="6" class="c-mask"/>
+          <rect x="60" y="420" width="170" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(66 426) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="145" y="454" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">MapProjection</text>
+        <text data-detail="context" x="145" y="470" class="t-muted" font-size="9" text-anchor="middle">degrees to pixels</text>
+        <text data-detail="fine" x="145" y="484" class="t-backend" font-size="7" text-anchor="middle">equirect or Mercator</text>
+        </g>
+
+        <!-- Connection labels -->
+        <g data-detail="context" data-edge-from="profile" data-edge-to="bbox" data-edge-label="the area" data-edge-key="0" data-edge-id="profile-area">
+          <rect x="120.8" y="160" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="145" y="170" class="t-muted" font-size="8" text-anchor="middle">the area</text>
+        </g>
+        <g data-detail="context" data-edge-from="profile" data-edge-to="selection" data-edge-label="what to fetch" data-edge-key="1" data-edge-id="profile-selection">
+          <rect x="248.8" y="72" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="285" y="82" class="t-muted" font-size="8" text-anchor="middle">what to fetch</text>
+        </g>
+        <g data-detail="context" data-edge-from="selection" data-edge-to="request" data-edge-label="resolves to one per chart" data-edge-key="2" data-edge-id="selection-request">
+          <rect x="515" y="136" width="130" height="14" rx="3" class="c-mask"/>
+          <text x="580" y="146" class="t-backend" font-size="8" text-anchor="middle">resolves to one per chart</text>
+        </g>
+        <g data-detail="context" data-edge-from="request" data-edge-to="grid" data-edge-label="decodes to" data-edge-key="3" data-edge-id="request-grid">
+          <rect x="701" y="176" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="730" y="186" class="t-backend" font-size="8" text-anchor="middle">decodes to</text>
+        </g>
+        <g data-detail="context" data-edge-from="grid" data-edge-to="layer" data-edge-label="drawn by" data-edge-key="4" data-edge-id="grid-layer">
+          <rect x="705.8" y="356" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="730" y="366" class="t-backend" font-size="8" text-anchor="middle">drawn by</text>
+        </g>
+        <g data-detail="context" data-edge-from="feature" data-edge-to="layer" data-edge-label="drawn by" data-edge-key="5" data-edge-id="feature-layer">
+          <rect x="498.8" y="316" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="523" y="326" class="t-muted" font-size="8" text-anchor="middle">drawn by</text>
+        </g>
+        <g data-detail="context" data-edge-from="spec" data-edge-to="layer" data-edge-label="which layers, how strongly" data-edge-key="6" data-edge-id="spec-layer">
+          <rect x="492.6" y="496" width="134.8" height="14" rx="3" class="c-mask"/>
+          <text x="560" y="506" class="t-muted" font-size="8" text-anchor="middle">which layers, how strongly</text>
+        </g>
+        <g data-detail="context" data-edge-from="bbox" data-edge-to="projection" data-edge-label="sized into" data-edge-key="7" data-edge-id="bbox-projection">
+          <rect x="116" y="350" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="145" y="360" class="t-muted" font-size="8" text-anchor="middle">sized into</text>
+        </g>
+        <g data-detail="context" data-edge-from="projection" data-edge-to="layer" data-edge-label="every layer draws through it" data-edge-key="8" data-edge-id="projection-layer">
+          <rect x="365.3" y="496" width="144.4" height="14" rx="3" class="c-mask"/>
+          <text x="437.5" y="506" class="t-messagebus" font-size="8" text-anchor="middle">every layer draws through it</text>
+        </g>
+
+        <!-- Boundary labels (foreground masks keep routes out of titles) -->
+
+
+        <!-- Legend -->
+        <g data-legend="" data-legend-bridge="">
+          <text x="40" y="524" class="t-primary" font-size="12" font-weight="650">Legend</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="40" data-legend-baseline="544" data-legend-width="78">
+            <rect x="40" y="535" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="62" y="544" class="t-muted" font-size="10" font-weight="500">Backend</text>
+          </g>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="140" data-legend-baseline="544" data-legend-width="83">
+            <rect x="140" y="535" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="162" y="544" class="t-muted" font-size="10" font-weight="500">Database</text>
+          </g>
+        </g>
+      </svg>

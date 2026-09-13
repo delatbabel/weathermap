@@ -1,0 +1,258 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Weather Map \u2014 Data Structures",
+    "output": "data-structures.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "profile",
+      "type": "database",
+      "label": "Profile",
+      "sublabel": "name + what to fetch",
+      "pos": [
+        60,
+        60
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "saved by name"
+    },
+    {
+      "id": "bbox",
+      "type": "backend",
+      "label": "BoundingBox",
+      "sublabel": "S, W, N, E degrees",
+      "pos": [
+        60,
+        230
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "no antimeridian"
+    },
+    {
+      "id": "selection",
+      "type": "backend",
+      "label": "GribSelection",
+      "sublabel": "model, run, hours, series",
+      "pos": [
+        340,
+        60
+      ],
+      "size": [
+        180,
+        72
+      ]
+    },
+    {
+      "id": "request",
+      "type": "backend",
+      "label": "ChartRequest",
+      "sublabel": "run date, cycle, lead",
+      "pos": [
+        640,
+        60
+      ],
+      "size": [
+        180,
+        72
+      ],
+      "tag": "one per chart"
+    },
+    {
+      "id": "grid",
+      "type": "database",
+      "label": "Grid",
+      "sublabel": "one decoded field",
+      "pos": [
+        640,
+        240
+      ],
+      "size": [
+        180,
+        72
+      ],
+      "tag": "float[] w x h"
+    },
+    {
+      "id": "feature",
+      "type": "database",
+      "label": "Feature",
+      "sublabel": "points + tags",
+      "pos": [
+        340,
+        240
+      ],
+      "size": [
+        180,
+        72
+      ],
+      "tag": "coastline, place, marine"
+    },
+    {
+      "id": "spec",
+      "type": "backend",
+      "label": "RenderSpec",
+      "sublabel": "layers, zone, opacity",
+      "pos": [
+        340,
+        420
+      ],
+      "size": [
+        180,
+        72
+      ]
+    },
+    {
+      "id": "layer",
+      "type": "backend",
+      "label": "Layer",
+      "sublabel": "draws on the projection",
+      "pos": [
+        640,
+        420
+      ],
+      "size": [
+        180,
+        72
+      ],
+      "tag": "stacked bottom to top"
+    },
+    {
+      "id": "projection",
+      "type": "backend",
+      "label": "MapProjection",
+      "sublabel": "degrees to pixels",
+      "pos": [
+        60,
+        420
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "equirect or Mercator"
+    }
+  ],
+  "connections": [
+    {
+      "id": "profile-area",
+      "from": "profile",
+      "to": "bbox",
+      "label": "the area",
+      "labelAt": [
+        145,
+        170
+      ]
+    },
+    {
+      "id": "profile-selection",
+      "from": "profile",
+      "to": "selection",
+      "label": "what to fetch"
+    },
+    {
+      "id": "selection-request",
+      "from": "selection",
+      "to": "request",
+      "label": "resolves to one per chart",
+      "variant": "emphasis",
+      "labelAt": [
+        580,
+        146
+      ]
+    },
+    {
+      "id": "request-grid",
+      "from": "request",
+      "to": "grid",
+      "label": "decodes to",
+      "variant": "emphasis",
+      "labelAt": [
+        730,
+        186
+      ]
+    },
+    {
+      "id": "grid-layer",
+      "from": "grid",
+      "to": "layer",
+      "label": "drawn by",
+      "variant": "emphasis",
+      "labelAt": [
+        730,
+        366
+      ]
+    },
+    {
+      "id": "feature-layer",
+      "from": "feature",
+      "to": "layer",
+      "label": "drawn by",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "spec-layer",
+      "from": "spec",
+      "to": "layer",
+      "label": "which layers, how strongly",
+      "labelAt": [
+        560,
+        506
+      ]
+    },
+    {
+      "id": "bbox-projection",
+      "from": "bbox",
+      "to": "projection",
+      "label": "sized into",
+      "labelAt": [
+        145,
+        360
+      ]
+    },
+    {
+      "id": "projection-layer",
+      "from": "projection",
+      "to": "layer",
+      "label": "every layer draws through it",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "What describes a request",
+      "items": [
+        "Profile = BoundingBox + GribSelection, nothing about rendering",
+        "A series resolves to one ChartRequest per chart, each naming its own run"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "What comes back",
+      "items": [
+        "Grid is one decoded field: variable, level, valid time, and a float array",
+        "Feature is one OSM or gazetteer thing: points plus the tags that survived"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "What draws it",
+      "items": [
+        "RenderSpec says which layers and how strongly",
+        "Every Layer draws through the MapProjection, so the stack is projection-agnostic"
+      ]
+    }
+  ]
+}

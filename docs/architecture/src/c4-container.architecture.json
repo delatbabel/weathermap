@@ -1,0 +1,261 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Weather Map \u2014 C4 Level 2: Containers",
+    "output": "c4-container.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "window",
+      "type": "frontend",
+      "label": "MainWindow",
+      "sublabel": "Swing desktop UI",
+      "pos": [
+        60,
+        140
+      ],
+      "size": [
+        160,
+        68
+      ],
+      "tag": "gui/"
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "WeatherMapCli",
+      "sublabel": "headless, cron-friendly",
+      "pos": [
+        60,
+        420
+      ],
+      "size": [
+        160,
+        68
+      ],
+      "tag": "cli/"
+    },
+    {
+      "id": "mapservice",
+      "type": "backend",
+      "label": "MapService",
+      "sublabel": "fetch, decode, composite, write",
+      "pos": [
+        360,
+        280
+      ],
+      "size": [
+        190,
+        76
+      ],
+      "tag": "the whole job"
+    },
+    {
+      "id": "overpass",
+      "type": "backend",
+      "label": "OverpassClient",
+      "sublabel": "4-endpoint failover",
+      "pos": [
+        690,
+        130
+      ],
+      "size": [
+        170,
+        68
+      ],
+      "tag": "osm/"
+    },
+    {
+      "id": "nomads",
+      "type": "backend",
+      "label": "NomadsClient",
+      "sublabel": "one request per chart",
+      "pos": [
+        690,
+        260
+      ],
+      "size": [
+        170,
+        68
+      ],
+      "tag": "grib/"
+    },
+    {
+      "id": "reader",
+      "type": "backend",
+      "label": "Grib2Scanner",
+      "sublabel": "built-in GRIB2 decoder",
+      "pos": [
+        690,
+        390
+      ],
+      "size": [
+        170,
+        68
+      ],
+      "tag": "no dependency"
+    },
+    {
+      "id": "compositor",
+      "type": "backend",
+      "label": "Compositor",
+      "sublabel": "Java2D layer stack",
+      "pos": [
+        360,
+        500
+      ],
+      "size": [
+        190,
+        68
+      ],
+      "tag": "render/"
+    },
+    {
+      "id": "cache",
+      "type": "database",
+      "label": "Cache",
+      "sublabel": "GRIB and OSM responses",
+      "pos": [
+        940,
+        260
+      ],
+      "size": [
+        170,
+        68
+      ]
+    },
+    {
+      "id": "prefs",
+      "type": "database",
+      "label": "Preferences",
+      "sublabel": "ProfileStore",
+      "pos": [
+        60,
+        280
+      ],
+      "size": [
+        160,
+        68
+      ],
+      "tag": "~/.weathermap"
+    }
+  ],
+  "connections": [
+    {
+      "id": "gui-runs",
+      "from": "window",
+      "to": "mapservice",
+      "label": "SwingWorker",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "cli-runs",
+      "from": "cli",
+      "to": "mapservice",
+      "label": "runs and exits",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "gui-prefs",
+      "from": "window",
+      "to": "prefs",
+      "label": "reads and writes",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        140,
+        222
+      ]
+    },
+    {
+      "id": "cli-prefs",
+      "from": "prefs",
+      "to": "cli",
+      "label": "repeats the last selection",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        140,
+        362
+      ]
+    },
+    {
+      "id": "svc-osm",
+      "from": "mapservice",
+      "to": "overpass",
+      "label": "base map features",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "svc-grib",
+      "from": "mapservice",
+      "to": "nomads",
+      "label": "one file per chart",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "svc-read",
+      "from": "mapservice",
+      "to": "reader",
+      "label": "decode to Grid",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "svc-draw",
+      "from": "mapservice",
+      "to": "compositor",
+      "label": "render the stack",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "variant": "emphasis",
+      "labelAt": [
+        448,
+        430
+      ]
+    },
+    {
+      "id": "http-cache",
+      "from": "nomads",
+      "to": "cache",
+      "label": "immutable runs",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Two front ends, one pipeline",
+      "items": [
+        "MainWindow runs MapService on a SwingWorker",
+        "WeatherMapCli runs the same call and exits",
+        "No second renderer, so screen and file cannot differ"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Shared state on disk",
+      "items": [
+        "Preferences carries the last area and selection",
+        "ProfileStore keeps named areas and selections",
+        "Cache holds GRIB runs indefinitely and OSM for four weeks"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "No third-party decoder",
+      "items": [
+        "NOMADS filter output is simple-packed, so Grib2Scanner reads it directly",
+        "NetCDF-Java stays an optional profile for everything else"
+      ]
+    }
+  ]
+}

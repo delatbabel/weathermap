@@ -8,6 +8,11 @@ maps/
 *.grib2
 *.osm.xml
 
+# Archify's interactive viewers: ~800 KB each, regenerable from docs/architecture/src,
+# and GitLab renders neither their JavaScript nor their inline styles. What the
+# repository keeps is the source JSON and the exported SVG and Markdown.
+docs/architecture/html/
+
 # IDE
 .idea/
 *.iml

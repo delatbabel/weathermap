@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560"
+     role="img" aria-labelledby="cs-title cs-desc">
+  <title id="cs-title">Weather Map — package layout</title>
+  <desc id="cs-desc">The packages of org.weathermap, what each holds, and which
+    depend on which. Both front ends call MapService and nothing else.</desc>
+  <style>
+    :root{
+      --ink:#0f172a; --muted:#475569; --faint:#94a3b8;
+      --edge:#94a3b8; --edge-strong:#059669;
+      --entry:#0891b2; --entry-fill:rgba(34,211,238,.12);
+      --core:#059669;  --core-fill:rgba(52,211,153,.14);
+      --io:#7c3aed;    --io-fill:rgba(167,139,250,.12);
+      --draw:#b45309;  --draw-fill:rgba(251,191,36,.13);
+      --plain:#64748b; --plain-fill:rgba(148,163,184,.10);
+      --panel:#ffffff; --panel-edge:#e2e8f0;
+    }
+    @media (prefers-color-scheme: dark){
+      :root{
+        --ink:#e2e8f0; --muted:#94a3b8; --faint:#64748b;
+        --edge:#64748b; --edge-strong:#34d399;
+        --entry:#22d3ee; --entry-fill:rgba(8,51,68,.45);
+        --core:#34d399;  --core-fill:rgba(6,78,59,.45);
+        --io:#a78bfa;    --io-fill:rgba(76,29,149,.45);
+        --draw:#fbbf24;  --draw-fill:rgba(120,53,15,.40);
+        --plain:#94a3b8; --plain-fill:rgba(30,41,59,.55);
+        --panel:#0b1220; --panel-edge:#1e293b;
+      }
+    }
+    .bg{fill:var(--panel);stroke:var(--panel-edge)}
+    text{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+    .pkg{font-size:15px;font-weight:600;fill:var(--ink)}
+    .what{font-size:12px;fill:var(--muted)}
+    .note{font-size:11.5px;fill:var(--faint);font-style:italic}
+    .head{font-size:12px;font-weight:700;fill:var(--faint);letter-spacing:.09em}
+    .box{stroke-width:1.5;rx:10}
+    .entry{fill:var(--entry-fill);stroke:var(--entry)}
+    .core{fill:var(--core-fill);stroke:var(--core);stroke-width:2.2}
+    .io{fill:var(--io-fill);stroke:var(--io)}
+    .draw{fill:var(--draw-fill);stroke:var(--draw)}
+    .plain{fill:var(--plain-fill);stroke:var(--plain)}
+    .link{fill:none;stroke:var(--edge);stroke-width:1.6;marker-end:url(#a)}
+    .link-strong{fill:none;stroke:var(--edge-strong);stroke-width:2.4;marker-end:url(#as)}
+    .link-dash{fill:none;stroke:var(--edge);stroke-width:1.4;stroke-dasharray:5 4;marker-end:url(#a)}
+    .elbl{font-size:11px;fill:var(--muted)}
+  </style>
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="var(--edge)"/>
+    </marker>
+    <marker id="as" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+      <polygon points="0 0, 9 3.5, 0 7" fill="var(--edge-strong)"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0.5" y="0.5" width="999" height="559" rx="14"/>
+
+  <text class="head" x="40" y="42">FRONT ENDS</text>
+  <text class="head" x="404" y="42">THE JOB</text>
+  <text class="head" x="700" y="42">SOURCES AND DRAWING</text>
+
+  <!-- front ends -->
+  <rect class="box entry" x="40" y="60" width="230" height="74"/>
+  <text class="pkg" x="58" y="88">gui/</text>
+  <text class="what" x="58" y="108">MainWindow, MapPanel,</text>
+  <text class="what" x="58" y="124">AreaPanel, DataPanel, Themes</text>
+
+  <rect class="box entry" x="40" y="164" width="230" height="58"/>
+  <text class="pkg" x="58" y="192">cli/</text>
+  <text class="what" x="58" y="210">WeatherMapCli</text>
+
+  <rect class="box plain" x="40" y="252" width="230" height="58"/>
+  <text class="pkg" x="58" y="280">Main</text>
+  <text class="what" x="58" y="298">picks one or the other</text>
+
+  <!-- the job -->
+  <rect class="box core" x="404" y="126" width="216" height="88"/>
+  <text class="pkg" x="422" y="156">MapService</text>
+  <text class="what" x="422" y="176">fetch · decode ·</text>
+  <text class="what" x="422" y="192">composite · write</text>
+  <text class="note" x="422" y="208">the whole job</text>
+
+  <rect class="box plain" x="404" y="300" width="216" height="86"/>
+  <text class="pkg" x="422" y="328">model/</text>
+  <text class="what" x="422" y="348">BoundingBox, projections,</text>
+  <text class="what" x="422" y="364">GribSelection, ChartRequest,</text>
+  <text class="what" x="422" y="380">Preferences, ProfileStore</text>
+
+  <!-- sources and drawing -->
+  <rect class="box io" x="700" y="60" width="256" height="74"/>
+  <text class="pkg" x="718" y="88">osm/</text>
+  <text class="what" x="718" y="108">OverpassClient, OsmXmlParser,</text>
+  <text class="what" x="718" y="124">WorldBaseMap, WorldGazetteer</text>
+
+  <rect class="box io" x="700" y="150" width="256" height="82"/>
+  <text class="pkg" x="718" y="178">grib/</text>
+  <text class="what" x="718" y="198">NomadsClient, Grib2Scanner, Grid</text>
+  <text class="note" x="718" y="220">netcdf/ — optional decoder (-Pnetcdf)</text>
+
+  <rect class="box draw" x="700" y="248" width="256" height="98"/>
+  <text class="pkg" x="718" y="276">render/</text>
+  <text class="what" x="718" y="296">Compositor, Layer stack,</text>
+  <text class="what" x="718" y="312">WindBarbLayer, IsolineLayer,</text>
+  <text class="what" x="718" y="328">ColourRamp, AnnotationLayer</text>
+
+  <rect class="box plain" x="700" y="362" width="256" height="58"/>
+  <text class="pkg" x="718" y="390">util/</text>
+  <text class="what" x="718" y="408">Http, Cache</text>
+
+  <!-- edges -->
+  <path class="link-strong" d="M270 97 H337 V164 H396"/>
+  <path class="link-strong" d="M270 193 H337 V170 H396"/>
+  <text class="elbl" x="290" y="140">both call it</text>
+
+  <path class="link-dash" d="M120 252 V228"/>
+  <path class="link-dash" d="M190 252 V140"/>
+  <text class="elbl" x="196" y="246">dispatches</text>
+
+  <path class="link" d="M620 152 H660 V97 H692"/>
+  <path class="link" d="M620 170 H668 V191 H692"/>
+  <path class="link" d="M620 196 H676 V297 H692"/>
+  <path class="link-dash" d="M512 300 V224" />
+  <text class="elbl" x="524" y="266">types shared by all</text>
+
+  <text class="note" x="40" y="470">Main dispatches to one front end; both call MapService and nothing else, which is</text>
+  <text class="note" x="40" y="490">why the image on screen and the image on disk cannot differ.</text>
+  <text class="note" x="40" y="516">render/ draws through model/'s MapProjection, so the layer stack is projection-agnostic.</text>
+  <text class="note" x="40" y="536">util/ is reached from osm/ and grib/ only — one place where HTTP and caching happen.</text>
+</svg>

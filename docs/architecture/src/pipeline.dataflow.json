@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Weather Map \u2014 Chart Pipeline",
+    "output": "pipeline.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1069,
+      760
+    ]
+  },
+  "stages": [
+    {
+      "label": "Chosen"
+    },
+    {
+      "label": "Fetched"
+    },
+    {
+      "label": "Decoded"
+    },
+    {
+      "label": "Composited"
+    },
+    {
+      "label": "Delivered"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "area",
+      "type": "frontend",
+      "label": "Area + selection",
+      "sublabel": "area + fields",
+      "stage": 0,
+      "row": 0
+    },
+    {
+      "id": "series",
+      "type": "frontend",
+      "label": "Series",
+      "sublabel": "past + future",
+      "stage": 0,
+      "row": 3
+    },
+    {
+      "id": "osm",
+      "type": "external",
+      "label": "Overpass",
+      "sublabel": "coast, places",
+      "stage": 1,
+      "row": 0
+    },
+    {
+      "id": "nomads",
+      "type": "external",
+      "label": "NOMADS",
+      "sublabel": "GRIB2 subsets",
+      "stage": 1,
+      "row": 3
+    },
+    {
+      "id": "bundle",
+      "type": "database",
+      "label": "Bundled outline",
+      "sublabel": "Natural Earth",
+      "stage": 1,
+      "row": 1
+    },
+    {
+      "id": "features",
+      "type": "backend",
+      "label": "Feature list",
+      "sublabel": "OsmXmlParser",
+      "stage": 2,
+      "row": 0
+    },
+    {
+      "id": "grids",
+      "type": "backend",
+      "label": "Grid per field",
+      "sublabel": "Grib2Scanner",
+      "stage": 2,
+      "row": 3
+    },
+    {
+      "id": "layers",
+      "type": "backend",
+      "label": "Layer stack",
+      "sublabel": "barbs on top",
+      "stage": 3,
+      "row": 1
+    },
+    {
+      "id": "png",
+      "type": "database",
+      "label": "PNG",
+      "sublabel": "maps folder",
+      "stage": 4,
+      "row": 0
+    },
+    {
+      "id": "screen",
+      "type": "frontend",
+      "label": "On screen",
+      "sublabel": "steppable",
+      "stage": 4,
+      "row": 2
+    }
+  ],
+  "flows": [
+    {
+      "id": "area-osm",
+      "from": "area",
+      "to": "osm",
+      "label": "Overpass QL",
+      "classification": "one query per area"
+    },
+    {
+      "id": "series-grib",
+      "from": "series",
+      "to": "nomads",
+      "label": "run + forecast hour",
+      "classification": "one request per chart",
+      "variant": "emphasis",
+      "labelAt": [
+        208,
+        542
+      ]
+    },
+    {
+      "id": "osm-features",
+      "from": "osm",
+      "to": "features",
+      "label": "OSM XML",
+      "route": "straight"
+    },
+    {
+      "id": "bundle-features",
+      "from": "bundle",
+      "to": "features",
+      "label": "when Overpass cannot answer",
+      "variant": "dashed"
+    },
+    {
+      "id": "grib-grids",
+      "from": "nomads",
+      "to": "grids",
+      "label": "GRIB2 messages",
+      "variant": "emphasis"
+    },
+    {
+      "id": "features-layers",
+      "from": "features",
+      "to": "layers",
+      "label": "vectors and labels"
+    },
+    {
+      "id": "grids-layers",
+      "from": "grids",
+      "to": "layers",
+      "label": "washes, isobars, barbs",
+      "variant": "emphasis"
+    },
+    {
+      "id": "layers-png",
+      "from": "layers",
+      "to": "png",
+      "label": "ImageIO"
+    },
+    {
+      "id": "layers-screen",
+      "from": "layers",
+      "to": "screen",
+      "label": "same BufferedImage",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One renderer",
+      "items": [
+        "The image written to disk is the image on screen",
+        "The CLI and the window differ only in what they do with it"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Fail-soft at every fetch",
+      "items": [
+        "No Overpass answer falls back to the bundled outline",
+        "A run that has rolled off the archive is skipped, not fatal",
+        "A variable that decoded nothing is reported, not silent"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Each chart names its own run",
+      "items": [
+        "Future charts come from the newest run at a long lead",
+        "Past charts come from the run of their own time, often an analysis"
+      ]
+    }
+  ]
+}

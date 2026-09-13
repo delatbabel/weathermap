@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Weather Map \u2014 C4 Level 1: System Context",
+    "output": "c4-context.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "navigator",
+      "type": "external",
+      "label": "Navigator",
+      "sublabel": "reads the chart",
+      "pos": [
+        60,
+        300
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "weathermap",
+      "type": "backend",
+      "label": "Weather Map",
+      "sublabel": "desktop app + CLI",
+      "pos": [
+        420,
+        300
+      ],
+      "size": [
+        170,
+        72
+      ],
+      "tag": "one jar, two front ends"
+    },
+    {
+      "id": "nomads",
+      "type": "external",
+      "label": "NOAA NOMADS",
+      "sublabel": "GFS GRIB2 subsets",
+      "pos": [
+        820,
+        150
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "overpass",
+      "type": "external",
+      "label": "Overpass API",
+      "sublabel": "OpenStreetMap vectors",
+      "pos": [
+        820,
+        300
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "naturalearth",
+      "type": "database",
+      "label": "Bundled gazetteer",
+      "sublabel": "Natural Earth, 29 KB",
+      "pos": [
+        820,
+        450
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "disk",
+      "type": "database",
+      "label": "~/.weathermap",
+      "sublabel": "charts, cache, profiles",
+      "pos": [
+        420,
+        500
+      ],
+      "size": [
+        170,
+        64
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "picks",
+      "from": "navigator",
+      "to": "weathermap",
+      "label": "chooses area and fields",
+      "variant": "emphasis"
+    },
+    {
+      "id": "grib",
+      "from": "weathermap",
+      "to": "nomads",
+      "label": "HTTPS filter_gfs subsets",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "osm",
+      "from": "weathermap",
+      "to": "overpass",
+      "label": "HTTPS Overpass QL"
+    },
+    {
+      "id": "bundle",
+      "from": "naturalearth",
+      "to": "weathermap",
+      "label": "names and world outline",
+      "variant": "dashed"
+    },
+    {
+      "id": "writes",
+      "from": "weathermap",
+      "to": "disk",
+      "label": "writes PNG, reads preferences",
+      "labelAt": [
+        505,
+        436
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "What it is for",
+      "items": [
+        "Composites NOAA forecast fields over an OSM base map",
+        "Wind barbs on top; the chart is read for the wind"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "External dependencies",
+      "items": [
+        "NOMADS serves GRIB2 already cut to the area",
+        "Overpass serves coastline, boundaries and place names",
+        "Natural Earth ships in the jar and needs no network"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Fail-soft boundaries",
+      "items": [
+        "No Overpass answer still renders, from the bundle",
+        "A run that has rolled off the archive is skipped, not fatal"
+      ]
+    }
+  ]
+}
