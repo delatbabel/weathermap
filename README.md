@@ -32,6 +32,7 @@ The same pages are in the application: **Help → User's Guide** (F1) and
 | Page | What is in it |
 |---|---|
 | [Basic usage](docs/basic-usage.md) | Choosing an area, choosing data, reading the chart, stepping a series |
+| [Posting to Instagram](docs/instagram.md) | What Meta's API needs, how to get a token, and why there is no password |
 | [Packaging](docs/packaging.md) | Installable packages for Linux, Windows and macOS; the version scheme |
 | [Build and run](docs/build-and-run.md) | Building, the two front ends, the CLI options, the optional NetCDF-Java profile |
 | [How it works](docs/how-it-works.md) | The rectangle, the vector base map, the bundled gazetteer, persistence, caching |

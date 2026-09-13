@@ -40,6 +40,15 @@ that repeats a stored selection or a named profile.
 - The documentation is in the application: **Help → User's Guide** (F1) and
   **Help → Developer's Guide**.
 
+**Sharing**
+
+- **Share → Post to Instagram…** publishes the chart on screen and the ones
+  after it as a carousel, default four, in chronological order. Credentials are
+  an account ID and an access token — Instagram has no supported password
+  posting — and the images are written to a folder you serve publicly, because
+  Meta's API fetches every image rather than accepting an upload. See
+  [docs/instagram.md](docs/instagram.md).
+
 **Licensing**
 
 - Released under the GNU General Public License, version 3 or later. The text

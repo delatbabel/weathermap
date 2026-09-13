@@ -63,6 +63,7 @@ public final class HelpWindow extends JFrame {
             new Page("Series and Profiles", "/help/series-and-profiles.md"),
             new Page("Themes", "/help/themes.md"),
             new Page("Build and Run", "/help/build-and-run.md"),
+            new Page("Instagram", "/help/instagram.md"),
             new Page("License", "/help/LICENSE", true));
 
     public static final List<Page> DEVELOPER_GUIDE = List.of(

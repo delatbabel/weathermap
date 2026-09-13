@@ -492,6 +492,12 @@ public final class MainWindow extends JFrame {
         chart.add(timeZone);
         bar.add(chart);
 
+        final JMenu share = new JMenu("Share");
+        final JMenuItem instagram = new JMenuItem("Post to Instagram…");
+        instagram.addActionListener(e -> postToInstagram());
+        share.add(instagram);
+        bar.add(share);
+
         final JMenu appearance = new JMenu("Appearance");
         final ButtonGroup themes = new ButtonGroup();
         for (Theme theme : Theme.values()) {
@@ -714,6 +720,102 @@ public final class MainWindow extends JFrame {
                 showChart(resultIndex + 1);
             }
         });
+    }
+
+    // ---- posting ---------------------------------------------------------
+
+    /**
+     * Posts the chart on screen and the ones after it, as a carousel.
+     *
+     * <p>Forwards only, and in time order. A carousel is read left to right, so
+     * a post that began at the current chart and wrapped round to the start of
+     * the series would put next week between two Fridays.</p>
+     */
+    private void postToInstagram() {
+        if (results.isEmpty()) {
+            setStatus("Download a chart before posting");
+            return;
+        }
+        final int available = results.size() - resultIndex;
+        if (available < 2) {
+            JOptionPane.showMessageDialog(this,
+                    "A carousel needs at least two charts, and this is the last one.\n\n"
+                    + "Step back, or download a series that runs further ahead.",
+                    "Not enough charts", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        final org.weathermap.model.InstagramAccount stored =
+                org.weathermap.model.InstagramAccount
+                        .load(org.weathermap.model.InstagramAccount.defaultFile())
+                        .orElse(null);
+
+        InstagramDialog.ask(this, stored, available).ifPresent(request -> {
+            try {
+                // Saved before posting, so a failure does not also lose the
+                // settings the user has just typed in.
+                request.account().save(
+                        org.weathermap.model.InstagramAccount.defaultFile());
+            }
+            catch (java.io.IOException e) {
+                LOG.log(Level.WARNING, "Could not store the Instagram account", e);
+            }
+            new PostWorker(request).execute();
+        });
+    }
+
+    /** Writes the images and posts them, off the event thread. */
+    private final class PostWorker extends SwingWorker<String, String> {
+
+        private final InstagramDialog.Request request;
+
+        PostWorker(InstagramDialog.Request request) {
+            this.request = request;
+            progress.setIndeterminate(true);
+            progress.setVisible(true);
+        }
+
+        @Override
+        protected String doInBackground() throws Exception {
+            final List<MapService.Result> charts =
+                    org.weathermap.instagram.ChartPublisher.selectFrom(
+                            results, resultIndex, request.chartCount());
+            publish("Writing " + charts.size() + " images for Instagram to fetch");
+
+            final var publisher =
+                    new org.weathermap.instagram.ChartPublisher(request.account());
+            final var images = publisher.publish(charts);
+
+            publish("Posting to Instagram");
+            final var client =
+                    new org.weathermap.instagram.InstagramClient(request.account());
+            return client.postCarousel(images, request.caption());
+        }
+
+        @Override
+        protected void process(List<String> chunks) {
+            setStatus(chunks.get(chunks.size() - 1));
+        }
+
+        @Override
+        protected void done() {
+            progress.setVisible(false);
+            progress.setIndeterminate(false);
+            try {
+                setStatus("Posted to Instagram as media " + get());
+            }
+            catch (java.util.concurrent.CancellationException e) {
+                setStatus("Cancelled");
+            }
+            catch (Exception e) {
+                LOG.log(Level.WARNING, "Instagram post failed", e);
+                final Throwable cause = e.getCause() != null ? e.getCause() : e;
+                setStatus("Instagram post failed: " + cause.getMessage());
+                JOptionPane.showMessageDialog(MainWindow.this,
+                        String.valueOf(cause.getMessage()),
+                        "Instagram post failed", JOptionPane.ERROR_MESSAGE);
+            }
+        }
     }
 
     // ---- profiles --------------------------------------------------------
