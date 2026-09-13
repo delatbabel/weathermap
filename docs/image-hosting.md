@@ -79,7 +79,7 @@ region = auto
 endpoint = https://<account-id>.r2.cloudflarestorage.com
 acl = private
 no_check_bucket = true
-no_head = true
+no_head = true          # rclone older than 1.75 only
 ```
 
 `acl = private` is right even though the bucket is public: the objects are not
@@ -89,6 +89,7 @@ access is a property of the domain binding, not of the object.
 **The last two lines are not tuning. Without them nothing can be written at
 all**, and each fails in a way that points at something else entirely. Both are
 backend options, so they belong here rather than on the mount command line.
+`no_head` is needed only on an rclone older than 1.75.
 
 ### `no_check_bucket = true` — otherwise every write is 403
 
@@ -108,7 +109,11 @@ identically. The tell is that `rclone lsd weathermap-r2:weathermap-charts`
 succeeds at the same moment — a token that can list inside the bucket has the
 keys and endpoint right.
 
-### `no_head = true` — otherwise every write is 501
+### `no_head = true` — only on rclone older than 1.75
+
+**Not needed on a current rclone.** Verified broken on `v1.60.1` and fixed by
+`v1.75.1`; if yours is recent, leave this out and keep the integrity check. On
+an older one, every write fails like this:
 
 R2 answers a successful `PUT` with an `X-Amz-Version-Id` header. rclone reads
 that as a versioned bucket and re-reads the object by version id to verify what
@@ -128,10 +133,17 @@ aborts on a file that is actually there. What is given up is the post-upload
 verifying read; the ETag returned by the `PUT` is still checked against what
 was sent.
 
-Set both at once without hand-editing the file:
-
 ```bash
-rclone config update weathermap-r2 no_check_bucket true no_head true --non-interactive
+rclone config update weathermap-r2 no_check_bucket true --non-interactive
+rclone config update weathermap-r2 no_head true --non-interactive   # rclone < 1.75 only
+```
+
+`no_check_bucket` is still required on 1.75 — and 1.75 at least says which
+operation was refused, which the older one did not:
+
+```
+Failed to copy: failed to prepare upload: operation error S3: CreateBucket,
+https response error StatusCode: 403 ... AccessDenied: Access Denied
 ```
 
 ### Checking it
@@ -181,26 +193,25 @@ take milliseconds. The unit sets `1s`, which is the right trade here: the files
 are small and nothing else writes to this bucket, so there is no batching worth
 preserving.
 
-### Deleting through the mount does not work
+### Deleting through the mount needs rclone 1.75
 
-`rclone deletefile weathermap-r2:weathermap-charts/<key>` removes an object
-normally. Deleting the same object **through the mount** fails with
-`Input/output error`, and the mount's log gives the reason:
+On `v1.60.1`, removing a file **through the mount** fails with `Input/output
+error`, and the mount's log gives the reason:
 
 ```
 ERROR : IO error: NotImplemented: versionId not implemented
 	status code: 501
 ```
 
-It is the versioning gap again, on a path `no_head` does not cover. R2 returns a
-version ID when a file is written; rclone keeps it on the cached object and sends
-it back with the delete; R2 has no versioned delete. The command-line delete is
-unaffected because it looks the object up fresh, with no version ID to send.
+It is the versioning gap again, on a path `no_head` does not cover: R2 returns a
+version ID when a file is written, rclone keeps it on the cached object and sends
+it back with the delete, and R2 has no versioned delete. `rclone deletefile` is
+unaffected, because it looks the object up fresh with no version ID to send — so
+on an old rclone, anything tidying up after itself has to go through the command
+rather than the mount.
 
-Writing and reading are the operations that matter here and both work, so this
-is a wart rather than a blocker — but anything that tidies up after itself has
-to do it through `rclone deletefile`, not through the mount. It is fixed in
-later rclone; the version this was found on is `v1.60.1`.
+Both are fixed by `v1.75.1`: writes need no `no_head`, and `rm` through the mount
+removes the object with no 501 in the log.
 
 ### Put mount flags on the command line, not in `rclone.conf`
 

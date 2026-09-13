@@ -53,6 +53,12 @@
 #     Skipping the verifying HEAD costs the post-upload integrity check; the
 #     ETag in the PUT response is still checked against what was sent.
 #
+# rclone lives at /usr/local/bin, not /usr/bin. Deleting a file through a mount
+# served by the distribution's rclone fails with EIO - it sends R2 the version
+# ID from the write, and R2 has no versioned delete - which is fixed upstream.
+# The distribution package is left in place for the other mounts on this
+# machine; /usr/local/bin simply comes first.
+#
 # Install:
 #   mkdir -p ~/weathermap-charts.saigonweather.online
 #   sudo cp dist/r2/rclone-weathermap-r2.service /etc/systemd/system/
@@ -64,13 +70,24 @@ Description=RClone mount for the Weather Map chart bucket (Cloudflare R2)
 Documentation=man:rclone(1)
 After=network-online.target
 Wants=network-online.target
-AssertPathIsDirectory=/home/del/weathermap-charts.saigonweather.online
+
+# No AssertPathIsDirectory here, deliberately. If the rclone process dies
+# without unmounting, the FUSE mount survives it: /proc/mounts still lists the
+# path and every stat of it returns ENOTCONN. The assertion is evaluated before
+# ExecStartPre runs, so it fails on exactly the stale mount that a restart is
+# meant to clear - "Assertion failed on job for rclone-weathermap-r2.service",
+# with no way out of it but a manual fusermount. The ExecStartPre pair below
+# clears the stale mount and then guarantees the directory instead.
 
 [Service]
 Type=simple
 User=del
 Group=del
-ExecStart=/usr/bin/rclone mount weathermap-r2:weathermap-charts /home/del/weathermap-charts.saigonweather.online \
+# Clear a mount left behind by a process that died without unmounting; the
+# leading "-" makes the usual case, where there is nothing to clear, a no-op.
+ExecStartPre=-/bin/fusermount -uz /home/del/weathermap-charts.saigonweather.online
+ExecStartPre=/bin/mkdir -p /home/del/weathermap-charts.saigonweather.online
+ExecStart=/usr/local/bin/rclone mount weathermap-r2:weathermap-charts /home/del/weathermap-charts.saigonweather.online \
     --config=/home/del/.config/rclone/rclone.conf \
     --vfs-cache-mode writes \
     --vfs-cache-max-age 24h \
@@ -83,7 +100,7 @@ ExecStart=/usr/bin/rclone mount weathermap-r2:weathermap-charts /home/del/weathe
     --uid 1000 \
     --gid 1000 \
     --daemon-timeout 30s
-ExecStop=/bin/fusermount -u /home/del/weathermap-charts.saigonweather.online
+ExecStop=/bin/fusermount -uz /home/del/weathermap-charts.saigonweather.online
 TimeoutStartSec=60
 TimeoutStopSec=20
 KillMode=process
