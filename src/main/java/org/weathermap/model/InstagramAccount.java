@@ -46,10 +46,14 @@ import java.util.logging.Logger;
  * @param syncCommand   run after the images are written and before they are
  *                      posted, for a folder that is uploaded rather than served
  *                      directly; may be blank
+ * @param caption       the last caption posted, kept so the next one starts
+ *                      from it rather than from nothing - a daily chart's text
+ *                      is usually yesterday's with the date and a line changed,
+ *                      and retyping it every day was the whole cost
  */
 public record InstagramAccount(Login login, String profile, String igUserId,
                                String accessToken, Path publishDir, String publicBaseUrl,
-                               String syncCommand) {
+                               String syncCommand, String caption) {
 
     /**
      * The two ways Meta issues a publishing token, which are not interchangeable.
@@ -113,6 +117,7 @@ public record InstagramAccount(Login login, String profile, String igUserId,
     private static final String KEY_DIR = "instagram.publishDir";
     private static final String KEY_URL = "instagram.publicBaseUrl";
     private static final String KEY_SYNC = "instagram.syncCommand";
+    private static final String KEY_CAPTION = "instagram.caption";
 
     public InstagramAccount {
         login = login == null ? Login.INSTAGRAM : login;
@@ -121,12 +126,20 @@ public record InstagramAccount(Login login, String profile, String igUserId,
         accessToken = accessToken == null ? "" : accessToken.trim();
         publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.trim().replaceAll("/+$", "");
         syncCommand = syncCommand == null ? "" : syncCommand.trim();
+        // Not trimmed: a caption's own leading blank line is deliberate.
+        caption = caption == null ? "" : caption;
     }
 
     /** True when every field needed to post is present. */
     public boolean isComplete() {
         return !igUserId.isEmpty() && !accessToken.isEmpty()
                 && publishDir != null && !publicBaseUrl.isEmpty();
+    }
+
+    /** The same account with a different caption remembered. */
+    public InstagramAccount withCaption(String text) {
+        return new InstagramAccount(login, profile, igUserId, accessToken,
+                                    publishDir, publicBaseUrl, syncCommand, text);
     }
 
     /** True when the images have to be pushed somewhere before they are fetched. */
@@ -159,7 +172,8 @@ public record InstagramAccount(Login login, String profile, String igUserId,
                 props.getProperty(KEY_TOKEN, ""),
                 dir.isBlank() ? null : Path.of(dir),
                 props.getProperty(KEY_URL, ""),
-                props.getProperty(KEY_SYNC, "")));
+                props.getProperty(KEY_SYNC, ""),
+                props.getProperty(KEY_CAPTION, "")));
     }
 
     /**
@@ -179,6 +193,7 @@ public record InstagramAccount(Login login, String profile, String igUserId,
         props.setProperty(KEY_DIR, publishDir == null ? "" : publishDir.toString());
         props.setProperty(KEY_URL, publicBaseUrl);
         props.setProperty(KEY_SYNC, syncCommand);
+        props.setProperty(KEY_CAPTION, caption);
 
         final Path parent = file.getParent();
         if (parent != null) Files.createDirectories(parent);

@@ -118,6 +118,46 @@ public final class Http {
         }
     }
 
+    /**
+     * A non-2xx status, with whatever the server said about it.
+     *
+     * <p><b>The body is the whole point.</b> Meta answers a bad publish with
+     * HTTP 400 and a JSON body naming the cause - "The image could not be
+     * fetched", "Invalid OAuth access token" - while the status alone says only
+     * that something was wrong with the request. Throwing away the body turned
+     * every distinct setup mistake into the same unactionable line, and
+     * {@code InstagramClient} was written to read exactly those messages: it
+     * never saw one, because the failure was raised here first.</p>
+     */
+    public static final class HttpStatusException extends IOException {
+        private static final long serialVersionUID = 1L;
+
+        private final int status;
+        private final String body;
+
+        public HttpStatusException(int status, URI uri, String body) {
+            super(message(status, uri, body));
+            this.status = status;
+            this.body = body == null ? "" : body;
+        }
+
+        /** The HTTP status code. */
+        public int status() { return status; }
+
+        /** The response body, possibly empty - never null. */
+        public String body() { return body; }
+
+        /** True when repeating the identical request cannot help. */
+        public boolean isPermanent() { return status >= 400 && status < 500; }
+
+        private static String message(int status, URI uri, String body) {
+            final String said = body == null ? "" : body.strip();
+            if (said.isEmpty()) return "HTTP " + status + " from " + uri;
+            final String trimmed = said.length() > 400 ? said.substring(0, 400) + "…" : said;
+            return "HTTP " + status + " from " + uri + ": " + trimmed;
+        }
+    }
+
     /** Reports download progress; {@code total} is -1 when the server sends no length. */
     public interface ProgressListener {
         void onProgress(long bytesSoFar, long total);
@@ -160,7 +200,7 @@ public final class Http {
         final int status = response.statusCode();
         if (status >= 200 && status < 300) return response.body();
         if (status == 429) throw new RateLimitedException(uri.getHost(), response.body());
-        throw new IOException("HTTP " + status + " from " + uri);
+        throw new HttpStatusException(status, uri, response.body());
     }
 
     /**
@@ -208,6 +248,19 @@ public final class Http {
      * request itself is wrong (an unavailable variable, say) and repeating it
      * only wastes the server's time.
      */
+    /**
+     * Retries 5xx and transport failures, never 4xx: a 400 from NOMADS means the
+     * request itself is wrong (an unavailable variable, say) and repeating it
+     * only wastes the server's time.
+     *
+     * <p>That is what it always claimed to do. It did the opposite: the throws
+     * for 4xx and 429 stood inside the {@code try}, so the {@code catch} on the
+     * next line caught them, filed them as the attempt's failure and went round
+     * again. Three requests were sent for every rejection, each identical to the
+     * one already refused, and the log said "retrying" over an error that could
+     * not change. Permanent failures now leave the loop rather than falling into
+     * their own handler.</p>
+     */
     private static <T> HttpResponse<T> sendWithRetry(HttpRequest request,
                                                      HttpResponse.BodyHandler<T> handler)
             throws IOException, InterruptedException {
@@ -217,16 +270,20 @@ public final class Http {
                 final HttpResponse<T> response = CLIENT.send(request, handler);
                 final int status = response.statusCode();
                 if (status >= 200 && status < 300) return response;
+
+                // Overpass answers 429 when the client is over its slot
+                // allowance. Retrying is exactly the wrong response, and the
+                // bare status is not a useful thing to show a user.
                 if (status == 429) {
-                    // Overpass answers 429 when the client is over its slot
-                    // allowance. Retrying is exactly the wrong response, and the
-                    // bare status is not a useful thing to show a user.
-                    throw new RateLimitedException(request.uri().getHost());
+                    throw new RateLimitedException(request.uri().getHost(), bodyOf(response));
                 }
-                if (status < 500) {
-                    throw new IOException("HTTP " + status + " from " + request.uri());
-                }
-                last = new IOException("HTTP " + status + " from " + request.uri());
+                final HttpStatusException failure =
+                        new HttpStatusException(status, request.uri(), bodyOf(response));
+                if (failure.isPermanent()) throw failure;
+                last = failure;
+            }
+            catch (HttpStatusException | RateLimitedException e) {
+                throw e;   // asking again cannot change the answer
             }
             catch (IOException e) {
                 last = e;
@@ -237,6 +294,29 @@ public final class Http {
             }
         }
         throw last;
+    }
+
+    /**
+     * The response body as text, for an error worth explaining.
+     *
+     * <p>A download's body is a {@link Path} rather than a string, and on a
+     * failure that file holds the server's message; a little of it is read back
+     * rather than reporting the pathname, which explains nothing.</p>
+     */
+    private static String bodyOf(HttpResponse<?> response) {
+        final Object body = response.body();
+        if (body instanceof String s) return s;
+        if (body instanceof Path file) {
+            try {
+                final byte[] head = Files.readAllBytes(file);
+                final int take = Math.min(head.length, 1024);
+                return new String(head, 0, take, java.nio.charset.StandardCharsets.UTF_8);
+            }
+            catch (IOException e) {
+                return "";
+            }
+        }
+        return "";
     }
 
     /**

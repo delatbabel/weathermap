@@ -140,13 +140,28 @@ public final class InstagramClient {
         }
     }
 
+    /**
+     * POSTs to the API and returns the response body, error or not.
+     *
+     * <p>A rejection from Meta arrives as HTTP 400 carrying a JSON body that
+     * names the cause. That body is the diagnosis, so it is handed on to
+     * {@link #idFrom} to be read like any other response rather than being lost
+     * behind the status code - which is what used to happen, leaving every
+     * distinct mistake looking like the same bare "HTTP 400".</p>
+     */
     private String post(String path, String body) throws IOException, InterruptedException {
         final String withToken = body.isEmpty()
                 ? "access_token=" + Http.encode(account.accessToken())
                 : body + "&access_token=" + Http.encode(account.accessToken());
         // The token goes in the body, never the query string, so it stays out of
         // the server's access log.
-        return Http.postForm(URI.create(base + path), withToken);
+        try {
+            return Http.postForm(URI.create(base + path), withToken);
+        }
+        catch (Http.HttpStatusException e) {
+            if (field(e.body(), "message") != null) return e.body();
+            throw e;
+        }
     }
 
     /**
@@ -161,8 +176,25 @@ public final class InstagramClient {
         if (id != null) return id;
 
         final String message = field(json, "message");
-        throw new IOException(step + " failed: "
-                + (message != null ? message : json));
+        final String detail = field(json, "error_user_msg");
+        final String type = field(json, "type");
+
+        final StringBuilder said = new StringBuilder(step).append(" failed");
+        if (message == null) {
+            said.append(": ").append(json);
+        }
+        else {
+            said.append(": ").append(message);
+            if (detail != null && !detail.equals(message)) said.append(" - ").append(detail);
+            // OAuthException on a request that named the right account almost
+            // always means the token was issued down the other login path.
+            if ("OAuthException".equals(type)) {
+                said.append(" (an OAuth error here usually means the token and the "
+                        + "\"Token from\" setting disagree - a token issued by one of "
+                        + "Meta's two login paths is refused by the other's host)");
+            }
+        }
+        throw new IOException(said.toString());
     }
 
     /** A string or number field from a flat JSON object. */

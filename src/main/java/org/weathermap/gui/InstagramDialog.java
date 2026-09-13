@@ -75,6 +75,7 @@ public final class InstagramDialog extends JDialog {
             publishDir.setText(existing.publishDir() == null ? "" : existing.publishDir().toString());
             publicUrl.setText(existing.publicBaseUrl());
             syncCommand.setText(existing.syncCommand());
+            caption.setText(existing.caption());
         }
 
         setContentPane(buildContent(available));
@@ -104,13 +105,16 @@ public final class InstagramDialog extends JDialog {
                   "Instagram fetches every image; nothing local can be posted.");
         row = add(fields, c, row, "Sync command", syncCommand,
                   "Optional. Run after writing, before posting — e.g. "
-                  + "rclone sync . r2:charts. Leave empty if the folder is served directly.");
+                  + "rclone sync . r2:charts. Leave empty if the folder is served directly "
+                  + "— an rclone mount needs nothing here.");
         row = add(fields, c, row, "Charts to post", chartCount,
                   "The chart on screen, then the next in the series. "
                   + available + " available from here.");
 
         c.gridx = 0; c.gridy = row; c.anchor = GridBagConstraints.NORTHWEST;
-        fields.add(new JLabel("Caption"), c);
+        final JLabel captionLabel = new JLabel("Caption");
+        captionLabel.setToolTipText("Kept between posts: tomorrow's starts from today's.");
+        fields.add(captionLabel, c);
         c.gridx = 1;
         caption.setLineWrap(true);
         caption.setWrapStyleWord(true);
@@ -214,7 +218,7 @@ public final class InstagramDialog extends JDialog {
                 profile.getText(), userId.getText(),
                 new String(token.getPassword()),
                 dir.isEmpty() ? null : Path.of(dir), publicUrl.getText(),
-                syncCommand.getText());
+                syncCommand.getText(), caption.getText());
     }
 
     private int add(JPanel panel, GridBagConstraints c, int row,
