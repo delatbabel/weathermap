@@ -167,12 +167,19 @@ ordinary WebDAV mount unit with two changes that object storage requires:
   in a listing almost at once.
 
 **A file written to the mount is not in the bucket yet.** With
-`--vfs-cache-mode writes` rclone queues the upload about five seconds after the
-file is closed, so it is readable through the mount immediately and returns 404
-from the public URL for several seconds longer. Nothing is wrong; the write has
-simply not left the machine. This is what `PublishGate.awaitReachable()` is
+`--vfs-cache-mode writes` rclone queues the upload rather than starting it when
+the file is closed, so the file reads back through the mount immediately and the
+public URL returns 404 for several seconds longer. Nothing is wrong; the write
+has simply not left the machine. This is what `PublishGate.awaitReachable()` is
 for — it polls every image URL before the post is submitted, because Instagram
 fetches the images itself and a 404 at that moment fails the whole carousel.
+
+The wait is `--vfs-write-back`, five seconds by default, and it is **per file
+and fixed** — not a bandwidth limit. Writing a carousel's worth of charts that
+way takes long enough to look like a slow mount while the transfers themselves
+take milliseconds. The unit sets `1s`, which is the right trade here: the files
+are small and nothing else writes to this bucket, so there is no batching worth
+preserving.
 
 ### Put mount flags on the command line, not in `rclone.conf`
 

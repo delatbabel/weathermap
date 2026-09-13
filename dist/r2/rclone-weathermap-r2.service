@@ -23,6 +23,16 @@
 #     Charts are hundreds of kilobytes. A large read-ahead buffer is for large
 #     sequential files and only costs memory here.
 #
+# --vfs-write-back 1s
+#     The default is five seconds, and it is a fixed wait per file rather than a
+#     throughput limit - a closed file simply sits in the queue before the
+#     upload starts. Writing eight charts that way looks like a slow mount and
+#     is nothing of the sort. Nothing else writes to this bucket and the files
+#     are small, so there is no batching to preserve.
+#
+# --transfers 4
+#     One carousel is up to ten images, all independent.
+#
 # TWO BACKEND OPTIONS THIS MOUNT DEPENDS ON, both set in rclone.conf because
 # they are backend options rather than mount flags:
 #
@@ -66,7 +76,8 @@ ExecStart=/usr/bin/rclone mount weathermap-r2:weathermap-charts /home/del/weathe
     --vfs-cache-max-age 24h \
     --dir-cache-time 10s \
     --buffer-size 16M \
-    --transfers 2 \
+    --vfs-write-back 1s \
+    --transfers 4 \
     --checkers 4 \
     --umask 002 \
     --uid 1000 \
