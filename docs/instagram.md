@@ -100,17 +100,27 @@ development that means the account needs the tester role — even when it is you
 own account and your own app. The dashboard says so beside *Generate access
 tokens*, and it is easy to read past.
 
-  - App Dashboard → left sidebar → **App roles → Roles** → **Add people**.
-  - In the dialog, scroll to **Additional roles** and tick **Instagram Tester**.
-  - Type the Instagram username, **Add**. The account appears as **Pending**.
-  - Now accept it *from Instagram*, as the account: Instagram app → **Settings
-    and privacy → Apps and websites → Tester invites → Accept**. On the web:
-    [instagram.com/accounts/manage_connections](https://www.instagram.com/accounts/manage_connections/).
+  - **Assign it** at
+    `https://developers.facebook.com/apps/<app-id>/roles/roles/` — go straight
+    to the URL. Meta has reorganised the App Dashboard sidebar more than once and
+    the entry is not always where a guide says it is; the URL has been stable.
+  - **Add people** → in the dialog scroll to **Additional roles** → tick
+    **Instagram Tester** → type the Instagram username → **Add**. The account
+    appears as **Pending**.
+  - **Accept it from Instagram**, signed in as that account:
+    [instagram.com/accounts/manage_access](https://www.instagram.com/accounts/manage_access/)
+    → the **Tester Invites** tab → **Accept**. In the app the same page is under
+    **Website permissions → Apps and websites → Tester invitations** — note
+    *Website permissions*, not directly under Settings.
   - Back in the dashboard the status becomes **Active**.
 
   You are inviting yourself, so both halves are yours to do — but the
   acceptance is the half that gets forgotten, because nothing in the dashboard
   prompts for it and the token button simply stays unhelpful until it is done.
+
+  > Both of these were wrong in an earlier draft of this page, written from the
+  > API reference rather than from the screens. Where this guide names a URL, it
+  > is because the URL outlived the menu path.
 
 **6. Add the account and generate the token.** Back in *API setup with Instagram
 login*, step 2 — **Add account**, then **Generate token** beside it. Log in and
