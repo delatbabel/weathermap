@@ -5,8 +5,9 @@ data. A desktop application to choose the area and the data, and a command-line
 tool that repeats the last choice — or a saved profile — against the newest
 model run.
 
-**This is an outline.** The pipeline runs end to end against the live services,
-but several pieces are deliberately sketched rather than finished.
+**This is an outline.** The pipeline runs end to end against the live services —
+including publishing a carousel to Instagram from charts served out of Cloudflare
+R2 — but several pieces are deliberately sketched rather than finished.
 [What is not done yet](docs/not-done-yet.md) is the honest list.
 
 ![The chart pipeline, from a chosen area to a composited PNG](docs/architecture/svg/pipeline.svg)
@@ -33,7 +34,7 @@ The same pages are in the application: **Help → User's Guide** (F1) and
 |---|---|
 | [Basic usage](docs/basic-usage.md) | Choosing an area, choosing data, reading the chart, stepping a series |
 | [Hosting the images](docs/image-hosting.md) | Cloudflare R2 and an rclone mount, so writing a chart publishes it |
-| [Posting to Instagram](docs/instagram.md) | What Meta's API needs, how to get a token, and why there is no password |
+| [Posting to Instagram](docs/instagram.md) | What Meta's API needs, how to get a token, why there is no password, and why a container has to be waited for |
 | [Packaging](docs/packaging.md) | Installable packages for Linux, Windows and macOS; the version scheme |
 | [Build and run](docs/build-and-run.md) | Building, the two front ends, the CLI options, the optional NetCDF-Java profile |
 | [How it works](docs/how-it-works.md) | The rectangle, the vector base map, the bundled gazetteer, persistence, caching |

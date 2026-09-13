@@ -94,8 +94,9 @@ the same format — see [Series, profiles and chart times](series-and-profiles.m
 
 `instagram.properties` is kept separate from all of them, because it holds a
 bearer token rather than a preference: the file is made owner-readable where the
-filesystem allows, and the token is never logged or put in an error message. See
-[Posting to Instagram](instagram.md).
+filesystem allows, and the token is never logged or put in an error message. It
+also keeps the last caption, so a daily post starts from the previous day's text
+rather than an empty box. See [Posting to Instagram](instagram.md).
 
 **A trap worth knowing about.** The window runs on *copies* of the selection and
 the render settings while the command-line tool does not, so anything

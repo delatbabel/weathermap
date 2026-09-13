@@ -46,8 +46,21 @@ that repeats a stored selection or a named profile.
   after it as a carousel, default four, in chronological order. Credentials are
   an account ID and an access token — Instagram has no supported password
   posting — and the images are written to a folder you serve publicly, because
-  Meta's API fetches every image rather than accepting an upload. See
-  [docs/instagram.md](docs/instagram.md).
+  Meta's API fetches every image rather than accepting an upload. Proven against
+  Meta's servers with a real account. See [docs/instagram.md](docs/instagram.md).
+- Both of Meta's login paths are supported, and the API host follows the token
+  rather than being fixed: a token from one is refused by the other, and the
+  refusal reads like a bad token instead of a wrong address.
+- A container is polled until Meta reports it `FINISHED` before the carousel is
+  published. An ID returned is not an image fetched, and publishing early is
+  refused with "Media ID is not available" — in the account's own language.
+- The caption is kept with the account, so a daily post starts from the previous
+  day's text. Saved before the post is attempted, so a failure does not take it.
+- A finished post says so in a dialog, with a link to it. Posting takes minutes,
+  and a line in the status bar is not where anyone is looking by then.
+- [Hosting the images](docs/image-hosting.md) sets up Cloudflare R2 behind an
+  rclone mount, so writing a chart publishes it, with the R2 quirks that break
+  a working configuration written down.
 
 **Licensing**
 

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="632" viewBox="0 0 1020 632" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+<svg xmlns="http://www.w3.org/2000/svg" width="1020" height="782" viewBox="0 0 1020 782" role="img" lang="en" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
         <title id="archify-diagram-title">Weather Map — C4 Level 1: System Context</title>
 <style>
 :root{
@@ -59,11 +59,13 @@ svg[data-chapter-handoff] [data-node-id][data-chapter-role="leave"] { opacity: 0
 .c-mask { fill: var(--mask); stroke: none; }
 .c-backend { fill: var(--backend-fill);    stroke: var(--backend-stroke); }
 .c-database { fill: var(--database-fill);   stroke: var(--database-stroke); }
+.c-cloud { fill: var(--cloud-fill);      stroke: var(--cloud-stroke); }
 .c-external { fill: var(--external-fill);   stroke: var(--external-stroke); }
 /* Text helpers */
     .t-primary { fill: var(--text); }
 .t-muted { fill: var(--text-muted); }
 .t-backend { fill: var(--backend-stroke); }
+.t-cloud { fill: var(--cloud-stroke); }
 .t-messagebus { fill: var(--messagebus-stroke); }
 /* Semantic Sigils are small authored role stamps, not icons from a brand
        pack and not viewer controls. Prefix selectors with svg so the canonical
@@ -81,6 +83,7 @@ svg .semantic-sigil > * { vector-effect: non-scaling-stroke; }
 svg .semantic-sigil .sigil-fill { fill: currentColor; stroke: none; }
 svg .s-backend { color: var(--backend-stroke); }
 svg .s-database { color: var(--database-stroke); }
+svg .s-cloud { color: var(--cloud-stroke); }
 svg .s-external { color: var(--external-stroke); }
 svg [data-detail-anchor] {
       transform-box: fill-box;
@@ -417,12 +420,14 @@ svg[data-animation="trace"] [data-animate="node"] {
 
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="navigator" data-edge-to="weathermap" data-edge-label="chooses area and fields" data-edge-key="0" data-edge-id="picks" data-composition-points="200,332;420,332" d="M 200 332 L 420 332" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="navigator" data-edge-to="weathermap" data-edge-label="chooses area and fields" data-edge-key="0" data-edge-id="picks" data-composition-points="200,329;420,329" d="M 200 329 L 420 329" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         <path data-edge-from="weathermap" data-edge-to="nomads" data-edge-label="HTTPS filter_gfs subsets" data-edge-key="1" data-edge-id="grib" data-composition-points="505,300;505,276;796,276;796,182;820,182" d="M 505 300 L 505 284 Q 505 276 513 276 L 788 276 Q 796 276 796 268 L 796 190 Q 796 182 804 182 L 820 182" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="weathermap" data-edge-to="overpass" data-edge-label="HTTPS Overpass QL" data-edge-key="2" data-edge-id="osm" data-composition-points="590,329;820,329" d="M 590 329 L 820 329" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="naturalearth" data-edge-to="weathermap" data-edge-label="names and world outline" data-edge-key="3" data-edge-id="bundle" data-composition-points="820,482;705,482;705,343;590,343" d="M 820 482 L 713 482 Q 705 482 705 474 L 705 351 Q 705 343 697 343 L 590 343" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="weathermap" data-edge-to="disk" data-edge-label="writes PNG, reads preferences" data-edge-key="4" data-edge-id="writes" data-composition-points="505,372;505,500" d="M 505 372 L 505 500" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="weathermap" data-edge-to="instagram" data-edge-label="posts a carousel" data-edge-key="5" data-edge-id="posts" data-composition-points="420,336;205,336;205,500" d="M 420 336 L 213 336 Q 205 336 205 344 L 205 500" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="weathermap" data-edge-to="disk" data-edge-label="writes PNG, reads preferences" data-edge-key="4" data-edge-id="writes" data-composition-points="505,372;505,650" d="M 505 372 L 505 650" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="weathermap" data-edge-to="instagram" data-edge-label="posts a carousel" data-edge-key="5" data-edge-id="posts" data-composition-points="420,343;205,343;205,500" d="M 420 343 L 213 343 Q 205 343 205 351 L 205 500" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="weathermap" data-edge-to="objectstore" data-edge-label="writes charts" data-edge-key="6" data-edge-id="writes-charts" data-composition-points="505,372;505,396;334,396;334,682;310,682" d="M 505 372 L 505 388 Q 505 396 497 396 L 342 396 Q 334 396 334 404 L 334 674 Q 334 682 326 682 L 310 682" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="instagram" data-edge-to="objectstore" data-edge-label="fetches every image" data-edge-key="7" data-edge-id="fetches" data-composition-points="205,564;205,588;231,588;231,626;215,626;215,650" d="M 205 564 L 205 580 Q 205 588 213 588 L 223 588 Q 231 588 231 596 L 231 618 Q 231 626 223 626 L 223 626 Q 215 626 215 634 L 215 650" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
         <g id="node-navigator" data-node-id="navigator" data-node-label="Navigator" tabindex="0" role="button" aria-label="Focus Navigator, reads the chart, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="reads the chart" data-node-context="Architecture component">
@@ -487,14 +492,14 @@ svg[data-animation="trace"] [data-animate="node"] {
 
         <g id="node-disk" data-node-id="disk" data-node-label="~/.weathermap" tabindex="0" role="button" aria-label="Focus ~/.weathermap, charts, cache, profiles, Architecture component" aria-pressed="false" data-node-kind="database" data-node-sublabel="charts, cache, profiles" data-node-context="Architecture component">
           <title>~/.weathermap · charts, cache, profiles · Architecture component</title>
-          <rect x="420" y="500" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="420" y="500" width="170" height="64" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(426 506) scale(0.6875)">
+          <rect x="420" y="650" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="420" y="650" width="170" height="64" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(426 656) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="505" y="530" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">~/.weathermap</text>
-        <text data-detail="context" x="505" y="546" class="t-muted" font-size="9" text-anchor="middle">charts, cache, profiles</text>
+          <text data-node-label="" data-detail-anchor="" x="505" y="680" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">~/.weathermap</text>
+        <text data-detail="context" x="505" y="696" class="t-muted" font-size="9" text-anchor="middle">charts, cache, profiles</text>
         </g>
 
         <g id="node-instagram" data-node-id="instagram" data-node-label="Instagram" tabindex="0" role="button" aria-label="Focus Instagram, Meta Content Publishing, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Meta Content Publishing" data-node-context="Architecture component">
@@ -509,10 +514,22 @@ svg[data-animation="trace"] [data-animate="node"] {
         <text data-detail="context" x="205" y="546" class="t-muted" font-size="9" text-anchor="middle">Meta Content Publishing</text>
         </g>
 
+        <g id="node-objectstore" data-node-id="objectstore" data-node-label="Object store" tabindex="0" role="button" aria-label="Focus Object store, Cloudflare R2 via rclone mount, Architecture component" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="Cloudflare R2 via rclone mount" data-node-tag="public URL Instagram can reach" data-node-context="Architecture component">
+          <title>Object store · Cloudflare R2 via rclone mount · Architecture component · public URL Instagram can reach</title>
+          <rect x="120" y="650" width="190" height="64" rx="6" class="c-mask"/>
+          <rect x="120" y="650" width="190" height="64" rx="6" class="c-cloud" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(126 656) scale(0.6875)">
+            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="215" y="680" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Object store</text>
+        <text data-detail="context" x="215" y="696" class="t-muted" font-size="9" text-anchor="middle">Cloudflare R2 via rclone mount</text>
+        <text data-detail="fine" x="215" y="706" class="t-cloud" font-size="7" text-anchor="middle">public URL Instagram can reach</text>
+        </g>
+
         <!-- Connection labels -->
         <g data-detail="context" data-edge-from="navigator" data-edge-to="weathermap" data-edge-label="chooses area and fields" data-edge-key="0" data-edge-id="picks">
-          <rect x="249.8" y="312" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="310" y="322" class="t-backend" font-size="8" text-anchor="middle">chooses area and fields</text>
+          <rect x="249.8" y="309" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
+          <text x="310" y="319" class="t-backend" font-size="8" text-anchor="middle">chooses area and fields</text>
         </g>
         <g data-detail="context" data-edge-from="weathermap" data-edge-to="nomads" data-edge-label="HTTPS filter_gfs subsets" data-edge-key="1" data-edge-id="grib">
           <rect x="587.9" y="256" width="125.19999999999999" height="14" rx="3" class="c-mask"/>
@@ -531,8 +548,16 @@ svg[data-animation="trace"] [data-animate="node"] {
           <text x="505" y="436" class="t-muted" font-size="8" text-anchor="middle">writes PNG, reads preferences</text>
         </g>
         <g data-detail="context" data-edge-from="weathermap" data-edge-to="instagram" data-edge-label="posts a carousel" data-edge-key="5" data-edge-id="posts">
-          <rect x="206.6" y="440" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="250" y="450" class="t-messagebus" font-size="8" text-anchor="middle">posts a carousel</text>
+          <rect x="161.6" y="401.5" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="205" y="411.5" class="t-messagebus" font-size="8" text-anchor="middle">posts a carousel</text>
+        </g>
+        <g data-detail="context" data-edge-from="weathermap" data-edge-to="objectstore" data-edge-label="writes charts" data-edge-key="6" data-edge-id="writes-charts">
+          <rect x="383.3" y="376" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="419.5" y="386" class="t-muted" font-size="8" text-anchor="middle">writes charts</text>
+        </g>
+        <g data-detail="context" data-edge-from="instagram" data-edge-to="objectstore" data-edge-label="fetches every image" data-edge-key="7" data-edge-id="fetches">
+          <rect x="167.4" y="568" width="101.2" height="14" rx="3" class="c-mask"/>
+          <text x="218" y="578" class="t-messagebus" font-size="8" text-anchor="middle">fetches every image</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
@@ -540,18 +565,22 @@ svg[data-animation="trace"] [data-animate="node"] {
 
         <!-- Legend -->
         <g data-legend="" data-legend-bridge="">
-          <text x="40" y="596" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="40" data-legend-baseline="616" data-legend-width="78">
-            <rect x="40" y="607" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="62" y="616" class="t-muted" font-size="10" font-weight="500">Backend</text>
+          <text x="40" y="746" class="t-primary" font-size="12" font-weight="650">Legend</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Backend" data-legend-x="40" data-legend-baseline="766" data-legend-width="78">
+            <rect x="40" y="757" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="62" y="766" class="t-muted" font-size="10" font-weight="500">Backend</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="140" data-legend-baseline="616" data-legend-width="83">
-            <rect x="140" y="607" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="162" y="616" class="t-muted" font-size="10" font-weight="500">Database</text>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="Database" data-legend-x="140" data-legend-baseline="766" data-legend-width="83">
+            <rect x="140" y="757" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="162" y="766" class="t-muted" font-size="10" font-weight="500">Database</text>
           </g>
-          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External" data-legend-x="245" data-legend-baseline="616" data-legend-width="83">
-            <rect x="245" y="607" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="267" y="616" class="t-muted" font-size="10" font-weight="500">External</text>
+          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Cloud" data-legend-x="245" data-legend-baseline="766" data-legend-width="68">
+            <rect x="245" y="757" width="16" height="10" rx="2.5" class="c-cloud" stroke-width="1"/>
+            <text x="267" y="766" class="t-muted" font-size="10" font-weight="500">Cloud</text>
+          </g>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External" data-legend-x="335" data-legend-baseline="766" data-legend-width="83">
+            <rect x="335" y="757" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="357" y="766" class="t-muted" font-size="10" font-weight="500">External</text>
           </g>
         </g>
       </svg>

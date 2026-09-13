@@ -114,4 +114,36 @@ class MarkdownTest {
             assertTrue(out.length() > 200, resource + " rendered suspiciously short");
         }
     }
+
+    /**
+     * Every page in docs/ is reachable from the Help menu.
+     *
+     * <p>The README says the documentation is the same in the repository and in
+     * the application, and a page that exists in one and not the other quietly
+     * makes that false. {@code packaging.md} had been bundled into the jar and
+     * shown nowhere since the Help window was written.</p>
+     */
+    @Test
+    void everyDocumentIsReachableFromTheHelpMenu() throws Exception {
+        final java.nio.file.Path docs = java.nio.file.Path.of("docs");
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+                java.nio.file.Files.isDirectory(docs), "runs from the source tree only");
+
+        final java.util.Set<String> shown = new java.util.HashSet<>();
+        for (HelpWindow.Page page : HelpWindow.USER_GUIDE) shown.add(page.resource());
+        for (HelpWindow.Page page : HelpWindow.DEVELOPER_GUIDE) shown.add(page.resource());
+
+        final java.util.List<String> missing = new java.util.ArrayList<>();
+        try (var files = java.nio.file.Files.list(docs)) {
+            for (java.nio.file.Path file : files.toList()) {
+                final String name = file.getFileName().toString();
+                if (!name.endsWith(".md")) continue;
+                if (!shown.contains("/help/" + name)) missing.add(name);
+            }
+        }
+        assertTrue(missing.isEmpty(),
+                "documents with no Help tab: " + missing
+                + " - add a Page to HelpWindow, or the README's claim that the same "
+                + "pages are in the application is not true");
+    }
 }

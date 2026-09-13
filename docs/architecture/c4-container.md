@@ -13,7 +13,7 @@
 - Preferences carries the last area and selection
 - ProfileStore keeps named areas and selections
 - Cache holds GRIB runs indefinitely and OSM for four weeks
-- instagram.properties holds a bearer token, owner-readable only
+- instagram.properties holds a token and the last caption, owner-only
 
 **No third-party decoder**
 
@@ -23,7 +23,9 @@
 **Publishing**
 
 - Instagram fetches every image; nothing local can be posted
-- So charts are written to a folder served at a configured public URL
+- So charts go to a folder served at a configured public URL
+- PublishGate waits until every URL actually answers
+- Then each container is polled until Meta has fetched it
 
 ---
 

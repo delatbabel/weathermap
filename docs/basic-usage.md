@@ -93,7 +93,21 @@ The setup is not what you would expect, and it is worth reading
 has no password-based posting, so the credentials are an account ID and an
 access token, and the API fetches every image from a public URL rather than
 accepting an upload — so the application needs a folder it can write that you
-also serve over HTTP.
+also serve over HTTP. [Hosting the images](image-hosting.md) sets that up with
+Cloudflare R2, where writing a chart publishes it.
+
+**Check settings** proves the folder and the URL are the same place before
+anything is posted, which is the one part of the setup you cannot confirm by
+looking.
+
+**Expect it to take minutes.** Meta fetches every image in the carousel before
+it will publish, and that is most of the time; the status bar counts the seconds
+while it waits, and a dialog confirms the finished post with a link to it.
+
+The caption is kept with the account, so tomorrow's post opens with today's text
+ready to edit rather than empty — a daily chart's caption is usually the
+previous one with the date and a line changed. It is saved when you press
+**Post**, before the post is attempted, so a failure does not take it with it.
 
 ## Help without leaving the window
 

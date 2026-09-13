@@ -85,7 +85,7 @@
       "sublabel": "charts, cache, profiles",
       "pos": [
         420,
-        500
+        650
       ],
       "size": [
         170,
@@ -105,6 +105,21 @@
         170,
         64
       ]
+    },
+    {
+      "id": "objectstore",
+      "type": "cloud",
+      "label": "Object store",
+      "sublabel": "Cloudflare R2 via rclone mount",
+      "pos": [
+        120,
+        650
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "public URL Instagram can reach"
     }
   ],
   "connections": [
@@ -153,11 +168,24 @@
       "label": "posts a carousel",
       "variant": "dashed",
       "fromSide": "left",
-      "toSide": "top",
-      "labelAt": [
-        250,
-        450
-      ]
+      "toSide": "top"
+    },
+    {
+      "id": "writes-charts",
+      "from": "weathermap",
+      "to": "objectstore",
+      "label": "writes charts",
+      "fromSide": "bottom",
+      "toSide": "right"
+    },
+    {
+      "id": "fetches",
+      "from": "instagram",
+      "to": "objectstore",
+      "label": "fetches every image",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
     }
   ],
   "cards": [
@@ -176,7 +204,8 @@
         "NOMADS serves GRIB2 already cut to the area",
         "Overpass serves coastline, boundaries and place names",
         "Natural Earth ships in the jar and needs no network",
-        "Instagram fetches posted images from a public URL"
+        "Instagram fetches images; it never accepts an upload",
+        "So charts are written to an object store with a public URL"
       ]
     },
     {

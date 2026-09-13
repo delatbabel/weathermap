@@ -12,7 +12,8 @@
 - NOMADS serves GRIB2 already cut to the area
 - Overpass serves coastline, boundaries and place names
 - Natural Earth ships in the jar and needs no network
-- Instagram fetches posted images from a public URL
+- Instagram fetches images; it never accepts an upload
+- So charts are written to an object store with a public URL
 
 **Fail-soft boundaries**
 

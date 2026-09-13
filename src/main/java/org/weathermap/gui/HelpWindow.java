@@ -74,6 +74,7 @@ public final class HelpWindow extends JFrame {
             new Page("Operations", "/help/operations.md"),
             new Page("Architecture", "/help/architecture/README.md"),
             new Page("Diagrams", "/help/architecture/diagrams.md"),
+            new Page("Packaging", "/help/packaging.md"),
             new Page("Not Done Yet", "/help/not-done-yet.md"),
             new Page("License", "/help/LICENSE", true));
 
