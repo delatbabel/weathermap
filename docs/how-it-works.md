@@ -89,6 +89,17 @@ where the user cannot reach it.
 A maximised window is not saved as a size, or un-maximising would restore to
 full screen and the size actually chosen would be lost.
 
+Named profiles sit beside it, one file each under `~/.weathermap/profiles`, in
+the same format — see [Series, profiles and chart times](series-and-profiles.md).
+
+**A trap worth knowing about.** The window runs on *copies* of the selection and
+the render settings while the command-line tool does not, so anything
+`GribSelection.copy()` or `RenderSpec.copy()` forgets is a setting that
+demonstrably works from the terminal and silently does nothing in the window.
+That has happened twice — to the backward leg of a series, and to the chart time
+zone. `CopyCompletenessTest` now compares every declared field after a copy, so
+adding a field and forgetting to copy it fails a test rather than shipping.
+
 All of it fails soft: a missing or unreadable file yields defaults, and one bad
 value is dropped individually rather than discarding the file.
 

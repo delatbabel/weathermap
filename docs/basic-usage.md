@@ -83,6 +83,13 @@ image, ready to paste into a message.
 | *Area wider than 20°* | Too large for Overpass; the bundled world map is used instead. |
 | *… charts skipped* | Their model runs have aged out of NOMADS' ten-day archive. |
 
+## Help without leaving the window
+
+**Help → User's Guide** (F1) is this page and the ones beside it; **Help →
+Developer's Guide** is the rest of the documentation, including the architecture
+diagrams. Both are the same Markdown the repository holds, so neither can go
+stale against the other.
+
 ## The command line
 
 The same jar, with `--cli`, repeats your last selection — or a saved profile —
