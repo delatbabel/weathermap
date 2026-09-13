@@ -13,11 +13,17 @@
 - Preferences carries the last area and selection
 - ProfileStore keeps named areas and selections
 - Cache holds GRIB runs indefinitely and OSM for four weeks
+- instagram.properties holds a bearer token, owner-readable only
 
 **No third-party decoder**
 
 - NOMADS filter output is simple-packed, so Grib2Scanner reads it directly
 - NetCDF-Java stays an optional profile for everything else
+
+**Publishing**
+
+- Instagram fetches every image; nothing local can be posted
+- So charts are written to a folder served at a configured public URL
 
 ---
 

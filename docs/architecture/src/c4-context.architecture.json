@@ -91,6 +91,20 @@
         170,
         64
       ]
+    },
+    {
+      "id": "instagram",
+      "type": "external",
+      "label": "Instagram",
+      "sublabel": "Meta Content Publishing",
+      "pos": [
+        120,
+        500
+      ],
+      "size": [
+        170,
+        64
+      ]
     }
   ],
   "connections": [
@@ -131,6 +145,19 @@
         505,
         436
       ]
+    },
+    {
+      "id": "posts",
+      "from": "weathermap",
+      "to": "instagram",
+      "label": "posts a carousel",
+      "variant": "dashed",
+      "fromSide": "left",
+      "toSide": "top",
+      "labelAt": [
+        250,
+        450
+      ]
     }
   ],
   "cards": [
@@ -148,7 +175,8 @@
       "items": [
         "NOMADS serves GRIB2 already cut to the area",
         "Overpass serves coastline, boundaries and place names",
-        "Natural Earth ships in the jar and needs no network"
+        "Natural Earth ships in the jar and needs no network",
+        "Instagram fetches posted images from a public URL"
       ]
     },
     {

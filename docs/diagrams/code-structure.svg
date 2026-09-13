@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="560" viewBox="0 0 1000 560"
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="620" viewBox="0 0 1000 620"
      role="img" aria-labelledby="cs-title cs-desc">
   <title id="cs-title">Weather Map — package layout</title>
   <desc id="cs-desc">The packages of org.weathermap, what each holds, and which
@@ -52,25 +52,26 @@
     </marker>
   </defs>
 
-  <rect class="bg" x="0.5" y="0.5" width="999" height="559" rx="14"/>
+  <rect class="bg" x="0.5" y="0.5" width="999" height="619" rx="14"/>
 
   <text class="head" x="40" y="42">FRONT ENDS</text>
   <text class="head" x="404" y="42">THE JOB</text>
   <text class="head" x="700" y="42">SOURCES AND DRAWING</text>
 
   <!-- front ends -->
-  <rect class="box entry" x="40" y="60" width="230" height="74"/>
+  <rect class="box entry" x="40" y="60" width="230" height="92"/>
   <text class="pkg" x="58" y="88">gui/</text>
   <text class="what" x="58" y="108">MainWindow, MapPanel,</text>
-  <text class="what" x="58" y="124">AreaPanel, DataPanel, Themes</text>
+  <text class="what" x="58" y="124">AreaPanel, DataPanel, Themes,</text>
+  <text class="what" x="58" y="140">HelpWindow, Markdown, dialogs</text>
 
-  <rect class="box entry" x="40" y="164" width="230" height="58"/>
-  <text class="pkg" x="58" y="192">cli/</text>
-  <text class="what" x="58" y="210">WeatherMapCli</text>
+  <rect class="box entry" x="40" y="176" width="230" height="58"/>
+  <text class="pkg" x="58" y="204">cli/</text>
+  <text class="what" x="58" y="222">WeatherMapCli</text>
 
-  <rect class="box plain" x="40" y="252" width="230" height="58"/>
-  <text class="pkg" x="58" y="280">Main</text>
-  <text class="what" x="58" y="298">picks one or the other</text>
+  <rect class="box plain" x="40" y="258" width="230" height="58"/>
+  <text class="pkg" x="58" y="286">Main</text>
+  <text class="what" x="58" y="304">picks one or the other</text>
 
   <!-- the job -->
   <rect class="box core" x="404" y="126" width="216" height="88"/>
@@ -106,23 +107,30 @@
   <text class="pkg" x="718" y="390">util/</text>
   <text class="what" x="718" y="408">Http, Cache</text>
 
+  <rect class="box io" x="700" y="434" width="256" height="76"/>
+  <text class="pkg" x="718" y="462">instagram/</text>
+  <text class="what" x="718" y="482">InstagramClient, ChartPublisher</text>
+  <text class="note" x="718" y="502">posts a carousel of the series</text>
+
   <!-- edges -->
-  <path class="link-strong" d="M270 97 H337 V164 H396"/>
-  <path class="link-strong" d="M270 193 H337 V170 H396"/>
+  <path class="link-strong" d="M270 106 H337 V164 H396"/>
+  <path class="link-strong" d="M270 205 H337 V170 H396"/>
   <text class="elbl" x="290" y="140">both call it</text>
 
-  <path class="link-dash" d="M120 252 V228"/>
-  <path class="link-dash" d="M190 252 V140"/>
-  <text class="elbl" x="196" y="246">dispatches</text>
+  <path class="link-dash" d="M120 258 V240"/>
+  <path class="link-dash" d="M190 258 V152"/>
+  <text class="elbl" x="196" y="252">dispatches</text>
 
   <path class="link" d="M620 152 H660 V97 H692"/>
   <path class="link" d="M620 170 H668 V191 H692"/>
   <path class="link" d="M620 196 H676 V297 H692"/>
   <path class="link-dash" d="M512 300 V224" />
+  <path class="link" d="M270 120 H300 V472 H692"/>
+  <text class="elbl" x="306" y="466">the window posts</text>
   <text class="elbl" x="524" y="266">types shared by all</text>
 
-  <text class="note" x="40" y="470">Main dispatches to one front end; both call MapService and nothing else, which is</text>
-  <text class="note" x="40" y="490">why the image on screen and the image on disk cannot differ.</text>
-  <text class="note" x="40" y="516">render/ draws through model/'s MapProjection, so the layer stack is projection-agnostic.</text>
-  <text class="note" x="40" y="536">util/ is reached from osm/ and grib/ only — one place where HTTP and caching happen.</text>
+  <text class="note" x="40" y="540">Main dispatches to one front end; both call MapService and nothing else, which is</text>
+  <text class="note" x="40" y="560">why the image on screen and the image on disk cannot differ.</text>
+  <text class="note" x="40" y="584">render/ draws through model/'s MapProjection, so the layer stack is projection-agnostic.</text>
+  <text class="note" x="40" y="604">util/ is reached from osm/ and grib/ only — one place where HTTP and caching happen.</text>
 </svg>

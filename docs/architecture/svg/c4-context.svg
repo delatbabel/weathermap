@@ -422,6 +422,7 @@ svg[data-animation="trace"] [data-animate="node"] {
         <path data-edge-from="weathermap" data-edge-to="overpass" data-edge-label="HTTPS Overpass QL" data-edge-key="2" data-edge-id="osm" data-composition-points="590,329;820,329" d="M 590 329 L 820 329" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="naturalearth" data-edge-to="weathermap" data-edge-label="names and world outline" data-edge-key="3" data-edge-id="bundle" data-composition-points="820,482;705,482;705,343;590,343" d="M 820 482 L 713 482 Q 705 482 705 474 L 705 351 Q 705 343 697 343 L 590 343" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         <path data-edge-from="weathermap" data-edge-to="disk" data-edge-label="writes PNG, reads preferences" data-edge-key="4" data-edge-id="writes" data-composition-points="505,372;505,500" d="M 505 372 L 505 500" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="weathermap" data-edge-to="instagram" data-edge-label="posts a carousel" data-edge-key="5" data-edge-id="posts" data-composition-points="420,336;205,336;205,500" d="M 420 336 L 213 336 Q 205 336 205 344 L 205 500" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
         <g id="node-navigator" data-node-id="navigator" data-node-label="Navigator" tabindex="0" role="button" aria-label="Focus Navigator, reads the chart, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="reads the chart" data-node-context="Architecture component">
@@ -496,6 +497,18 @@ svg[data-animation="trace"] [data-animate="node"] {
         <text data-detail="context" x="505" y="546" class="t-muted" font-size="9" text-anchor="middle">charts, cache, profiles</text>
         </g>
 
+        <g id="node-instagram" data-node-id="instagram" data-node-label="Instagram" tabindex="0" role="button" aria-label="Focus Instagram, Meta Content Publishing, Architecture component" aria-pressed="false" data-node-kind="external" data-node-sublabel="Meta Content Publishing" data-node-context="Architecture component">
+          <title>Instagram · Meta Content Publishing · Architecture component</title>
+          <rect x="120" y="500" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="120" y="500" width="170" height="64" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(126 506) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="205" y="530" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Instagram</text>
+        <text data-detail="context" x="205" y="546" class="t-muted" font-size="9" text-anchor="middle">Meta Content Publishing</text>
+        </g>
+
         <!-- Connection labels -->
         <g data-detail="context" data-edge-from="navigator" data-edge-to="weathermap" data-edge-label="chooses area and fields" data-edge-key="0" data-edge-id="picks">
           <rect x="249.8" y="312" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
@@ -516,6 +529,10 @@ svg[data-animation="trace"] [data-animate="node"] {
         <g data-detail="context" data-edge-from="weathermap" data-edge-to="disk" data-edge-label="writes PNG, reads preferences" data-edge-key="4" data-edge-id="writes">
           <rect x="430.4" y="426" width="149.2" height="14" rx="3" class="c-mask"/>
           <text x="505" y="436" class="t-muted" font-size="8" text-anchor="middle">writes PNG, reads preferences</text>
+        </g>
+        <g data-detail="context" data-edge-from="weathermap" data-edge-to="instagram" data-edge-label="posts a carousel" data-edge-key="5" data-edge-id="posts">
+          <rect x="206.6" y="440" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="250" y="450" class="t-messagebus" font-size="8" text-anchor="middle">posts a carousel</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->

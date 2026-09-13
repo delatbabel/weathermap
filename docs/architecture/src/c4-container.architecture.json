@@ -140,6 +140,35 @@
         68
       ],
       "tag": "~/.weathermap"
+    },
+    {
+      "id": "instagram",
+      "type": "backend",
+      "label": "InstagramClient",
+      "sublabel": "carousel publishing",
+      "pos": [
+        360,
+        60
+      ],
+      "size": [
+        190,
+        68
+      ],
+      "tag": "instagram/"
+    },
+    {
+      "id": "meta",
+      "type": "external",
+      "label": "Meta Graph API",
+      "sublabel": "fetches images by URL",
+      "pos": [
+        690,
+        20
+      ],
+      "size": [
+        170,
+        68
+      ]
     }
   ],
   "connections": [
@@ -228,6 +257,20 @@
       "variant": "dashed",
       "fromSide": "right",
       "toSide": "left"
+    },
+    {
+      "id": "gui-post",
+      "from": "window",
+      "to": "instagram",
+      "label": "posts the series",
+      "fromSide": "top",
+      "toSide": "left"
+    },
+    {
+      "id": "post-meta",
+      "from": "instagram",
+      "to": "meta",
+      "label": "token + public image URLs"
     }
   ],
   "cards": [
@@ -246,7 +289,8 @@
       "items": [
         "Preferences carries the last area and selection",
         "ProfileStore keeps named areas and selections",
-        "Cache holds GRIB runs indefinitely and OSM for four weeks"
+        "Cache holds GRIB runs indefinitely and OSM for four weeks",
+        "instagram.properties holds a bearer token, owner-readable only"
       ]
     },
     {
@@ -255,6 +299,14 @@
       "items": [
         "NOMADS filter output is simple-packed, so Grib2Scanner reads it directly",
         "NetCDF-Java stays an optional profile for everything else"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Publishing",
+      "items": [
+        "Instagram fetches every image; nothing local can be posted",
+        "So charts are written to a folder served at a configured public URL"
       ]
     }
   ]

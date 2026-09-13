@@ -83,6 +83,18 @@ image, ready to paste into a message.
 | *Area wider than 20°* | Too large for Overpass; the bundled world map is used instead. |
 | *… charts skipped* | Their model runs have aged out of NOMADS' ten-day archive. |
 
+## Post a series to Instagram
+
+**Share → Post to Instagram…** publishes the chart on screen and the ones after
+it as a carousel — four by default, up to ten.
+
+The setup is not what you would expect, and it is worth reading
+[Posting to Instagram](instagram.md) once before the first attempt: Instagram
+has no password-based posting, so the credentials are an account ID and an
+access token, and the API fetches every image from a public URL rather than
+accepting an upload — so the application needs a folder it can write that you
+also serve over HTTP.
+
 ## Help without leaving the window
 
 **Help → User's Guide** (F1) is this page and the ones beside it; **Help →
