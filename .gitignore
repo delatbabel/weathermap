@@ -31,3 +31,4 @@ tmp/
 
 # Maven wrapper keeps its properties but not a downloaded distribution
 .mvn/wrapper/maven-wrapper.jar
+dist/r2/rclone-1.75.1*
