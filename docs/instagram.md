@@ -81,6 +81,9 @@ configuration turns one into the other.
 All of them need the object to be **publicly readable** and served as
 `image/jpeg`. Meta fetches anonymously; a signed or expiring URL will not do.
 
+See [Hosting the images](image-hosting.md) for a worked setup of the first
+row — Cloudflare R2 with an rclone mount.
+
 ### Getting the files there
 
 [**rclone**](https://rclone.org) is the piece that replaces Dropbox in this

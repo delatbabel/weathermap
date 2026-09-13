@@ -1,0 +1,65 @@
+# Mounts the Cloudflare R2 bucket that Instagram fetches chart images from.
+#
+# Modelled on the Nextcloud WebDAV mount this machine already runs, with the
+# tuning where rclone actually reads it.
+#
+# THE FLAGS GO HERE, NOT IN rclone.conf. A remote stanza in rclone.conf holds
+# *backend* options - for webdav that is url, vendor, user, pass. VFS and mount
+# settings such as vfs-cache-mode, buffer_size, transfers and checkers are
+# global flags, and rclone stores unrecognised keys in a stanza without
+# complaining: a deliberately invented option is accepted just as quietly. So a
+# tuning block written into the config file looks applied and is not.
+#
+# --vfs-cache-mode writes
+#     Not optional here. Without it rclone must know a file length before it can
+#     begin uploading, so an encoder that seeks back to write a header fails.
+#     With it the file is written locally and uploaded once closed.
+#
+# --dir-cache-time 10s
+#     Deliberately short, and the opposite of what a backup mount wants. Nothing
+#     else writes to this bucket, and a chart should appear in a listing at once.
+#
+# --buffer-size 16M
+#     Charts are hundreds of kilobytes. A large read-ahead buffer is for large
+#     sequential files and only costs memory here.
+#
+# Install:
+#   mkdir -p ~/weathermap-charts.saigonweather.online
+#   sudo cp dist/r2/rclone-weathermap-r2.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now rclone-weathermap-r2.service
+#
+[Unit]
+Description=RClone mount for the Weather Map chart bucket (Cloudflare R2)
+Documentation=man:rclone(1)
+After=network-online.target
+Wants=network-online.target
+AssertPathIsDirectory=/home/del/weathermap-charts.saigonweather.online
+
+[Service]
+Type=simple
+User=del
+Group=del
+ExecStart=/usr/bin/rclone mount weathermap-r2:weathermap-charts /home/del/weathermap-charts.saigonweather.online \
+    --config=/home/del/.config/rclone/rclone.conf \
+    --vfs-cache-mode writes \
+    --vfs-cache-max-age 24h \
+    --dir-cache-time 10s \
+    --buffer-size 16M \
+    --transfers 2 \
+    --checkers 4 \
+    --umask 002 \
+    --uid 1000 \
+    --gid 1000 \
+    --daemon-timeout 30s
+ExecStop=/bin/fusermount -u /home/del/weathermap-charts.saigonweather.online
+TimeoutStartSec=60
+TimeoutStopSec=20
+KillMode=process
+Restart=on-failure
+RestartSec=30
+StartLimitInterval=300
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target
