@@ -84,10 +84,10 @@ acl = private
 world-readable through the S3 API, they are served by the custom domain. Public
 access is a property of the domain binding, not of the object.
 
-Check it before going further:
+Check it before going further — **inside the bucket**, not at the account level:
 
 ```bash
-rclone lsd weathermap-r2:
+rclone lsd weathermap-r2:weathermap-charts
 rclone copy /etc/hostname weathermap-r2:weathermap-charts/
 curl -I https://charts.example.com/hostname
 rclone delete weathermap-r2:weathermap-charts/hostname
@@ -95,6 +95,21 @@ rclone delete weathermap-r2:weathermap-charts/hostname
 
 The `curl` should return `200`. If it returns 404 the domain is not connected
 yet; if it never resolves, DNS has not propagated.
+
+### Reading a 403 from R2
+
+`AccessDenied` means different things depending on which command produced it,
+and the distinction saves a lot of time:
+
+| Command | 403 means |
+|---|---|
+| `rclone lsd weathermap-r2:` | **Nothing is wrong.** Listing every bucket is an account-level operation, and a token scoped to one bucket cannot do it. Always list inside the bucket. |
+| `rclone lsd weathermap-r2:bucket` | The token is scoped to a different bucket, or the endpoint has the wrong account ID. |
+| `rclone copy ... weathermap-r2:bucket/` **after a successful list** | The token is **Object Read only**. Recreate it as **Object Read & Write**. |
+
+That middle-of-the-night one is the trap: a read-only token lists perfectly and
+fails only when something is written, which is long after the setup looked
+finished.
 
 ## 5. Mount it with systemd
 
