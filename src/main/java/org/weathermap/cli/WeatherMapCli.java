@@ -88,7 +88,8 @@ public final class WeatherMapCli {
                                     line breaks in it
               --count N             how many charts to post, 2 to 10 (default 4)
               --save                store the overrides as the new defaults
-              --dry-run             report what would be fetched, fetch nothing
+              --dry-run             report what would be fetched, fetch nothing.
+                                    --save still applies: settings are stored
               --quiet               print nothing to stdout - for cron. Everything
                                     goes to ~/.weathermap/weathermap.log instead,
                                     including the logging of every class that
@@ -240,6 +241,10 @@ public final class WeatherMapCli {
         }
 
         if (options.dryRun) {
+            // --save is still honoured: storing a setting is not fetching
+            // anything, and "--rename ... --save --dry-run" quietly doing
+            // nothing is a trap - it looks exactly like the run that works.
+            if (options.save) saveDefaults(prefs, area, selection, spec, log);
             log.say("dry run - nothing downloaded"
                     + (options.post ? ", nothing posted" : ""));
             return 0;
@@ -265,13 +270,7 @@ public final class WeatherMapCli {
                 final int status = post(results, account, caption, options, log);
                 if (status != 0) return status;
             }
-            if (options.save) {
-                prefs.setArea(area);
-                prefs.setSelection(selection);
-                prefs.setRenderSpec(spec);
-                prefs.save();
-                log.say("saved defaults to " + prefs.file());
-            }
+            if (options.save) saveDefaults(prefs, area, selection, spec, log);
             return 0;
         }
         catch (InterruptedException e) {
@@ -283,6 +282,15 @@ public final class WeatherMapCli {
             log.problem("weathermap: " + e.getMessage());
             return 1;
         }
+    }
+
+    private static void saveDefaults(Preferences prefs, BoundingBox area,
+                                     GribSelection selection, RenderSpec spec, RunLog log) {
+        prefs.setArea(area);
+        prefs.setSelection(selection);
+        prefs.setRenderSpec(spec);
+        prefs.save();
+        log.say("saved defaults to " + prefs.file());
     }
 
     /**
