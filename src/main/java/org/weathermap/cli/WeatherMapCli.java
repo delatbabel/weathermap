@@ -86,7 +86,13 @@ public final class WeatherMapCli {
               --count N             how many charts to post, 2 to 10 (default 4)
               --save                store the overrides as the new defaults
               --dry-run             report what would be fetched, fetch nothing
-              --quiet               only report errors
+              --quiet               print nothing to stdout - for cron. Everything
+                                    goes to ~/.weathermap/weathermap.log instead,
+                                    including the logging of every class that
+                                    does any. Failures still reach stderr, so a
+                                    broken job is still noticed
+              --log FILE            write the log here instead, and keep writing
+                                    it even when not quiet
               --help                this message
             """;
 
@@ -109,11 +115,19 @@ public final class WeatherMapCli {
             return 0;
         }
 
+        // Opened before anything is reported, and closed on every way out, so
+        // an unattended run leaves a record of itself whatever happened.
+        try (RunLog log = RunLog.open(options.quiet, options.logFile)) {
+            return run(options, log);
+        }
+    }
+
+    private static int run(Options options, RunLog log) {
         final ProfileStore profiles = new ProfileStore();
         if (options.listProfiles) {
             final List<String> names = profiles.names();
             if (names.isEmpty()) {
-                System.out.println("no saved profiles in " + profiles.directory());
+                log.say("no saved profiles in " + profiles.directory());
             }
             else {
                 names.forEach(System.out::println);
@@ -131,11 +145,11 @@ public final class WeatherMapCli {
         if (options.profile != null) {
             profile = profiles.load(options.profile).orElse(null);
             if (profile == null) {
-                System.err.println("weathermap: no profile called \"" + options.profile
+                log.problem("weathermap: no profile called \"" + options.profile
                         + "\" in " + profiles.directory());
                 final List<String> names = profiles.names();
                 if (!names.isEmpty()) {
-                    System.err.println("  saved profiles: " + String.join(", ", names));
+                    log.problem("  saved profiles: " + String.join(", ", names));
                 }
                 return 1;
             }
@@ -153,7 +167,7 @@ public final class WeatherMapCli {
         // tomorrow morning and not 48 hours from now with the front cut off.
         if (options.start != null) {
             if (!selection.hasSeries()) {
-                System.err.println("weathermap: --start needs a series; add --series STEP,AHEAD");
+                log.problem("weathermap: --start needs a series; add --series STEP,AHEAD");
                 return 2;
             }
             try {
@@ -163,12 +177,10 @@ public final class WeatherMapCli {
                 final int ahead = (int) java.time.Duration.between(from, begin).toHours();
                 selection.setSeries(selection.seriesStepHours(), -ahead,
                                     ahead + selection.seriesSpanHours());
-                if (!options.quiet) {
-                    System.out.println("start     " + begin + " (" + options.start + ")");
-                }
+                log.say("start     " + begin + " (" + options.start + ")");
             }
             catch (IllegalArgumentException e) {
-                System.err.println("weathermap: --start " + options.start + ": " + e.getMessage());
+                log.problem("weathermap: --start " + options.start + ": " + e.getMessage());
                 return 2;
             }
         }
@@ -180,7 +192,7 @@ public final class WeatherMapCli {
         org.weathermap.model.InstagramAccount account = null;
         String caption = null;
         if (options.post) {
-            final Object[] checked = prepareToPost(options, spec);
+            final Object[] checked = prepareToPost(options, spec, log);
             if (checked == null) return 2;
             account = (org.weathermap.model.InstagramAccount) checked[0];
             caption = (String) checked[1];
@@ -197,54 +209,50 @@ public final class WeatherMapCli {
         final List<org.weathermap.model.ChartRequest> requests =
                 selection.chartRequests(java.time.ZonedDateTime.now());
 
-        if (!options.quiet) {
-            if (profile != null) System.out.println("profile   " + profile.name());
-            System.out.println("area      " + area);
-            System.out.println("selection " + selection);
-            if (selection.hasSeries()) {
-                System.out.println("series    " + describeSeries(requests));
-            }
-            if (!added.isEmpty()) {
-                final List<String> names = new ArrayList<>();
-                for (GribLevel level : added) names.add(level.displayName());
-                System.out.println("added     " + String.join(", ", names)
-                        + " - the selected variables are not published at the "
-                        + "levels that were stored");
-            }
-            System.out.println("output    " + outputDir);
-            if (options.post) {
-                System.out.println("instagram " + account + ", " + options.postCount + " charts");
-                // Already expanded, so this is the text that will be published.
-                System.out.println("caption   " + caption.strip().replace("\n", " / "));
-            }
+        if (profile != null) log.say("profile   " + profile.name());
+        log.say("area      " + area);
+        log.say("selection " + selection);
+        if (selection.hasSeries()) {
+            log.say("series    " + describeSeries(requests));
+        }
+        if (!added.isEmpty()) {
+            final List<String> names = new ArrayList<>();
+            for (GribLevel level : added) names.add(level.displayName());
+            log.say("added     " + String.join(", ", names)
+                    + " - the selected variables are not published at the "
+                    + "levels that were stored");
+        }
+        log.say("output    " + outputDir);
+        if (options.post) {
+            log.say("instagram " + account + ", " + options.postCount + " charts");
+            // Already expanded, so this is the text that will be published.
+            log.say("caption   " + caption.strip().replace("\n", " / "));
         }
 
         if (options.dryRun) {
-            System.out.println("dry run - nothing downloaded"
+            log.say("dry run - nothing downloaded"
                     + (options.post ? ", nothing posted" : ""));
             return 0;
         }
 
         final MapService service = new MapService();
-        if (!options.quiet) {
-            System.out.println("decoder   " + service.reader().description());
-        }
+        log.say("decoder   " + service.reader().description());
 
         try {
             final List<MapService.Result> results = service.run(
                     area, selection, spec, outputDir,
-                    options.quiet ? MapService.Progress.SILENT : System.out::println);
+                    log::say);
 
             if (results.isEmpty()) {
-                System.err.println("weathermap: nothing was rendered - "
+                log.problem("weathermap: nothing was rendered - "
                         + "the request matched no GRIB records");
                 return 1;
             }
             for (MapService.Result r : results) {
-                System.out.println(r.pngFile());
+                log.say(r.pngFile().toString());
             }
             if (options.post) {
-                final int status = post(results, account, caption, options);
+                final int status = post(results, account, caption, options, log);
                 if (status != 0) return status;
             }
             if (options.save) {
@@ -252,17 +260,17 @@ public final class WeatherMapCli {
                 prefs.setSelection(selection);
                 prefs.setRenderSpec(spec);
                 prefs.save();
-                if (!options.quiet) System.out.println("saved defaults to " + prefs.file());
+                log.say("saved defaults to " + prefs.file());
             }
             return 0;
         }
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.err.println("weathermap: interrupted");
+            log.problem("weathermap: interrupted");
             return 130;
         }
         catch (Exception e) {
-            System.err.println("weathermap: " + e.getMessage());
+            log.problem("weathermap: " + e.getMessage());
             return 1;
         }
     }
@@ -278,21 +286,21 @@ public final class WeatherMapCli {
      * @return {account, caption}, or null when something is wrong, having said
      *         what on stderr
      */
-    private static Object[] prepareToPost(Options options, RenderSpec spec) {
+    private static Object[] prepareToPost(Options options, RenderSpec spec, RunLog log) {
         final java.nio.file.Path file = org.weathermap.model.InstagramAccount.defaultFile();
         final org.weathermap.model.InstagramAccount account =
                 org.weathermap.model.InstagramAccount.load(file).orElse(null);
 
         if (account == null) {
-            System.err.println("weathermap: no Instagram account in " + file);
-            System.err.println("  Set one up in the desktop application: "
+            log.problem("weathermap: no Instagram account in " + file);
+            log.problem("  Set one up in the desktop application: "
                     + "Share -> Post to Instagram..., then Check settings.");
             return null;
         }
         if (!account.isComplete()) {
-            System.err.println("weathermap: the stored Instagram account is incomplete: "
+            log.problem("weathermap: the stored Instagram account is incomplete: "
                     + account);
-            System.err.println("  It needs an account ID, a token, a publish folder and "
+            log.problem("  It needs an account ID, a token, a publish folder and "
                     + "that folder's public URL.");
             return null;
         }
@@ -303,7 +311,7 @@ public final class WeatherMapCli {
                 caption = java.nio.file.Files.readString(options.captionFile);
             }
             catch (java.io.IOException e) {
-                System.err.println("weathermap: could not read " + options.captionFile
+                log.problem("weathermap: could not read " + options.captionFile
                         + ": " + e.getMessage());
                 return null;
             }
@@ -316,15 +324,15 @@ public final class WeatherMapCli {
         final var broken = org.weathermap.text.CaptionTemplate.problems(
                 caption, now, java.util.Locale.getDefault());
         if (!broken.isEmpty()) {
-            System.err.println("weathermap: the caption has a parameter that cannot "
+            log.problem("weathermap: the caption has a parameter that cannot "
                     + "be worked out:");
-            for (var problem : broken) System.err.println("  " + problem);
+            for (var problem : broken) log.problem("  " + problem);
             return null;
         }
 
         if (options.postCount < 2
                 || options.postCount > org.weathermap.instagram.InstagramClient.MAX_CAROUSEL) {
-            System.err.println("weathermap: --count must be 2 to "
+            log.problem("weathermap: --count must be 2 to "
                     + org.weathermap.instagram.InstagramClient.MAX_CAROUSEL
                     + ", not " + options.postCount);
             return null;
@@ -343,15 +351,14 @@ public final class WeatherMapCli {
      */
     private static int post(List<MapService.Result> results,
                             org.weathermap.model.InstagramAccount account,
-                            String caption, Options options) {
-        final java.util.function.Consumer<String> say =
-                options.quiet ? m -> { } : System.out::println;
+                            String caption, Options options, RunLog log) {
+        final java.util.function.Consumer<String> say = log.sink();
         try {
             final List<MapService.Result> charts =
                     org.weathermap.instagram.ChartPublisher.selectFrom(
                             results, 0, options.postCount);
             if (charts.size() < 2) {
-                System.err.println("weathermap: a carousel needs at least two charts, and "
+                log.problem("weathermap: a carousel needs at least two charts, and "
                         + "only " + charts.size() + " was rendered - ask for a series");
                 return 1;
             }
@@ -364,17 +371,17 @@ public final class WeatherMapCli {
 
             final var client = new org.weathermap.instagram.InstagramClient(account);
             final String mediaId = client.postCarousel(images, caption, say);
-            System.out.println("posted    " + mediaId);
-            client.permalink(mediaId).ifPresent(link -> System.out.println("post      " + link));
+            log.say("posted    " + mediaId);
+            client.permalink(mediaId).ifPresent(link -> log.say("post      " + link));
             return 0;
         }
         catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            System.err.println("weathermap: interrupted while posting");
+            log.problem("weathermap: interrupted while posting");
             return 130;
         }
         catch (Exception e) {
-            System.err.println("weathermap: the post failed: " + e.getMessage());
+            log.problem("weathermap: the post failed: " + e.getMessage());
             return 1;
         }
     }
@@ -465,6 +472,7 @@ public final class WeatherMapCli {
         int seriesSpan = org.weathermap.model.GribSelection.DEFAULT_SERIES_SPAN_HOURS;
         boolean save;
         boolean post;
+        Path logFile;
         String caption;
         Path captionFile;
         int postCount = 4;
@@ -520,6 +528,7 @@ public final class WeatherMapCli {
                     case "--start" -> o.start = next(args, ++i, a);
                     case "--dry-run" -> o.dryRun = true;
                     case "--quiet", "-q" -> o.quiet = true;
+                    case "--log" -> o.logFile = Path.of(next(args, ++i, a));
                     case "--area" -> o.area = parseArea(next(args, ++i, a));
                     case "--model" -> {
                         final String id = next(args, ++i, a);

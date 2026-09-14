@@ -104,6 +104,26 @@ say why near the cause rather than at the end.
                  --profile "BoB to East Sea" --post --quiet
 ```
 
+`--quiet` prints **nothing** to stdout. It does not trim the output — it sends
+the same lines to `~/.weathermap/weathermap.log` instead, along with the
+logging of every class that does any, which otherwise goes to stderr and would
+have cron mailing you a retry warning. `--log FILE` puts it somewhere else, and
+turns the log on for an ordinary run too. The live file is always exactly the
+path named; when it passes a megabyte the previous one is kept alongside it as
+`weathermap.log.1`.
+
+```
+2026-09-14 23:17:10  profile   BoB to East Sea
+2026-09-14 23:17:10  series    12 charts, 2026-09-14T18:00:00Z to 2026-09-17T12:00:00Z
+2026-09-14 23:17:10  caption   Weather charts for tomorrow, Tuesday 15 September 2026
+2026-09-14 23:17:10  posted    17895695668004550
+```
+
+> **Failures still reach stderr**, on purpose, and that is the one thing quiet
+> does not swallow — cron mails stderr, which is how anyone finds out a nightly
+> job stopped working. The same lines are in the log either way, so redirect it
+> if you would rather have nothing at all.
+
 Series times sit on a grid of whole steps **in UTC**, not on the local clock, so
 which local times the charts fall on depends on the offset from UTC. At UTC+7
 with a six-hourly series they are 01:00, 07:00, 13:00 and 19:00 local; the first

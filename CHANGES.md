@@ -43,6 +43,10 @@ that repeats a stored selection or a named profile.
   `--caption-file` and `--count` to override. Everything it can check it checks
   before downloading anything, so a scheduled run that cannot succeed fails at
   the start rather than after the work.
+- `--quiet` prints nothing at all, rather than nearly nothing: the same lines go
+  to `~/.weathermap/weathermap.log` instead, along with the framework logging
+  that used to reach stderr regardless. Failures still reach stderr, so a
+  scheduled job that stops working is still noticed.
 - `--start WHEN` begins a series at a named moment — `'tomorrow 06:00'`, the
   same expressions a caption parameter takes — rather than at now, which is what
   a chart posted in the evening about tomorrow needs.
