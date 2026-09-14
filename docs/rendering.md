@@ -37,10 +37,45 @@ because the right answer differs (`render/FieldStyle`):
 | Field | Treatment | Opacity |
 |---|---|---|
 | Temperature, dew point | Desaturated and lightened — a pale wash to read past | 0.32 |
-| Precipitation | Darkened and saturated — weight on the map | 0.62 |
+| Precipitation | Drawn as authored — the ramp carries its own weight | 0.78 |
 | Cloud, humidity | A grey veil | 0.38 |
 
 `RenderSpec.gribOpacity` (`--opacity`) scales all of them at once.
+
+### The precipitation ramp
+
+White where nothing is falling, then **yellow → green → blue → indigo →
+purple** as it gets heavier, with brightness falling the whole way — 1.00 at the
+first wet stop to 0.41 at the last — and the lightest rain also the least
+saturated.
+
+| mm | colour | brightness | saturation |
+|---|---|---|---|
+| 0 | transparent | — | — |
+| 0.2 | pale yellow | 1.00 | 0.31 |
+| 1 | gold | 0.99 | 0.71 |
+| 4 | green | 0.77 | 0.63 |
+| 12 | blue | 0.71 | 0.86 |
+| 30 | indigo | 0.52 | 0.71 |
+| 75 | purple | 0.41 | 0.90 |
+
+The stops are weighted toward the low end because 0.5, 2 and 10 mm are what
+anyone reading a forecast cares about; a linear ramp to 75 renders all of them
+at the same colour.
+
+**The lightness matters more than the hue.** The previous ramp ran green → teal
+→ blue → purple with every colour between 0.40 and 0.66 brightness. It had a hue
+progression and almost no lightness one, so it read as a single dark stain that
+changed shade slightly — drizzle and a downpour separated only by the attribute
+the eye judges worst, while the one it judges best carried nothing. The
+gradient now means the map survives a greyscale print and a colour-blind reader,
+neither of which is true of hue alone.
+
+This ramp is the one field drawn **exactly as authored**. The others are toned
+on the way to the map — temperature washed out, cloud greyed — and precipitation
+used to have a uniform brightness scale applied too, which is precisely what
+flattens a lightness gradient. Tests assert the ordering and that nothing
+re-tones it.
 
 ## Wind barbs
 

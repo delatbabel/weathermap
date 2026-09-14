@@ -41,9 +41,13 @@ public record FieldStyle(ColourRamp ramp, float opacity) {
             // past, while keeping the cold-to-warm hue order.
             case "TMP", "DPT" -> new FieldStyle(ramp.muted(0.40f, 0.45f, 1f), 0.32f);
 
-            // Weight on the map. Darker and more opaque than temperature, but
-            // still transparent where nothing is falling.
-            case "APCP" -> new FieldStyle(ramp.darkened(0.85f, 1.15f, 1f), 0.62f);
+            // Weight on the map, and drawn exactly as authored. The ramp runs
+            // pale yellow to dark purple and carries its own lightness
+            // gradient; the uniform brightness scale that used to be applied
+            // here flattened that into one dark stain, which is the thing the
+            // ramp exists to avoid. Opacity still rises with the value, and
+            // nothing is drawn where nothing is falling.
+            case "APCP" -> new FieldStyle(ramp, 0.78f);
 
             // Cloud reads as a grey veil; humidity likewise.
             case "TCDC", "RH" -> new FieldStyle(ramp.muted(0.7f, 0.2f, 1f), 0.38f);

@@ -16,6 +16,10 @@ that repeats a stored selection or a named profile.
   not called a system.
 - Scalar fields carry their own weight rather than sharing one opacity:
   temperature a pale wash, precipitation darker and heavier.
+- Precipitation runs white, yellow, green, blue, indigo, purple as it gets
+  heavier, darkening the whole way. The ramp it replaced varied in hue but
+  hardly at all in lightness, so it read as one dark stain and drizzle was told
+  from a downpour by the attribute the eye judges worst.
 - A bundled Natural Earth gazetteer names the seas, the countries and the
   cities, so a chart of an area Overpass cannot serve still says where it is.
 - Large, legible **valid at** and **chart created** labels in a time zone the

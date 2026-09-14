@@ -117,27 +117,6 @@ public final class ColourRamp {
         return new ColourRamp(name, stops, out);
     }
 
-    /**
-     * The same ramp with its colours taken toward the dark end.
-     *
-     * <p>The opposite treatment, for a field that should read as weight on the
-     * map - rain being the obvious one. Brightness is scaled down and saturation
-     * pushed up, so heavy precipitation reads as a dark stain rather than a
-     * pastel smear.</p>
-     */
-    public ColourRamp darkened(float brightnessScale, float saturationScale, float alphaScale) {
-        final Color[] out = new Color[colours.length];
-        for (int i = 0; i < colours.length; i++) {
-            final Color c = colours[i];
-            final float[] hsb = Color.RGBtoHSB(c.getRed(), c.getGreen(), c.getBlue(), null);
-            final Color darker = new Color(Color.HSBtoRGB(
-                    hsb[0], clamp01(hsb[1] * saturationScale), clamp01(hsb[2] * brightnessScale)));
-            out[i] = new Color(darker.getRed(), darker.getGreen(), darker.getBlue(),
-                               Math.round(clamp01(c.getAlpha() / 255f * alphaScale) * 255));
-        }
-        return new ColourRamp(name, stops, out);
-    }
-
     private static float clamp01(float v) {
         return Math.max(0f, Math.min(1f, v));
     }
@@ -166,24 +145,56 @@ public final class ColourRamp {
     }
 
     /**
-     * Sequential and deliberately dark, transparent at zero so dry ground shows
-     * the base map.
+     * Sequential, transparent at zero so dry ground shows the base map, and
+     * running white - yellow - green - blue - indigo - purple as the rain gets
+     * heavier.
      *
      * <p>Weighted toward the low end - 0.5, 2 and 10 mm are the steps that
      * matter to anyone reading a forecast, and a linear ramp to 75 would render
-     * all of them as the same faint green.</p>
+     * all of them at the same colour.</p>
+     *
+     * <h2>Why the lightness matters more than the hue</h2>
+     *
+     * <p>This ramp used to go green - teal - blue - purple with every colour
+     * between 0.40 and 0.66 brightness. It had a hue progression and almost no
+     * lightness one, so on the map it read as a single dark stain that changed
+     * shade slightly: light drizzle and a downpour were told apart by a
+     * distinction the eye judges poorly, while the attribute it judges best -
+     * how light or dark something is - carried no information at all.</p>
+     *
+     * <p>So brightness now falls monotonically across the whole ramp, from 1.00
+     * at the first wet stop to 0.41 at the last, and the lightest rain is also
+     * the least saturated. Heavy rain is dark and saturated, drizzle is a pale
+     * wash, and the two are distinguishable in a greyscale print or to a
+     * colour-blind reader - neither of which is true of hue alone.</p>
+     *
+     * <table>
+     *   <caption>The stops</caption>
+     *   <tr><th>mm</th><th>colour</th><th>brightness</th><th>saturation</th></tr>
+     *   <tr><td>0</td><td>transparent</td><td>—</td><td>—</td></tr>
+     *   <tr><td>0.2</td><td>pale yellow</td><td>1.00</td><td>0.31</td></tr>
+     *   <tr><td>1</td><td>gold</td><td>0.99</td><td>0.71</td></tr>
+     *   <tr><td>4</td><td>green</td><td>0.77</td><td>0.63</td></tr>
+     *   <tr><td>12</td><td>blue</td><td>0.71</td><td>0.86</td></tr>
+     *   <tr><td>30</td><td>indigo</td><td>0.52</td><td>0.71</td></tr>
+     *   <tr><td>75</td><td>purple</td><td>0.41</td><td>0.90</td></tr>
+     * </table>
+     *
+     * <p>It carries its own weight, so unlike the other fields it is drawn
+     * as authored - see {@link FieldStyle}. A uniform brightness scale over the
+     * top of it would undo the gradient that is the point of it.</p>
      */
     public static ColourRamp precipitation() {
         return new ColourRamp("Precipitation (kg/m²)",
                 new float[]{0f, 0.2f, 1f, 4f, 12f, 30f, 75f},
                 new Color[]{
                         new Color(255, 255, 255, 0),
-                        new Color(120, 170, 135, 120),
-                        new Color(56, 132, 92, 175),
-                        new Color(26, 100, 84, 205),
-                        new Color(22, 68, 96, 225),
-                        new Color(58, 34, 94, 238),
-                        new Color(74, 12, 52, 246)});
+                        new Color(255, 246, 176, 150),
+                        new Color(252, 211, 74, 185),
+                        new Color(110, 197, 72, 210),
+                        new Color(26, 104, 180, 230),
+                        new Color(46, 38, 132, 243),
+                        new Color(74, 10, 104, 252)});
     }
 
     /** Greyscale, transparent when clear. */
