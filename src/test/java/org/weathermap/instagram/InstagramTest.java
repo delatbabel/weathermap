@@ -473,4 +473,56 @@ class InstagramTest {
         assertTrue(said.contains("Media ID is not available"), said);
         assertTrue(said.contains("Phuong tien nay chua san sang dang"), said);
     }
+
+    // ---- the cache in front of the bucket ----------------------------------
+
+    /**
+     * Every readiness check asks for a different address.
+     *
+     * <p>Cloudflare caches a 404 for a missing image, and for four hours - an
+     * R2 custom domain answers one with {@code cache-control: max-age=14400}.
+     * The gate polls the moment the file is written, a second or so before the
+     * mount has uploaded it, so the first request is always a miss. If two
+     * requests share an address the second is answered from that cached miss,
+     * and the gate then waits out its three minutes against a file that arrived
+     * almost immediately.</p>
+     *
+     * <p>Polling the plain URL did that. Polling one probe URL per run did
+     * exactly the same thing one step along, and failed identically when it was
+     * tried - which is why this asserts a fresh address per call rather than
+     * merely a different one from the original.</p>
+     */
+    @Test
+    void everyReadinessCheckAsksForADifferentAddress() {
+        final String url = "https://charts.example.test/charts/chart-1.jpg";
+
+        final java.util.Set<String> seen = new java.util.HashSet<>();
+        for (int i = 0; i < 50; i++) seen.add(PublishGate.probe(url));
+
+        assertEquals(50, seen.size(), "a repeated probe address is a cached 404");
+        for (String probe : seen) {
+            assertTrue(probe.startsWith(url + "?"), probe);
+        }
+    }
+
+    /**
+     * And the address Instagram is given is never one of them.
+     *
+     * <p>The plain URL is left untouched until the image really exists, so the
+     * first request for it - Meta's - reaches the bucket and is cached as a
+     * 200. Poisoning that entry was the worse half of the bug: it is the one
+     * the post depends on.</p>
+     */
+    @Test
+    void theAddressInThePostIsNotTheOneThatWasPolled() {
+        final String url = "https://charts.example.test/charts/chart-1.jpg";
+        assertFalse(PublishGate.probe(url).equals(url));
+    }
+
+    /** A base that already has a query keeps it. */
+    @Test
+    void aProbeAddsToAnExistingQueryRatherThanBreakingIt() {
+        final String probe = PublishGate.probe("https://h/c/chart.jpg?v=2");
+        assertTrue(probe.startsWith("https://h/c/chart.jpg?v=2&"), probe);
+    }
 }

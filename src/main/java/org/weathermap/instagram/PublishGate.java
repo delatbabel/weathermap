@@ -40,6 +40,37 @@ public final class PublishGate {
 
     private static final Duration POLL = Duration.ofSeconds(2);
 
+    /**
+     * Makes each readiness request its own thing to the cache in front of the
+     * bucket, and never asks for the plain address.
+     *
+     * <p>Cloudflare caches a 404 for an image, and for four hours: an R2 custom
+     * domain answers a missing {@code .jpg} with {@code cache-control:
+     * max-age=14400}. The gate used to poll the plain URL the moment the file
+     * was written, which is a second or so before the mount has uploaded it -
+     * so it asked for something that was not there yet, the miss was cached,
+     * and every poll afterwards was answered from that cache with the same 404
+     * while the object sat in the bucket. The wait then ran out against a file
+     * that had been there almost the whole time.</p>
+     *
+     * <p>Worse, the poisoned entry was the one Instagram would have been sent
+     * to. Polling a URL that nobody else will ever ask for leaves the plain one
+     * untouched until the image really exists, so the first request for it -
+     * Meta's - is a miss that reaches the bucket and is cached as a 200.</p>
+     *
+     * <p><b>A fresh value on every request, not one per run.</b> Polling one
+     * probe URL repeatedly recreates the bug one step along: the first poll is
+     * still made before the upload finishes, the 404 is still cached - under
+     * the probe's address this time - and every poll after it is answered from
+     * that cache for the rest of the wait. It was tried that way and failed
+     * identically, three minutes of cached 404 for a file that arrived in
+     * two seconds.</p>
+     */
+    static String probe(String url) {
+        final String nonce = Long.toUnsignedString(System.nanoTime(), 36);
+        return url + (url.indexOf('?') < 0 ? "?" : "&") + "ready=" + nonce;
+    }
+
     private PublishGate() { }
 
     /**
@@ -90,7 +121,7 @@ public final class PublishGate {
                     + " is reachable");
 
             while (true) {
-                if (isReachable(url)) break;
+                if (isReachable(probe(url))) break;
                 if (Instant.now().isAfter(deadline)) {
                     throw new IOException(
                             "this image is still not reachable after "

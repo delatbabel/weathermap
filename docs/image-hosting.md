@@ -186,6 +186,41 @@ has simply not left the machine. This is what `PublishGate.awaitReachable()` is
 for — it polls every image URL before the post is submitted, because Instagram
 fetches the images itself and a 404 at that moment fails the whole carousel.
 
+### Cloudflare caches a 404, for four hours
+
+The other half of the same problem, and the one that actually bit. An R2 custom
+domain answers a request for a missing image with:
+
+```
+HTTP/2 404
+cache-control: max-age=14400
+```
+
+So asking for a chart *before* the mount has uploaded it does not merely fail —
+it teaches the cache that the chart is not there, for the rest of the day. Every
+later request is answered from that entry:
+
+```
+poll 1: HTTP/2 404  cf-cache-status: HIT      <- object is in the bucket by now
+poll 2: HTTP/2 404  cf-cache-status: HIT
+```
+
+The readiness check therefore never asks for the address the post will use. It
+asks for that address with a **different cache-busting query on every single
+request**, so the plain one stays untouched until the image really exists and
+the first request for it — Meta's — reaches the bucket and is cached as a 200.
+
+> One probe URL per run is not enough, and looks like it should be. The first
+> poll of a run still happens before the upload finishes, so that probe address
+> collects the cached 404 and every poll after it within the same run is
+> answered from the cache. It fails in exactly the way it was meant to fix:
+> three minutes of cached 404 for a file that arrived in two seconds.
+
+This applies to images and not to the `weathermap-check.txt` marker, because
+Cloudflare caches by file extension and `.txt` is not in its default list.
+Testing the mechanism with a text file says nothing about what a `.jpg` does —
+which is how this was missed the first time.
+
 The wait is `--vfs-write-back`, five seconds by default, and it is **per file
 and fixed** — not a bandwidth limit. Writing a carousel's worth of charts that
 way takes long enough to look like a slow mount while the transfers themselves
