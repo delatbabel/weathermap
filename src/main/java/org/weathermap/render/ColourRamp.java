@@ -17,9 +17,22 @@ import java.awt.Color;
  */
 public final class ColourRamp {
 
+    /**
+     * How a legend should space this ramp's stops along its bar.
+     *
+     * <p>A property of the quantity, not of the drawing. Temperature is linear
+     * in kelvin and a legend that is not linear in kelvin is simply wrong about
+     * where freezing sits. Rainfall is read across orders of magnitude - the
+     * difference between 0.2 and 4 mm matters as much as between 30 and 75 -
+     * and on a linear bar the whole of it below 12 mm occupies a sixth of the
+     * width, which is what made the legend disagree with the map.</p>
+     */
+    public enum LegendScale { LINEAR, LOGARITHMIC }
+
     private final float[] stops;
     private final Color[] colours;
     private final String name;
+    private final LegendScale legendScale;
 
     /**
      * @param name    for the legend
@@ -27,12 +40,42 @@ public final class ColourRamp {
      * @param colours one per stop
      */
     public ColourRamp(String name, float[] stops, Color[] colours) {
+        this(name, stops, colours, LegendScale.LINEAR);
+    }
+
+    /** @param legendScale how a legend should space the stops */
+    public ColourRamp(String name, float[] stops, Color[] colours, LegendScale legendScale) {
         if (stops.length != colours.length || stops.length < 2) {
             throw new IllegalArgumentException("need at least two matching stops and colours");
         }
         this.name = name;
         this.stops = stops.clone();
         this.colours = colours.clone();
+        this.legendScale = legendScale;
+    }
+
+    public LegendScale legendScale() { return legendScale; }
+
+    /**
+     * Where a value sits along a legend bar, 0 to 1.
+     *
+     * <p>Logarithmic ramps are placed by {@code log1p}, which takes zero to zero
+     * without special-casing it - and for rainfall in millimetres the implied
+     * one-millimetre offset is where the curve bends, which is about the right
+     * place for a quantity whose interesting range starts at a tenth of that.</p>
+     */
+    public float legendPosition(float value) {
+        final float lo = stops[0];
+        final float hi = stops[stops.length - 1];
+        if (!(hi > lo)) return 0f;
+        if (legendScale == LegendScale.LOGARITHMIC && lo >= 0f) {
+            final double bottom = Math.log1p(lo);
+            final double top = Math.log1p(hi);
+            if (top > bottom) {
+                return (float) ((Math.log1p(Math.max(value, lo)) - bottom) / (top - bottom));
+            }
+        }
+        return (value - lo) / (hi - lo);
     }
 
     public String name() { return name; }
@@ -40,6 +83,16 @@ public final class ColourRamp {
     public float min() { return stops[0]; }
 
     public float max() { return stops[stops.length - 1]; }
+
+    /**
+     * The ramp's own breakpoints, ascending.
+     *
+     * <p>For the legend, which cannot draw a ramp faithfully without them. A
+     * legend that samples at even intervals shows only the part of the ramp
+     * that happens to be evenly spaced, and precipitation is deliberately not:
+     * four of its seven stops lie below a seventh of its range.</p>
+     */
+    public float[] stops() { return stops.clone(); }
 
     /** @return the colour for a value, clamped to the ends of the ramp. */
     public Color colourFor(float value) {
@@ -83,7 +136,7 @@ public final class ColourRamp {
             final float fraction = (stops[i] - stops[0]) / span;
             fitted[i] = min + (max - min) * fraction;
         }
-        return new ColourRamp(name, fitted, colours);
+        return new ColourRamp(name, fitted, colours, legendScale);
     }
 
     /**
@@ -114,7 +167,7 @@ public final class ColourRamp {
             out[i] = new Color(muted.getRed(), muted.getGreen(), muted.getBlue(),
                                Math.round(clamp01(c.getAlpha() / 255f * alphaScale) * 255));
         }
-        return new ColourRamp(name, stops, out);
+        return new ColourRamp(name, stops, out, legendScale);
     }
 
     private static float clamp01(float v) {
@@ -194,7 +247,8 @@ public final class ColourRamp {
                         new Color(110, 197, 72, 210),
                         new Color(26, 104, 180, 230),
                         new Color(46, 38, 132, 243),
-                        new Color(74, 10, 104, 252)});
+                        new Color(74, 10, 104, 252)},
+                LegendScale.LOGARITHMIC);
     }
 
     /** Greyscale, transparent when clear. */

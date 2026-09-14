@@ -171,6 +171,25 @@ public final class AnnotationLayer implements Layer {
         g.drawString(line, pad, fm.getAscent() + pad / 2);
     }
 
+    /**
+     * The colour bar, with every breakpoint labelled.
+     *
+     * <h2>Sampled at the stops, placed by the ramp's own scale</h2>
+     *
+     * <p>It used to sample at eight even intervals across the range, which for
+     * precipitation hid most of the ramp: the stops are 0, 0.2, 1, 4, 12, 30
+     * and 75 mm, so four of the seven fall inside the first of those intervals
+     * and the legend drew a straight blend from transparent to the 10.7 mm
+     * colour. The yellow and green half never appeared at all, which is why the
+     * legend disagreed with the map it belonged to.</p>
+     *
+     * <p>Sampling at the ramp's own stops fixes the colours. Where they sit is
+     * then {@link ColourRamp#legendPosition}: linear for a quantity that is
+     * linear, logarithmic for rainfall, which is read across orders of
+     * magnitude. Placed linearly, everything below 12 mm shares a sixth of the
+     * bar and the legend is all indigo and purple - the same complaint as
+     * before, arrived at honestly.</p>
+     */
     private void drawLegend(Graphics2D g, int width, int height) {
         final int barWidth = Math.min(280, width - 40);
         final int barHeight = 12;
@@ -183,16 +202,13 @@ public final class AnnotationLayer implements Layer {
         g.setColor(new Color(255, 255, 255, 225));
         g.fill(new Rectangle2D.Double(x - 8, y - 18, barWidth + 16, barHeight + 34));
 
-        // Sample the ramp at both ends plus the interior stops so the gradient
-        // shows the ramp's real shape rather than a straight min-to-max blend.
-        final float lo = ramp.min();
-        final float hi = ramp.max();
-        final int steps = 8;
-        final float[] fractions = new float[steps];
-        final Color[] colours = new Color[steps];
-        for (int i = 0; i < steps; i++) {
-            fractions[i] = i / (float) (steps - 1);
-            colours[i] = ramp.colourFor(lo + (hi - lo) * fractions[i]);
+        final float[] stops = ramp.stops();
+        final int n = stops.length;
+        final float[] fractions = new float[n];
+        final Color[] colours = new Color[n];
+        for (int i = 0; i < n; i++) {
+            fractions[i] = ramp.legendPosition(stops[i]);
+            colours[i] = ramp.colourFor(stops[i]);
         }
 
         g.setPaint(new LinearGradientPaint(
@@ -202,12 +218,62 @@ public final class AnnotationLayer implements Layer {
         g.setStroke(new BasicStroke(1f));
         g.draw(new Rectangle2D.Double(x, y, barWidth, barHeight));
 
+        drawTicks(g, x, y, barWidth, barHeight, stops, fractions);
+        g.drawString(ramp.name(), x, y - 3);
+    }
+
+    /**
+     * A number under each breakpoint, as many as will fit.
+     *
+     * <p>Only the two ends used to be labelled, which for a banded scale says
+     * almost nothing: the interesting readings on a rain chart are 4, 12 and 30
+     * mm, and none of them was on the legend.</p>
+     *
+     * <p>The ends are aligned inside the bar and the rest centred on their
+     * boundary. Where two would collide the later one is dropped, so a ramp
+     * with many stops thins out rather than printing a smear - and the ends are
+     * placed first, since a legend without its extremes is worse than one with
+     * a gap in the middle.</p>
+     */
+    private void drawTicks(Graphics2D g, int x, int y, int barWidth, int barHeight,
+                           float[] stops, float[] fractions) {
         g.setFont(g.getFont().deriveFont(Font.PLAIN, 10f));
         final FontMetrics fm = g.getFontMetrics();
-        g.drawString(fmt(lo), x, y + barHeight + fm.getAscent() + 2);
-        final String hiLabel = fmt(hi);
-        g.drawString(hiLabel, x + barWidth - fm.stringWidth(hiLabel), y + barHeight + fm.getAscent() + 2);
-        g.drawString(ramp.name(), x, y - 3);
+        final int baseline = y + barHeight + fm.getAscent() + 2;
+        final int gap = 4;
+
+        final int last = stops.length - 1;
+        final String loLabel = tick(stops[0]);
+        final String hiLabel = tick(stops[last]);
+        final int loStart = x;
+        final int hiStart = x + barWidth - fm.stringWidth(hiLabel);
+
+        g.drawString(loLabel, loStart, baseline);
+        g.drawString(hiLabel, hiStart, baseline);
+
+        // Everything between, where it does not run into a neighbour.
+        int occupiedTo = loStart + fm.stringWidth(loLabel) + gap;
+        for (int i = 1; i < last; i++) {
+            final String label = tick(stops[i]);
+            final int w = fm.stringWidth(label);
+            final int start = Math.round(x + barWidth * fractions[i]) - w / 2;
+            if (start < occupiedTo || start + w + gap > hiStart) continue;
+
+            g.setPaint(new Color(40, 40, 40));
+            g.draw(new java.awt.geom.Line2D.Double(
+                    x + barWidth * fractions[i], y + barHeight,
+                    x + barWidth * fractions[i], y + barHeight + 3));
+            g.drawString(label, start, baseline);
+            occupiedTo = start + w + gap;
+        }
+    }
+
+    /** A breakpoint as it should read on a legend: 4, not 4.0. */
+    private static String tick(float v) {
+        if (v == Math.rint(v) && Math.abs(v) < 10000) {
+            return String.format(java.util.Locale.ROOT, "%.0f", v);
+        }
+        return String.format(java.util.Locale.ROOT, "%.1f", v);
     }
 
     /**
@@ -358,12 +424,6 @@ public final class AnnotationLayer implements Layer {
                                       textWidth + pad * 2, fm.getHeight() + pad));
         g.setColor(new Color(40, 40, 40));
         g.drawString(line, pad, height - pad - fm.getDescent());
-    }
-
-    private static String fmt(float v) {
-        return (Math.abs(v) >= 100)
-                ? String.format(java.util.Locale.ROOT, "%.0f", v)
-                : String.format(java.util.Locale.ROOT, "%.1f", v);
     }
 
     @Override

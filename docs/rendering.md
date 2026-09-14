@@ -77,6 +77,31 @@ used to have a uniform brightness scale applied too, which is precisely what
 flattens a lightness gradient. Tests assert the ordering and that nothing
 re-tones it.
 
+### The legend
+
+The bar samples the ramp **at its own stops** and labels every one of them that
+will fit. It used to sample at eight even intervals and label only the two ends,
+which for precipitation meant four of the seven stops fell inside the first
+interval: the legend drew a straight blend from transparent to the 10.7 mm
+colour, so the yellow and green half never appeared and the legend disagreed
+with the map beside it.
+
+Where the stops sit is the ramp's own `legendScale`:
+
+- **Linear** for a quantity that is linear. A temperature legend that is not
+  linear in kelvin is simply wrong about where freezing falls.
+- **Logarithmic** for rainfall, which is read across orders of magnitude. The
+  difference between 0.2 and 4 mm matters as much as between 30 and 75, and on a
+  linear bar everything below 12 mm shares a sixth of the width — all indigo and
+  purple, the original complaint arrived at honestly. Positions come from
+  `log1p`, which takes zero to zero without a special case, and whose implied
+  one-millimetre offset is about where a rainfall scale should bend.
+
+A derived ramp — fitted to the data, or toned — is the same quantity and keeps
+the same scale. Tests check the positions are strictly increasing and span 0 to
+1, because `LinearGradientPaint` throws otherwise, and that is not a bad legend
+but no chart at all.
+
 ## Wind barbs
 
 The top layer. `WindBarbLayer` draws the standard notation: the staff points

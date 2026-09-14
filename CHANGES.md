@@ -20,6 +20,10 @@ that repeats a stored selection or a named profile.
   heavier, darkening the whole way. The ramp it replaced varied in hue but
   hardly at all in lightness, so it read as one dark stain and drizzle was told
   from a downpour by the attribute the eye judges worst.
+- The legend samples the ramp at its own stops and labels each one, on a
+  logarithmic scale for rainfall. It used to sample evenly and label only the
+  ends, which hid four of precipitation's seven stops and left the legend
+  showing colours the map no longer used.
 - A bundled Natural Earth gazetteer names the seas, the countries and the
   cities, so a chart of an area Overpass cannot serve still says where it is.
 - Large, legible **valid at** and **chart created** labels in a time zone the

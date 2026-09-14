@@ -3,6 +3,7 @@ package org.weathermap.render;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -145,5 +146,79 @@ class ColourRampTest {
                     "the precipitation ramp is being re-toned at " + mm
                     + " mm; the gradient is the point of it");
         }
+    }
+
+    // ---- where the legend puts things --------------------------------------
+
+    /**
+     * Rain is read across orders of magnitude, so the legend is logarithmic.
+     *
+     * <p>Placed linearly, every stop below 12 mm shares a sixth of the bar: the
+     * yellow and green half is a sliver at the left end and the legend reads as
+     * all indigo and purple, which is the disagreement with the map that
+     * started this. The stops are geometric, so the scale that shows them
+     * evenly is the log one.</p>
+     */
+    @Test
+    void theRainLegendIsLogarithmic() {
+        final ColourRamp ramp = ColourRamp.precipitation();
+        assertEquals(ColourRamp.LegendScale.LOGARITHMIC, ramp.legendScale());
+
+        assertEquals(0f, ramp.legendPosition(0f), 1e-4, "dry is the left end");
+        assertEquals(1f, ramp.legendPosition(75f), 1e-4, "the wettest is the right end");
+
+        // 4 mm sits in the middle third rather than the first twentieth.
+        final float four = ramp.legendPosition(4f);
+        assertTrue(four > 0.3f && four < 0.45f, "4 mm is at " + four);
+        assertTrue(ramp.legendPosition(4f) > 6 * (4f / 75f),
+                "log must spread the low end far wider than linear would");
+    }
+
+    /** Temperature is linear in kelvin, and a legend that is not is wrong. */
+    @Test
+    void theTemperatureLegendStaysLinear() {
+        final ColourRamp ramp = ColourRamp.temperatureKelvin();
+        assertEquals(ColourRamp.LegendScale.LINEAR, ramp.legendScale());
+        assertEquals((273.15f - 233.15f) / (318.15f - 233.15f),
+                     ramp.legendPosition(273.15f), 1e-4,
+                     "freezing must sit where it actually falls on the scale");
+    }
+
+    /**
+     * The positions are usable as gradient fractions.
+     *
+     * <p>{@code LinearGradientPaint} requires them strictly increasing and
+     * within 0 to 1, and throws otherwise - which on a chart is not a bad
+     * legend but no chart at all.</p>
+     */
+    @Test
+    void everyRampGivesUsableGradientFractions() {
+        for (ColourRamp ramp : List.of(
+                ColourRamp.precipitation(),
+                ColourRamp.temperatureKelvin(),
+                ColourRamp.percentGrey("Cloud (%)"),
+                ColourRamp.temperatureKelvin().fittedTo(282f, 292f),
+                ColourRamp.precipitation().muted(0.5f, 0.3f, 1f))) {
+
+            float previous = -1f;
+            for (float stop : ramp.stops()) {
+                final float at = ramp.legendPosition(stop);
+                assertTrue(at >= 0f && at <= 1f, ramp.name() + " out of range: " + at);
+                assertTrue(at > previous, ramp.name() + " not increasing at " + stop);
+                previous = at;
+            }
+            assertEquals(1f, previous, 1e-4, ramp.name() + " should end at the right edge");
+        }
+    }
+
+    /** A derived ramp is the same quantity, so it keeps the same scale. */
+    @Test
+    void theScaleSurvivesFittingAndToning() {
+        assertEquals(ColourRamp.LegendScale.LOGARITHMIC,
+                     ColourRamp.precipitation().muted(0.5f, 0.3f, 1f).legendScale());
+        assertEquals(ColourRamp.LegendScale.LOGARITHMIC,
+                     ColourRamp.precipitation().fittedTo(0f, 40f).legendScale());
+        assertEquals(ColourRamp.LegendScale.LINEAR,
+                     ColourRamp.temperatureKelvin().fittedTo(282f, 292f).legendScale());
     }
 }
