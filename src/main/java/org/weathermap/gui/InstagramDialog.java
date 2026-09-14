@@ -21,6 +21,7 @@ import javax.swing.SpinnerNumberModel;
 import java.awt.BorderLayout;
 import java.awt.Desktop;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -58,10 +59,17 @@ public final class InstagramDialog extends JDialog {
     private final JSpinner chartCount;
     private final JTextArea caption = new JTextArea(4, 22);
 
+    /** Shows what the caption will actually say, since it may be a template. */
+    private final JLabel captionPreview = new JLabel(" ");
+
+    private final java.time.ZoneId zone;
+
     private Request result;
 
-    private InstagramDialog(Window owner, InstagramAccount existing, int available) {
+    private InstagramDialog(Window owner, InstagramAccount existing, int available,
+                            java.time.ZoneId zone) {
         super(owner, "Post to Instagram", ModalityType.APPLICATION_MODAL);
+        this.zone = zone == null ? java.time.ZoneId.systemDefault() : zone;
 
         // Never more than the carousel limit, nor more charts than there are.
         final int max = Math.max(2, Math.min(InstagramClient.MAX_CAROUSEL, available));
@@ -120,6 +128,20 @@ public final class InstagramDialog extends JDialog {
         caption.setWrapStyleWord(true);
         fields.add(new JScrollPane(caption), c);
 
+        // A template is only trustworthy if you can see what it produces. The
+        // alternative is finding out from the published post, which is the one
+        // place a mistake cannot be taken back.
+        row++;
+        c.gridx = 1; c.gridy = row;
+        captionPreview.setFont(captionPreview.getFont().deriveFont(Font.PLAIN, 11f));
+        fields.add(captionPreview, c);
+        caption.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { refresh(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { refresh(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { refresh(); }
+        });
+        refreshPreview();
+
         final JPanel root = new JPanel(new BorderLayout(0, 10));
         root.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
         root.add(explanation(), BorderLayout.NORTH);
@@ -168,6 +190,17 @@ public final class InstagramDialog extends JDialog {
                         "Not enough to post", JOptionPane.WARNING_MESSAGE);
                 return;
             }
+            final var broken = org.weathermap.text.CaptionTemplate.problems(
+                    caption.getText(), java.time.ZonedDateTime.now(zone), java.util.Locale.getDefault());
+            if (!broken.isEmpty()) {
+                final StringBuilder said = new StringBuilder(
+                        "The caption has a parameter that cannot be worked out:\n");
+                for (var problem : broken) said.append("\n").append(problem);
+                said.append("\n\nPosting it now would publish the text as written.");
+                JOptionPane.showMessageDialog(this, said.toString(),
+                        "Caption problem", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
             result = new Request(account, (Integer) chartCount.getValue(), caption.getText());
             dispose();
         });
@@ -211,6 +244,36 @@ public final class InstagramDialog extends JDialog {
         }
     }
 
+    /** Updates the preview line under the caption. */
+    private void refresh() { refreshPreview(); }
+
+    private void refreshPreview() {
+        final String template = caption.getText();
+        if (!org.weathermap.text.CaptionTemplate.hasParameters(template)) {
+            captionPreview.setText("<html><i>Dates can be inserted with "
+                    + "${tomorrow:'+%A %e %B %Y'} — see the User's Guide.</i></html>");
+            captionPreview.setForeground(java.awt.Color.GRAY);
+            return;
+        }
+        final var now = java.time.ZonedDateTime.now(zone);
+        final var broken = org.weathermap.text.CaptionTemplate.problems(
+                template, now, java.util.Locale.getDefault());
+        if (!broken.isEmpty()) {
+            captionPreview.setText("<html><b>" + escape(broken.get(0).toString()) + "</b></html>");
+            captionPreview.setForeground(new java.awt.Color(170, 30, 30));
+            return;
+        }
+        final String expanded = org.weathermap.text.CaptionTemplate.expand(
+                template, now, java.util.Locale.getDefault());
+        captionPreview.setText("<html><body style='width: 320px'>"
+                + escape(expanded.replace("\n", " ")) + "</body></html>");
+        captionPreview.setForeground(new java.awt.Color(20, 110, 40));
+    }
+
+    private static String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+    }
+
     private InstagramAccount read() {
         final String dir = publishDir.getText().trim();
         return new InstagramAccount(
@@ -252,8 +315,10 @@ public final class InstagramDialog extends JDialog {
      * @param available how many charts follow the one on screen, inclusive
      * @return what to post, or empty if the user cancelled
      */
-    public static Optional<Request> ask(Window owner, InstagramAccount existing, int available) {
-        final InstagramDialog dialog = new InstagramDialog(owner, existing, available);
+    /** @param zone the chart's time zone, so a caption's dates agree with its labels */
+    public static Optional<Request> ask(Window owner, InstagramAccount existing,
+                                        int available, java.time.ZoneId zone) {
+        final InstagramDialog dialog = new InstagramDialog(owner, existing, available, zone);
         dialog.setMinimumSize(new Dimension(520, 0));
         dialog.setVisible(true);
         return Optional.ofNullable(dialog.result);

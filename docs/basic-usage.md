@@ -109,6 +109,12 @@ ready to edit rather than empty — a daily chart's caption is usually the
 previous one with the date and a line changed. It is saved when you press
 **Post**, before the post is attempted, so a failure does not take it with it.
 
+Better still, the date need not be edited at all. A caption can carry
+parameters — `${tomorrow:'+%A %e %B %Y'}` becomes *Tuesday 15 September 2026* —
+which are worked out when the post is made, so the same stored caption is
+correct every day. The line under the caption box shows what it will actually
+say. See [Posting to Instagram](instagram.md).
+
 ## Help without leaving the window
 
 **Help → User's Guide** (F1) is this page and the ones beside it; **Help →

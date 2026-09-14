@@ -107,6 +107,11 @@
   <text class="pkg" x="718" y="390">util/</text>
   <text class="what" x="718" y="408">Http, Cache</text>
 
+  <rect class="box plain" x="404" y="410" width="216" height="76"/>
+  <text class="pkg" x="422" y="438">text/</text>
+  <text class="what" x="422" y="458">CaptionTemplate,</text>
+  <text class="what" x="422" y="474">DateExpression, Strftime</text>
+
   <rect class="box io" x="700" y="434" width="256" height="76"/>
   <text class="pkg" x="718" y="462">instagram/</text>
   <text class="what" x="718" y="482">InstagramClient, ChartPublisher</text>
@@ -127,6 +132,8 @@
   <path class="link-dash" d="M512 300 V224" />
   <path class="link" d="M270 120 H300 V472 H692"/>
   <text class="elbl" x="306" y="466">the window posts</text>
+  <path class="link" d="M300 448 H396"/>
+  <text class="elbl" x="306" y="440">expands captions</text>
   <text class="elbl" x="524" y="266">types shared by all</text>
 
   <text class="note" x="40" y="540">Main dispatches to one front end; both call MapService and nothing else, which is</text>

@@ -750,7 +750,7 @@ public final class MainWindow extends JFrame {
                         .load(org.weathermap.model.InstagramAccount.defaultFile())
                         .orElse(null);
 
-        InstagramDialog.ask(this, stored, available).ifPresent(request -> {
+        InstagramDialog.ask(this, stored, available, renderSpec.zone()).ifPresent(request -> {
             try {
                 // Saved before posting, so a failure does not also lose the
                 // settings the user has just typed in.
@@ -795,8 +795,17 @@ public final class MainWindow extends JFrame {
             publish("Posting to Instagram");
             final var client =
                     new org.weathermap.instagram.InstagramClient(request.account());
+            // Expanded here, not when it was typed and not when it was stored.
+            // The account keeps the template - "${tomorrow:'+%A %e %B %Y'}" -
+            // so tomorrow's post says tomorrow's date without anyone editing
+            // it. The zone is the chart's, so the caption and the labels on the
+            // images cannot disagree about what day it is.
+            final String caption = org.weathermap.text.CaptionTemplate.expand(
+                    request.caption(), java.time.ZonedDateTime.now(renderSpec.zone()),
+                    java.util.Locale.getDefault());
+
             final String mediaId =
-                    client.postCarousel(images, request.caption(), this::publish);
+                    client.postCarousel(images, caption, this::publish);
             // Asked for here rather than on the event thread: the post has
             // already succeeded and this is one more network round trip.
             return new Posted(mediaId, client.permalink(mediaId).orElse(null),

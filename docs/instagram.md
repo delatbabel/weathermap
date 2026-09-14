@@ -296,6 +296,89 @@ allows it. **It holds a bearer token in plain text**: anything that can read the
 file can post as that account until the token is revoked. The application never
 writes the token to a log or into an error message.
 
+## Parameters in the caption
+
+A daily chart's caption is the same sentence every day with the date changed.
+Writing the date in means retyping it every day, and eventually not noticing
+that you didn't — so the caption can carry parameters instead, and they are
+worked out at the moment of posting.
+
+```
+Saigon Weather charts for ${tomorrow:'+%A %e %B %Y'}
+
+#saigonweather #gfs
+```
+
+posts as *Saigon Weather charts for Tuesday 15 September 2026*. **The stored
+caption keeps the template**, so tomorrow's post says tomorrow's date with
+nobody touching it.
+
+### `${DATE:FORMAT}`
+
+Both halves are exactly what the `date` command takes: `DATE` is its
+`--date=STRING`, `FORMAT` its `+FORMAT`. Either half may be wrapped in single or
+double quotes, and the format may keep the `+` it would have in a shell, so a
+format can be pasted straight across.
+
+| Written | Gives |
+|---|---|
+| `${tomorrow:'+%A %e %B %Y'}` | Tuesday 15 September 2026 |
+| `${now:"+%F %T"}` | 2026-09-14 22:17:06 |
+| `${'next friday':'+%A %e %B'}` | Friday 18 September |
+| `${3 days ago:'+%a %d %b %y'}` | Fri 11 Sep 26 |
+| `${yesterday}` | 2026-09-13 — no format means `%F` |
+| `${today:'+%-d/%-m/%Y'}` | 14/9/2026 |
+
+Dates it understands: `now`, `today`, `tomorrow`, `yesterday`; offsets such as
+`+3 days`, `-2 weeks`, `2 hours ago`, `next week`, `last month`; day names with
+`next`, `last` or `this`; `2026-09-15`, a time as `14:30`, the two together, and
+`@` followed by seconds since the epoch.
+
+Formats it understands: `%a %A %b %B %C %d %D %e %F %h %H %I %j %k %l %m %M %n
+%p %P %r %R %s %S %t %T %u %V %w %y %Y %z %Z %%`, with the `-`, `_`, `0` and `^`
+flags. `%d` is zero-padded, `%e` space-padded and `%-d` not padded: on the fifth
+of the month, `05`, ` 5` and `5`.
+
+To put a literal `${` in a caption, write `$${`.
+
+### Three rules that are not what they look like
+
+Taken from GNU `date` by running it, not by reasoning about it, because each one
+can put the wrong day on a post:
+
+- **A relative offset keeps the time of day.** `tomorrow` at 22:17 is tomorrow
+  at 22:17, not tomorrow morning.
+- **Naming a day or a date does not.** `friday` and `2026-09-15` are both
+  00:00:00 — a date without a time means midnight. An explicit time wins over
+  both: `tomorrow 09:00`.
+- **`next monday` on a Monday is a week away**, while a bare `monday` on a
+  Monday is today. "next" means strictly after today; a bare day, or `this`,
+  means on or after it.
+
+### Where the colon goes
+
+Both halves can contain one — `${2026-09-15 14:30:'+%H:%M'}` has four. The
+format is the half that begins with `+`, so the divider is the last colon whose
+remainder does; quoting the date settles it outright. Both of these work:
+
+```
+${'2026-09-15 14:30':'+%H:%M'}
+${2026-09-15 14:30:'+%H:%M'}
+```
+
+### This is not a call to `date`
+
+`--date` is a GNU extension. BSD `date` on macOS does not have it and Windows
+has no `date` of this kind at all, and packages are built for all three. It is
+implemented here instead, as a documented subset, checked against real GNU
+`date` output across several hundred expression-and-format pairs.
+
+Anything outside that subset is **named as a problem rather than guessed at**.
+The dialog shows what the caption will actually say as you type it, and refuses
+to post a caption whose parameters cannot be worked out — a post is published
+before anyone reads it, and that is the one place a mistake cannot be taken
+back.
+
 ## A container is not ready when its ID comes back
 
 Creating a container returns an ID straight away, and then Meta goes off to

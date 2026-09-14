@@ -64,6 +64,12 @@ that repeats a stored selection or a named profile.
   refused with "Media ID is not available" — in the account's own language.
 - The caption is kept with the account, so a daily post starts from the previous
   day's text. Saved before the post is attempted, so a failure does not take it.
+- Captions can carry parameters: `${tomorrow:'+%A %e %B %Y'}` becomes
+  "Tuesday 15 September 2026" when the post is made, so one stored caption is
+  right every day. Both halves are `date(1)`'s own notation — its `--date` and
+  its `+FORMAT` — implemented here rather than shelled out to, since `--date` is
+  a GNU extension and packages are built for macOS and Windows too. The dialog
+  previews what the caption will say and refuses to post one it cannot work out.
 - A finished post says so in a dialog, with a link to it. Posting takes minutes,
   and a line in the status bar is not where anyone is looking by then.
 - [Hosting the images](docs/image-hosting.md) sets up Cloudflare R2 behind an
