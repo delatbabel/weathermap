@@ -10,6 +10,7 @@ import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -96,5 +97,65 @@ class PlaceLabelLayerTest {
         }
         assertTrue(ink > 30_000,
                 "the labels cover only " + ink + " pixels of a 1.9 million pixel chart");
+    }
+
+    /** Renders with one named feature withheld, so its absence can be seen. */
+    private static BufferedImage renderWithout(String name) {
+        final java.util.List<org.weathermap.osm.Feature> kept =
+                new java.util.ArrayList<>();
+        for (org.weathermap.osm.Feature f : WorldGazetteer.features()) {
+            if (!name.equals(f.name())) kept.add(f);
+        }
+        final BufferedImage image = new BufferedImage(1600, 1200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = image.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 1600, 1200);
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+        g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+                           RenderingHints.VALUE_TEXT_ANTIALIAS_OFF);
+        new VectorLayers.PlaceLabelLayer(kept)
+                .draw(g, new MercatorProjection(SOUTHEAST_ASIA, 1600, 1200));
+        g.dispose();
+        return image;
+    }
+
+    private static boolean same(BufferedImage a, BufferedImage b) {
+        for (int y = 0; y < a.getHeight(); y++) {
+            for (int x = 0; x < a.getWidth(); x++) {
+                if (a.getRGB(x, y) != b.getRGB(x, y)) return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * A city is drawn even when the sea beside it wants the same space.
+     *
+     * <p>The names used to be drawn kind by kind - every sea, then every
+     * country, then every city - which gave the water first claim. At twice the
+     * size that left nowhere at all for Ho Chi Minh City: "South China Sea" and
+     * "Gulf of Thailand" between them covered every side of it.</p>
+     *
+     * <p>They are now sorted together by Natural Earth's scale rank, which means
+     * the same thing for all three kinds, with a city ahead of a sea of equal
+     * rank. Ho Chi Minh City and the Gulf of Thailand are both rank 2, so this
+     * is precisely the case that decides it.</p>
+     *
+     * <p>Checked by drawing the chart without the feature and seeing that the
+     * result differs: no pixel changes if the name was never placed.</p>
+     */
+    @Test
+    void aCityIsNotCrowdedOutByAnEquallyRankedSea() {
+        assertFalse(same(render(1600, 1200), renderWithout("Ho Chi Minh City")),
+                "Ho Chi Minh City is not being drawn - a sea name has taken its place");
+    }
+
+    /** An ocean still beats a minor town: rank decides, not kind. */
+    @Test
+    void theBigWaterIsStillDrawn() {
+        for (String sea : new String[]{"South China Sea", "Philippine Sea", "Java Sea"}) {
+            assertFalse(same(render(1600, 1200), renderWithout(sea)),
+                        sea + " should still be named - it outranks the towns around it");
+        }
     }
 }

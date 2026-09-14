@@ -332,63 +332,80 @@ public final class VectorLayers {
          */
         private static final int HALO_WIDTH = Math.max(1, Math.round(LABEL_SCALE));
 
+        /** One name waiting to be drawn, and how it should look. */
+        private record Candidate(Feature feature, int importance, int kindOrder,
+                                 float points, int style, Color colour, boolean dot) { }
+
+        /**
+         * Draws the names in one order, most important first, whatever kind
+         * they are.
+         *
+         * <h2>Why they are not drawn kind by kind</h2>
+         *
+         * <p>They used to be: every sea, then every country, then every city.
+         * That gave the seas first claim on the space, which is defensible on a
+         * chart read for the wind and indefensible at the point where "Gulf of
+         * Thailand" and "South China Sea" between them left nowhere to put Ho
+         * Chi Minh City. A city of nine million losing its name to the water
+         * beside it is not a trade anyone would choose.</p>
+         *
+         * <p>Rank settles it instead. All three kinds carry Natural Earth's
+         * scale rank and it means the same thing in each, so they sort together:
+         * an ocean still outranks a minor town, and a capital now outranks the
+         * gulf it stands on. Where a city and a sea rank equally the city goes
+         * first, which is exactly the case in hand - Ho Chi Minh City and the
+         * Gulf of Thailand are both rank 2.</p>
+         */
         @Override
         public void draw(Graphics2D g, MapProjection projection) {
             final double span = Math.max(projection.bounds().widthDegrees(),
                                          projection.bounds().heightDegrees());
             final int budget = labelBudget(projection);
+            final Font base = g.getFont();
+
+            final List<Candidate> candidates = new ArrayList<>();
+
+            final int waterLimit = waterRankLimitFor(span);
+            for (Feature f : water) {
+                final int rank = WorldGazetteer.rankOf(f);
+                if (rank > waterLimit) continue;
+                // Italic, the cartographic convention for water, and sized by
+                // importance so an ocean reads as larger than a gulf inside it.
+                candidates.add(new Candidate(f, rank, 1,
+                        rank <= 1 ? WATER_MAJOR_PT : WATER_MINOR_PT,
+                        Font.ITALIC, waterText, false));
+            }
+            if (span >= MIN_COUNTRY_SPAN) {
+                for (Feature f : countries) {
+                    final int rank = WorldGazetteer.rankOf(f);
+                    if (rank > COUNTRY_RANK_LIMIT) continue;
+                    candidates.add(new Candidate(f, rank, 2,
+                            COUNTRY_PT, Font.PLAIN, countryText, false));
+                }
+            }
+            final int placeLimit = rankLimitFor(span);
+            for (Feature f : places) {
+                if (rankOf(f) > placeLimit) continue;
+                candidates.add(new Candidate(f, importanceOf(f), 0,
+                        PLACE_PT, Font.PLAIN, text, true));
+            }
+
+            candidates.sort(Comparator
+                    .comparingInt(Candidate::importance)
+                    .thenComparingInt(Candidate::kindOrder)
+                    .thenComparing(c -> -c.feature().population()));
 
             // One collision set across all three kinds, because a sea name and a
             // city name overlapping is exactly as unreadable as two city names
             // overlapping, and separate layers cannot see each other to avoid it.
             final List<Rectangle2D> placed = new ArrayList<>();
-            final Font base = g.getFont();
-
-            // Order is priority. Water first: on a chart read for the wind, the
-            // sea the wind is blowing over is the thing that locates it, and the
-            // names are few enough that they never crowd the cities out.
-            drawWater(g, projection, placed, budget, span, base);
-            drawCountries(g, projection, placed, budget, span, base);
-            drawPlaces(g, projection, placed, budget, span, base);
-        }
-
-        private void drawWater(Graphics2D g, MapProjection projection,
-                               List<Rectangle2D> placed, int budget, double span, Font base) {
-            final int limit = waterRankLimitFor(span);
-            // Italic, the cartographic convention for water, and sized by
-            // importance so an ocean reads as larger than a gulf inside it.
-            for (Feature f : water) {
-                if (placed.size() >= budget) return;
-                final int rank = WorldGazetteer.rankOf(f);
-                if (rank > limit) continue;
-
-                final float size = rank <= 1 ? WATER_MAJOR_PT : WATER_MINOR_PT;
-                g.setFont(base.deriveFont(Font.ITALIC, size));
-                place(g, projection, placed, f, waterText, false);
+            for (Candidate c : candidates) {
+                if (placed.size() >= budget) break;
+                g.setFont(base.deriveFont(c.style(), c.points()));
+                place(g, projection, placed, c.feature(), c.colour(), c.dot());
             }
         }
 
-        private void drawCountries(Graphics2D g, MapProjection projection,
-                                   List<Rectangle2D> placed, int budget, double span, Font base) {
-            if (span < MIN_COUNTRY_SPAN) return;
-            g.setFont(base.deriveFont(Font.PLAIN, COUNTRY_PT));
-            for (Feature f : countries) {
-                if (placed.size() >= budget) return;
-                if (WorldGazetteer.rankOf(f) > COUNTRY_RANK_LIMIT) continue;
-                place(g, projection, placed, f, countryText, false);
-            }
-        }
-
-        private void drawPlaces(Graphics2D g, MapProjection projection,
-                                List<Rectangle2D> placed, int budget, double span, Font base) {
-            final int rankLimit = rankLimitFor(span);
-            g.setFont(base.deriveFont(Font.PLAIN, PLACE_PT));
-            for (Feature f : places) {
-                if (placed.size() >= budget) return;
-                if (rankOf(f) > rankLimit) continue;
-                place(g, projection, placed, f, text, true);
-            }
-        }
 
         private static boolean overlapsAny(Rectangle2D box, List<Rectangle2D> placed) {
             for (Rectangle2D other : placed) {
