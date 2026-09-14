@@ -20,6 +20,13 @@ that repeats a stored selection or a named profile.
   heavier, darkening the whole way. The ramp it replaced varied in hue but
   hardly at all in lightness, so it read as one dark stain and drizzle was told
   from a downpour by the attribute the eye judges worst.
+- Place names are drawn at twice the size, with a city outranking a sea of equal
+  rank rather than every sea being drawn first — which is what used to leave no
+  room at all for Ho Chi Minh City.
+- `--rename "South China Sea=East Sea"` prints a name of the publisher's
+  choosing over the map data's own. Some water has two names and which is right
+  depends on the audience, so the application ships with none and takes what it
+  is given.
 - The legend samples the ramp at its own stops and labels each one, on a
   logarithmic scale for rainfall. It used to sample evenly and label only the
   ends, which hid four of precipitation's seven stops and left the legend
@@ -45,8 +52,8 @@ that repeats a stored selection or a named profile.
   the start rather than after the work.
 - `--quiet` prints nothing at all, rather than nearly nothing: the same lines go
   to `~/.weathermap/weathermap.log` instead, along with the framework logging
-  that used to reach stderr regardless. Failures still reach stderr, so a
-  scheduled job that stops working is still noticed.
+  that used to reach stderr regardless. Failures go to the log too, so a
+  crontab entry produces no mail at all; the exit status still reports them.
 - `--start WHEN` begins a series at a named moment — `'tomorrow 06:00'`, the
   same expressions a caption parameter takes — rather than at now, which is what
   a chart posted in the evening about tomorrow needs.

@@ -17,6 +17,7 @@ import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.UnaryOperator;
 
 /**
  * The layers drawn from OSM vector features: sea and land fill, coastline,
@@ -270,6 +271,15 @@ public final class VectorLayers {
             return WorldGazetteer.isBundled(f) ? WorldGazetteer.rankOf(f) : rankOf(f);
         }
 
+        /** What to print instead of a feature's own name; see RenderSpec. */
+        private java.util.function.UnaryOperator<String> naming = UnaryOperator.identity();
+
+        public PlaceLabelLayer(List<Feature> features,
+                               java.util.function.UnaryOperator<String> naming) {
+            this(features);
+            if (naming != null) this.naming = naming;
+        }
+
         public PlaceLabelLayer(List<Feature> features) {
             this.places = new ArrayList<>(of(features, FeatureKind.PLACE));
             this.places.sort(Comparator
@@ -423,7 +433,7 @@ public final class VectorLayers {
          */
         private void place(Graphics2D g, MapProjection projection, List<Rectangle2D> placed,
                            Feature f, Color colour, boolean withDot) {
-            final String name = f.name();
+            final String name = naming.apply(f.name());
             if (name == null || name.isBlank()) return;
 
             final double[] p = f.points().get(0);

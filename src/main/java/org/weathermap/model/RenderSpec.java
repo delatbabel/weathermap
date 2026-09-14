@@ -2,6 +2,8 @@ package org.weathermap.model;
 
 import java.time.ZoneId;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -57,6 +59,24 @@ public final class RenderSpec {
      */
     private ZoneId zone = ZoneId.systemDefault();
 
+    /**
+     * Names to print instead of the ones the map data carries.
+     *
+     * <h2>Why this is a setting and not a correction</h2>
+     *
+     * <p>Some water has more than one name, and which one is right depends on
+     * who is reading. The bundled gazetteer calls one body of water the South
+     * China Sea; in Vietnam it is the East Sea, and a chart published there
+     * carrying the other name is not a chart anyone will publish. The same is
+     * true of several others, in both directions.</p>
+     *
+     * <p>So the application does not choose. It ships with no renames at all
+     * and takes whatever the publisher sets, because the publisher is the one
+     * who knows their audience and is answerable for the caption. Nothing here
+     * changes the data, only what is drawn over it.</p>
+     */
+    private final Map<String, String> labelNames = new LinkedHashMap<>();
+
     private int maxWidth = 1600;
     private int maxHeight = 1200;
     private boolean mercator = false;
@@ -66,6 +86,32 @@ public final class RenderSpec {
             LayerKind.LAND_SEA, LayerKind.GRIB, LayerKind.COASTLINE, LayerKind.BOUNDARIES,
             LayerKind.PLACE_LABELS, LayerKind.ISOBARS, LayerKind.WIND_BARBS,
             LayerKind.ANNOTATION);
+
+    /** The name to draw for a feature, which is usually its own. */
+    public String nameFor(String name) {
+        if (name == null || labelNames.isEmpty()) return name;
+        return labelNames.getOrDefault(name, name);
+    }
+
+    /** Every rename in force, in the order they were given. */
+    public Map<String, String> labelNames() { return Map.copyOf(labelNames); }
+
+    /**
+     * Prints {@code to} wherever the map data says {@code from}.
+     *
+     * @param to blank or equal to {@code from} removes the rename
+     */
+    public void renameLabel(String from, String to) {
+        if (from == null || from.isBlank()) return;
+        final String was = from.trim();
+        if (to == null || to.isBlank() || to.trim().equals(was)) {
+            labelNames.remove(was);
+            return;
+        }
+        labelNames.put(was, to.trim());
+    }
+
+    public void clearLabelNames() { labelNames.clear(); }
 
     public ZoneId zone() { return zone; }
 
@@ -152,6 +198,7 @@ public final class RenderSpec {
         c.zone = zone;
         c.layers.clear();
         c.layers.addAll(layers);
+        c.labelNames.putAll(labelNames);
         return c;
     }
 }

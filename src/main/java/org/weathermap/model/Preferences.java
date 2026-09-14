@@ -62,6 +62,18 @@ public final class Preferences {
     private static final String KEY_LAYERS = "render.layers.v3";
 
     /**
+     * Label renames, as numbered pairs rather than key-per-name.
+     *
+     * <p>A properties key ends at its first unescaped space, so
+     * {@code render.labelName.South China Sea} would load back as three
+     * different things. {@code Properties.store} escapes them on the way out,
+     * which round-trips but leaves a file nobody can edit by hand - and this is
+     * a file people will edit by hand. The name goes in the value, where spaces
+     * are ordinary.</p>
+     */
+    private static final String KEY_LABEL_NAMES = "render.labelNames";
+
+    /**
      * The previous layer key, still read when the current one is absent.
      *
      * <p>The list is stored as the layers that are <em>on</em>, so a kind added
@@ -285,6 +297,8 @@ public final class Preferences {
         catch (RuntimeException e) {
             LOG.log(Level.WARNING, "Ignoring stored GRIB opacity", e);
         }
+        readLabelNames(spec);
+
         final List<String> stored = csv(KEY_LAYERS);
         if (!stored.isEmpty()) {
             for (RenderSpec.LayerKind kind : RenderSpec.LayerKind.values()) {
@@ -313,6 +327,42 @@ public final class Preferences {
         props.setProperty(KEY_TIME_ZONE, spec.zone().getId());
         props.setProperty(KEY_GRIB_OPACITY, String.valueOf(spec.gribOpacity()));
         props.setProperty(KEY_LAYERS, join(spec.layers().stream().map(Enum::name).toList()));
+        writeLabelNames(spec);
+    }
+
+    private void readLabelNames(RenderSpec spec) {
+        final int count = intOr(KEY_LABEL_NAMES + ".count", 0);
+        for (int i = 0; i < count; i++) {
+            spec.renameLabel(props.getProperty(KEY_LABEL_NAMES + "." + i + ".from", ""),
+                             props.getProperty(KEY_LABEL_NAMES + "." + i + ".to", ""));
+        }
+    }
+
+    private void writeLabelNames(RenderSpec spec) {
+        // Clear whatever was there: a rename removed in the window has to
+        // disappear from the file, not linger behind a smaller count.
+        final int before = intOr(KEY_LABEL_NAMES + ".count", 0);
+        for (int i = 0; i < before; i++) {
+            props.remove(KEY_LABEL_NAMES + "." + i + ".from");
+            props.remove(KEY_LABEL_NAMES + "." + i + ".to");
+        }
+
+        int i = 0;
+        for (var rename : spec.labelNames().entrySet()) {
+            props.setProperty(KEY_LABEL_NAMES + "." + i + ".from", rename.getKey());
+            props.setProperty(KEY_LABEL_NAMES + "." + i + ".to", rename.getValue());
+            i++;
+        }
+        props.setProperty(KEY_LABEL_NAMES + ".count", String.valueOf(i));
+    }
+
+    private int intOr(String key, int fallback) {
+        try {
+            return Integer.parseInt(props.getProperty(key, String.valueOf(fallback)));
+        }
+        catch (RuntimeException e) {
+            return fallback;
+        }
     }
 
     // ---- output ---------------------------------------------------------

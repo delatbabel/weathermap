@@ -119,10 +119,14 @@ path named; when it passes a megabyte the previous one is kept alongside it as
 2026-09-14 23:17:10  posted    17895695668004550
 ```
 
-> **Failures still reach stderr**, on purpose, and that is the one thing quiet
-> does not swallow — cron mails stderr, which is how anyone finds out a nightly
-> job stopped working. The same lines are in the log either way, so redirect it
-> if you would rather have nothing at all.
+> **Quiet means quiet: failures go to the log and nowhere else**, so a crontab
+> entry produces no mail whether the run worked or not. The exit status still
+> reports the failure — `0` for success, non-zero otherwise — which is what a
+> wrapper script should test if it needs to know. Without `--quiet` failures go
+> to stderr exactly as before.
+>
+> The single exception is a log that cannot be opened. There is then nowhere
+> else for a failure to go, so it falls back to stderr rather than being lost.
 
 Series times sit on a grid of whole steps **in UTC**, not on the local clock, so
 which local times the charts fall on depends on the offset from UTC. At UTC+7

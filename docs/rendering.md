@@ -77,6 +77,31 @@ used to have a uniform brightness scale applied too, which is precisely what
 flattens a lightness gradient. Tests assert the ordering and that nothing
 re-tones it.
 
+### Naming the water
+
+Some water has more than one name, and which one is right depends on who is
+reading. The bundled gazetteer calls one body of water the South China Sea; in
+Vietnam it is the **East Sea**, and a chart published there carrying the other
+name is not a chart anyone will publish. The same is true of several others, in
+both directions.
+
+The application does not choose. It ships with no renames at all and prints
+whatever the publisher sets, because the publisher knows their audience and is
+answerable for what goes out:
+
+```bash
+java -jar weathermap.jar --cli --rename "South China Sea=East Sea" --save
+```
+
+`--save` keeps it, so a scheduled run needs no flag. It may be given more than
+once, it is added to whatever is already stored rather than replacing it, and
+`--rename "Name="` takes one away. Renames live in `preferences.properties` as
+numbered pairs — a properties key ends at its first unescaped space, so the name
+goes in the value where spaces are ordinary and the file stays editable by hand.
+
+Nothing here touches the data. Only the text drawn over it changes, and only for
+names that match exactly.
+
 ### The legend
 
 The bar samples the ramp **at its own stops** and labels every one of them that

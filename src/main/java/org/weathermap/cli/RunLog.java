@@ -31,12 +31,16 @@ import java.util.logging.Logger;
  * file names, the post, and the logging of every class that does any - goes to
  * a file instead.</p>
  *
- * <h2>Failures still reach stderr</h2>
+ * <h2>Failures go to the log too</h2>
  *
- * <p>Deliberately, and it is the one thing quiet does not swallow. A job that
- * fails silently every night is worse than one that says so: cron mails stderr,
- * which is how anybody finds out. Redirect it if that is genuinely not wanted -
- * the log file has the same lines either way.</p>
+ * <p>Quiet means quiet: a failure is written to the file and nowhere else, so a
+ * job in a crontab produces no mail whether it worked or not. The argument for
+ * putting errors on stderr is that cron mails them and that is how anyone finds
+ * out - but it is only an argument for someone who does not read the log, and
+ * the exit status still says whether the run worked, which is what a wrapper
+ * script should be testing anyway.</p>
+ *
+ * <p>Without {@code --quiet} nothing changes: failures go to stderr as before.</p>
  */
 public final class RunLog implements AutoCloseable {
 
@@ -44,6 +48,7 @@ public final class RunLog implements AutoCloseable {
     private static final long MAX_BYTES = 1024 * 1024;
 
     private final PrintStream out;
+    private final boolean quiet;
     private final Logger file;
     private final FileHandler handler;
     private final Path path;
@@ -51,8 +56,9 @@ public final class RunLog implements AutoCloseable {
     /** Console handlers taken off the root logger, to be put back on close. */
     private final java.util.List<Handler> displaced = new java.util.ArrayList<>();
 
-    private RunLog(PrintStream out, Logger file, FileHandler handler, Path path) {
+    private RunLog(PrintStream out, boolean quiet, Logger file, FileHandler handler, Path path) {
         this.out = out;
+        this.quiet = quiet;
         this.file = file;
         this.handler = handler;
         this.path = path;
@@ -70,7 +76,7 @@ public final class RunLog implements AutoCloseable {
     public static RunLog open(boolean quiet, Path explicit) {
         final Path target = explicit != null ? explicit : (quiet ? defaultFile() : null);
         if (target == null) {
-            return new RunLog(System.out, null, null, null);
+            return new RunLog(System.out, quiet, null, null, null);
         }
 
         FileHandler handler = null;
@@ -98,9 +104,12 @@ public final class RunLog implements AutoCloseable {
             // Losing the log is not a reason to lose the run. Say so once, on
             // stderr, which is the channel for things that went wrong.
             System.err.println("weathermap: could not open " + target + ": " + e.getMessage());
-            return new RunLog(quiet ? null : System.out, null, null, null);
+            // Quiet is silent because the log has the failures instead. With no
+            // log there is nowhere else to put them, so they go back to stderr:
+            // the commentary still goes nowhere, because out is null.
+            return new RunLog(quiet ? null : System.out, false, null, null, null);
         }
-        final RunLog log = new RunLog(quiet ? null : System.out, logger, handler, target);
+        final RunLog log = new RunLog(quiet ? null : System.out, quiet, logger, handler, target);
         if (quiet) {
             // Taken off rather than silenced, and put back by close(): the root
             // logger is global, and a process that used this once should not be
@@ -121,9 +130,14 @@ public final class RunLog implements AutoCloseable {
         if (file != null) file.info(message);
     }
 
-    /** Something went wrong. Reaches stderr even when quiet. */
+    /**
+     * Something went wrong.
+     *
+     * <p>To stderr, unless quiet, in which case the log is the only record -
+     * see the note above. The exit status reports the failure either way.</p>
+     */
     public void problem(String message) {
-        System.err.println(message);
+        if (!quiet) System.err.println(message);
         if (file != null) file.severe(message);
     }
 

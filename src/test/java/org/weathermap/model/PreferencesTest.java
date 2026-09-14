@@ -168,4 +168,62 @@ class PreferencesTest {
         assertEquals(java.time.ZoneId.systemDefault(),
                      new Preferences(java.nio.file.Path.of("/nonexistent/x.properties")).zone());
     }
+
+    // ---- names printed instead of the map data's own ----------------------
+
+    /**
+     * A rename survives being stored, spaces and all.
+     *
+     * <p>Stored as numbered pairs rather than a key per name: a properties key
+     * ends at its first unescaped space, so {@code render.labelName.South China
+     * Sea} would come back as three different things. The name goes in the
+     * value, where a space is ordinary and the file stays editable by hand.</p>
+     */
+    @Test
+    void aLabelRenameSurvivesBeingStored(@TempDir Path dir) {
+        final Path file = dir.resolve("preferences.properties");
+        final Preferences saved = new Preferences(file);
+        final RenderSpec spec = saved.renderSpec();
+        spec.renameLabel("South China Sea", "East Sea");
+        spec.renameLabel("Sea of Japan", "East Sea of Korea");
+        saved.setRenderSpec(spec);
+        saved.save();
+
+        final RenderSpec back = new Preferences(file).renderSpec();
+        assertEquals("East Sea", back.nameFor("South China Sea"));
+        assertEquals("East Sea of Korea", back.nameFor("Sea of Japan"));
+        assertEquals("Java Sea", back.nameFor("Java Sea"), "anything else is untouched");
+    }
+
+    /** One removed in the window has to disappear from the file, not linger. */
+    @Test
+    void aRenameThatIsTakenAwayStaysAway(@TempDir Path dir) {
+        final Path file = dir.resolve("preferences.properties");
+        final Preferences prefs = new Preferences(file);
+
+        final RenderSpec first = prefs.renderSpec();
+        first.renameLabel("South China Sea", "East Sea");
+        first.renameLabel("Gulf of Thailand", "Gulf of Siam");
+        prefs.setRenderSpec(first);
+        prefs.save();
+
+        final RenderSpec second = new Preferences(file).renderSpec();
+        second.renameLabel("Gulf of Thailand", "");          // take it away
+        final Preferences again = new Preferences(file);
+        again.setRenderSpec(second);
+        again.save();
+
+        final RenderSpec back = new Preferences(file).renderSpec();
+        assertEquals("East Sea", back.nameFor("South China Sea"));
+        assertEquals("Gulf of Thailand", back.nameFor("Gulf of Thailand"));
+    }
+
+    @Test
+    void aRenameToTheSameNameIsNoRenameAtAll() {
+        final RenderSpec spec = new RenderSpec();
+        spec.renameLabel("Java Sea", "Java Sea");
+        spec.renameLabel("  ", "Something");
+
+        assertTrue(spec.labelNames().isEmpty(), "" + spec.labelNames());
+    }
 }

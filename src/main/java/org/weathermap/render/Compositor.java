@@ -149,7 +149,7 @@ public final class Compositor {
         layers.add(new GraticuleLayer());
         layers.add(new VectorLayers.CoastlineLayer(features, 1.4f));
         layers.add(new VectorLayers.BoundaryLayer(features, 2));
-        layers.add(new VectorLayers.PlaceLabelLayer(features));
+        layers.add(new VectorLayers.PlaceLabelLayer(features, spec::nameFor));
 
         // --- isolines, over the base map -------------------------------------
         //

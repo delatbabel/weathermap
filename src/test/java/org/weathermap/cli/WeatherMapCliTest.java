@@ -37,4 +37,34 @@ class WeatherMapCliTest {
         assertThrows(IllegalArgumentException.class,
                 () -> WeatherMapCli.Options.parse(new String[]{"--nonsense"}));
     }
+
+    @Test
+    void aRenameIsSplitOnItsFirstEquals() {
+        final WeatherMapCli.Options options = WeatherMapCli.Options.parse(
+                new String[]{"--rename", "South China Sea=East Sea"});
+
+        assertEquals(1, options.renames.size());
+        assertEquals("South China Sea", options.renames.get(0)[0]);
+        assertEquals("East Sea", options.renames.get(0)[1]);
+    }
+
+    @Test
+    void severalRenamesAreKept() {
+        final WeatherMapCli.Options options = WeatherMapCli.Options.parse(new String[]{
+                "--rename", "South China Sea=East Sea",
+                "--rename", "Gulf of Thailand=Gulf of Siam"});
+
+        assertEquals(2, options.renames.size());
+    }
+
+    /** A rename with no new name, or no old one, is a typo rather than a request. */
+    @Test
+    void aRenameNeedsBothHalves() {
+        assertThrows(IllegalArgumentException.class,
+                     () -> WeatherMapCli.Options.parse(new String[]{"--rename", "nonsense"}));
+        assertThrows(IllegalArgumentException.class,
+                     () -> WeatherMapCli.Options.parse(new String[]{"--rename", "=East Sea"}));
+        assertThrows(IllegalArgumentException.class,
+                     () -> WeatherMapCli.Options.parse(new String[]{"--rename", "South China Sea="}));
+    }
 }

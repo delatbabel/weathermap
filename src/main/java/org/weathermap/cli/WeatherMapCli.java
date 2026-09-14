@@ -65,6 +65,9 @@ public final class WeatherMapCli {
               --mercator            use Mercator instead of equirectangular
               --timezone ZONE       write chart times in this zone, e.g.
                                     Asia/Bangkok or UTC (default: this machine's)
+              --rename "OLD=NEW"    print NEW on the chart wherever the map data
+                                    says OLD, e.g. "South China Sea=East Sea".
+                                    May be given more than once; --save keeps it
               --start WHEN          begin the series at WHEN instead of now, as
                                     a date(1) expression: 'tomorrow 06:00',
                                     '+12 hours'. A series posted in the evening
@@ -223,6 +226,13 @@ public final class WeatherMapCli {
                     + "levels that were stored");
         }
         log.say("output    " + outputDir);
+        if (!spec.labelNames().isEmpty()) {
+            final List<String> shown = new ArrayList<>();
+            for (var rename : spec.labelNames().entrySet()) {
+                shown.add(rename.getKey() + " -> " + rename.getValue());
+            }
+            log.say("labels    " + String.join(", ", shown));
+        }
         if (options.post) {
             log.say("instagram " + account + ", " + options.postCount + " charts");
             // Already expanded, so this is the text that will be published.
@@ -410,6 +420,22 @@ public final class WeatherMapCli {
                 + " (" + analyses + " analyses, longest lead f" + worstLead + ")";
     }
 
+    /**
+     * Splits {@code OLD=NEW}.
+     *
+     * <p>On the first {@code =}, so a replacement may contain one. A name with
+     * an {@code =} in it is not a thing the gazetteer has.</p>
+     */
+    private static String[] parseRename(String argument) {
+        final int at = argument.indexOf('=');
+        if (at <= 0 || at == argument.length() - 1) {
+            throw new IllegalArgumentException(
+                    "--rename wants OLD=NEW, for example \"South China Sea=East Sea\", not \""
+                    + argument + "\"");
+        }
+        return new String[]{argument.substring(0, at), argument.substring(at + 1)};
+    }
+
     private static GribSelection buildSelection(GribSelection stored, Options options) {
         final GribSelection selection = stored;
 
@@ -446,6 +472,9 @@ public final class WeatherMapCli {
         if (options.opacity >= 0) spec.setGribOpacity(options.opacity);
         if (options.mercator) spec.setMercator(true);
         if (options.zone != null) spec.setZone(options.zone);
+        // Added to whatever is stored rather than replacing it, so one name can
+        // be changed for a single run without losing the standing ones.
+        for (String[] rename : options.renames) spec.renameLabel(rename[0], rename[1]);
         return spec;
     }
 
@@ -473,6 +502,7 @@ public final class WeatherMapCli {
         boolean save;
         boolean post;
         Path logFile;
+        final List<String[]> renames = new ArrayList<>();
         String caption;
         Path captionFile;
         int postCount = 4;
@@ -529,6 +559,7 @@ public final class WeatherMapCli {
                     case "--dry-run" -> o.dryRun = true;
                     case "--quiet", "-q" -> o.quiet = true;
                     case "--log" -> o.logFile = Path.of(next(args, ++i, a));
+                    case "--rename" -> o.renames.add(parseRename(next(args, ++i, a)));
                     case "--area" -> o.area = parseArea(next(args, ++i, a));
                     case "--model" -> {
                         final String id = next(args, ++i, a);

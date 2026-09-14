@@ -59,13 +59,14 @@ class RunLogTest {
     }
 
     /**
-     * A failure still reaches stderr, and that is deliberate.
+     * Quiet means quiet: a failure goes to the log and nowhere else.
      *
-     * <p>cron mails stderr, which is how anyone finds out a nightly job stopped
-     * working. Silence there would be worse than the noise this removes.</p>
+     * <p>So a crontab entry produces no mail whether the run worked or not. The
+     * exit status still reports the failure, which is what a wrapper script
+     * should be testing.</p>
      */
     @Test
-    void aFailureIsStillReportedWhenQuiet(@TempDir Path dir) throws Exception {
+    void aFailureGoesToTheLogAndNotTheTerminal(@TempDir Path dir) throws Exception {
         final Path logFile = dir.resolve("weathermap.log");
 
         final String[] streams = capturing(() -> {
@@ -74,9 +75,45 @@ class RunLogTest {
             }
         });
 
-        assertEquals("", streams[0], "still nothing on stdout");
-        assertTrue(streams[1].contains("no profile called"), streams[1]);
+        assertEquals("", streams[0], "nothing on stdout");
+        assertEquals("", streams[1], "and nothing on stderr either");
         assertTrue(Files.readString(logFile).contains("no profile called"));
+    }
+
+    /** Without --quiet a failure still goes to stderr, as it always did. */
+    @Test
+    void anOrdinaryRunStillReportsFailuresOnStderr() {
+        final String[] streams = capturing(() -> {
+            try (RunLog log = RunLog.open(false, null)) {
+                log.problem("weathermap: no profile called \"nope\"");
+            }
+        });
+
+        assertTrue(streams[1].contains("no profile called"), streams[1]);
+    }
+
+    /**
+     * With no log to write to, a failure goes back to stderr.
+     *
+     * <p>Silence is bought by the log having the failures instead. If the log
+     * could not be opened there is nowhere else for them, and losing them
+     * entirely would be the one outcome worse than a mail.</p>
+     */
+    @Test
+    void aFailureIsNotLostWhenTheLogCannotBeOpened(@TempDir Path dir) throws Exception {
+        // A directory where the log file should be: opening it must fail.
+        final Path blocked = dir.resolve("weathermap.log");
+        Files.createDirectory(blocked);
+
+        final String[] streams = capturing(() -> {
+            try (RunLog log = RunLog.open(true, blocked)) {
+                log.say("this is only commentary");
+                log.problem("weathermap: something went wrong");
+            }
+        });
+
+        assertEquals("", streams[0], "the commentary still goes nowhere");
+        assertTrue(streams[1].contains("something went wrong"), streams[1]);
     }
 
     /**
