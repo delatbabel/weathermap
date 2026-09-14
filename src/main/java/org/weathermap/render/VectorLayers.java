@@ -299,8 +299,38 @@ public final class VectorLayers {
             return (int) Math.max(12, Math.min(90, area / 22_000));
         }
 
+        /**
+         * How much larger place names are drawn than they first were.
+         *
+         * <p>They were sized for a window and read as captions on a 1600x1200
+         * chart - unreadable on a phone, which is where most of these end up.
+         * Everything about a label scales together: the text, the dot beside
+         * it, the halo behind it and the space around it, because a doubled
+         * name next to an unchanged dot looks like a mistake rather than a
+         * choice.</p>
+         */
+        private static final float LABEL_SCALE = 2f;
+
+        private static final float WATER_MAJOR_PT = 13f * LABEL_SCALE;
+        private static final float WATER_MINOR_PT = 11.5f * LABEL_SCALE;
+        private static final float COUNTRY_PT = 11f * LABEL_SCALE;
+        private static final float PLACE_PT = 11f * LABEL_SCALE;
+
         /** Breathing room around a label, so names do not sit shoulder to shoulder. */
         private static final int LABEL_PADDING = 5;
+
+        /** The dot a city name hangs off, and how far the name sits from it. */
+        private static final int DOT_DIAMETER = Math.round(4 * LABEL_SCALE);
+        private static final int DOT_GAP = Math.round(5 * LABEL_SCALE);
+
+        /**
+         * How far the halo reaches behind the text.
+         *
+         * <p>A one-pixel outline vanishes behind letters twice the size, so it
+         * grows too - and every offset within the width is drawn, not just the
+         * outermost ring, or the halo comes out hollow.</p>
+         */
+        private static final int HALO_WIDTH = Math.max(1, Math.round(LABEL_SCALE));
 
         @Override
         public void draw(Graphics2D g, MapProjection projection) {
@@ -332,7 +362,7 @@ public final class VectorLayers {
                 final int rank = WorldGazetteer.rankOf(f);
                 if (rank > limit) continue;
 
-                final float size = rank <= 1 ? 13f : 11.5f;
+                final float size = rank <= 1 ? WATER_MAJOR_PT : WATER_MINOR_PT;
                 g.setFont(base.deriveFont(Font.ITALIC, size));
                 place(g, projection, placed, f, waterText, false);
             }
@@ -341,7 +371,7 @@ public final class VectorLayers {
         private void drawCountries(Graphics2D g, MapProjection projection,
                                    List<Rectangle2D> placed, int budget, double span, Font base) {
             if (span < MIN_COUNTRY_SPAN) return;
-            g.setFont(base.deriveFont(Font.PLAIN, 11f));
+            g.setFont(base.deriveFont(Font.PLAIN, COUNTRY_PT));
             for (Feature f : countries) {
                 if (placed.size() >= budget) return;
                 if (WorldGazetteer.rankOf(f) > COUNTRY_RANK_LIMIT) continue;
@@ -352,7 +382,7 @@ public final class VectorLayers {
         private void drawPlaces(Graphics2D g, MapProjection projection,
                                 List<Rectangle2D> placed, int budget, double span, Font base) {
             final int rankLimit = rankLimitFor(span);
-            g.setFont(base.deriveFont(Font.PLAIN, 11f));
+            g.setFont(base.deriveFont(Font.PLAIN, PLACE_PT));
             for (Feature f : places) {
                 if (placed.size() >= budget) return;
                 if (rankOf(f) > rankLimit) continue;
@@ -360,8 +390,15 @@ public final class VectorLayers {
             }
         }
 
+        private static boolean overlapsAny(Rectangle2D box, List<Rectangle2D> placed) {
+            for (Rectangle2D other : placed) {
+                if (other.intersects(box)) return true;
+            }
+            return false;
+        }
+
         /**
-         * Places one label if it fits, and reports nothing if it does not.
+         * Places one label if it fits anywhere, and reports nothing if it does not.
          *
          * <p>A name with a dot is offset to the right of it; one without is
          * centred on its point, because a sea name marks an area rather than a
@@ -381,41 +418,65 @@ public final class VectorLayers {
 
             final FontMetrics fm = g.getFontMetrics();
             final double width = fm.stringWidth(name);
-            final double tx = withDot ? pt.x + 5 : pt.x - width / 2;
-            final double ty = pt.y + fm.getAscent() / 2.0 - 1;
+            final double centred = pt.y + fm.getAscent() / 2.0 - 1;
 
-            final Rectangle2D box = new Rectangle2D.Double(
-                    tx - LABEL_PADDING, ty - fm.getAscent() - LABEL_PADDING,
-                    width + LABEL_PADDING * 2, fm.getHeight() + LABEL_PADDING * 2);
+            // Where the name may go, best first. A name on a dot has four sides
+            // to try; a sea name is centred on its point because it marks an
+            // area, and sliding it somewhere else would put it over the wrong
+            // water. This is why the labels survive being twice the size they
+            // were: at that size a city beside a sea name loses the space it
+            // used to have, and Ho Chi Minh City and Hanoi both vanished under
+            // "South China Sea" and "Vietnam" before there was anywhere else to
+            // put them.
+            final double[][] candidates = withDot
+                    ? new double[][]{
+                            {pt.x + DOT_GAP, centred},                        // right
+                            {pt.x - DOT_GAP - width, centred},                // left
+                            {pt.x - width / 2, pt.y - DOT_GAP},               // above
+                            {pt.x - width / 2, pt.y + DOT_GAP + fm.getAscent()}}   // below
+                    : new double[][]{{pt.x - width / 2, centred}};
 
-            // The point being on the page is not enough - a sea name is centred
-            // on its point and runs both ways from it, so "East China Sea" a
-            // few pixels inside the right edge was drawn as "East China". Half
-            // a name is worse than no name: it reads as a different place.
-            if (box.getMinX() < 0 || box.getMinY() < 0
-                    || box.getMaxX() > projection.imageWidth()
-                    || box.getMaxY() > projection.imageHeight()) {
-                return;
+            double tx = 0;
+            double ty = 0;
+            Rectangle2D box = null;
+            for (double[] candidate : candidates) {
+                final Rectangle2D tried = new Rectangle2D.Double(
+                        candidate[0] - LABEL_PADDING,
+                        candidate[1] - fm.getAscent() - LABEL_PADDING,
+                        width + LABEL_PADDING * 2, fm.getHeight() + LABEL_PADDING * 2);
+
+                // The point being on the page is not enough - a sea name is
+                // centred on its point and runs both ways from it, so "East
+                // China Sea" a few pixels inside the right edge was drawn as
+                // "East China". Half a name is worse than no name: it reads as
+                // a different place.
+                if (tried.getMinX() < 0 || tried.getMinY() < 0
+                        || tried.getMaxX() > projection.imageWidth()
+                        || tried.getMaxY() > projection.imageHeight()) {
+                    continue;
+                }
+                if (overlapsAny(tried, placed)) continue;
+
+                tx = candidate[0];
+                ty = candidate[1];
+                box = tried;
+                break;
             }
-
-            for (Rectangle2D other : placed) {
-                // TODO: try the other three quadrants around the dot before
-                // dropping the label.
-                if (other.intersects(box)) return;
-            }
+            if (box == null) return;
             placed.add(box);
 
             if (withDot) {
                 g.setColor(dot);
-                g.fillOval((int) pt.x - 2, (int) pt.y - 2, 4, 4);
+                final int r = DOT_DIAMETER / 2;
+                g.fillOval((int) pt.x - r, (int) pt.y - r, DOT_DIAMETER, DOT_DIAMETER);
             }
 
             // A halo keeps names legible over a busy GRIB field. Drawing the
             // string four times is crude next to a real outline but costs
             // nothing and needs no font-glyph work.
             g.setColor(halo);
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dy = -1; dy <= 1; dy++) {
+            for (int dx = -HALO_WIDTH; dx <= HALO_WIDTH; dx++) {
+                for (int dy = -HALO_WIDTH; dy <= HALO_WIDTH; dy++) {
                     if (dx != 0 || dy != 0) {
                         g.drawString(name, (float) tx + dx, (float) ty + dy);
                     }
