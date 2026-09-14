@@ -228,7 +228,13 @@ test:
 
 jar: $(DISTJAR)
 
-$(DISTJAR):
+# Everything the jar is built from. Without these the rule has no prerequisites
+# at all, so make sees a file that exists, calls it up to date and does nothing
+# - `make jar` after editing a source file rebuilt nothing, and `make release`
+# would happily package a jar built from code that had since changed.
+SOURCES:=pom.xml $(shell find src -type f 2>/dev/null)
+
+$(DISTJAR): $(SOURCES)
 	$(MVN) package
 
 # Replaces the old run.sh. ARGS passes options through, so the command-line tool
@@ -532,7 +538,17 @@ release-macos: release-macos-x86_64 release-macos-aarch64
 # Aggregate / checksums / clean
 # =======================================================================
 
-release: release-linux release-windows release-macos
+# Always from a clean tree. `mvn package` is incremental and does not remove a
+# resource that has been deleted from the source: a note moved out of docs/ was
+# still inside the built jar afterwards, and would have shipped in every
+# package. Incremental is right for the development loop above and wrong here,
+# where the whole point is that what ships matches the tree.
+#
+# Written as recipe lines rather than prerequisites so the clean is ordered
+# before the builds even under make -j.
+release:
+	$(MAKE) clean
+	$(MAKE) release-linux release-windows release-macos
 
 release-sha256: | $(TMPDIR)
 	pushd $(TMPDIR) >/dev/null ; \

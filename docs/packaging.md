@@ -10,6 +10,26 @@ make run                   # build if needed, then launch
 make run ARGS="--cli"      # the command-line tool
 ```
 
+
+## What ends up inside a package
+
+Everything under `docs/` matching the `<resources>` block in `pom.xml` is bundled
+into the jar as the Help pages, and therefore ships inside every package built
+here. A file put in `docs/` goes out to anyone who installs the application, so
+working material — research, costings, notes — belongs in `reference/`, which
+nothing reads and nothing ships.
+
+`make release` builds from a clean tree for the same reason. `mvn package` is
+incremental and does not remove a resource that has been deleted from the source,
+so a document moved out of `docs/` stayed inside the built jar until the next
+clean. Incremental is right for `make run`; it is wrong for the thing being
+handed to other people.
+
+The jar itself also has its sources as prerequisites. Without them the rule had
+none at all, make treated an existing jar as up to date whatever had changed
+underneath it, and a release could package code that no longer matched the tree.
+
+
 ## Version numbering
 
 `VNUM` at the top of the `Makefile` is the single source of truth. Everything
