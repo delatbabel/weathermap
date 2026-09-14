@@ -162,12 +162,23 @@ class ChartRequestSeriesTest {
         assertTrue(GribSelection.MAX_SERIES_HOURS_BACK >= 72);
     }
 
+    /**
+     * The cap on the past stands; the floor at zero does not.
+     *
+     * <p>A negative reach back used to be refused outright. It now means a
+     * series that starts that many hours in the future, which is what a chart
+     * posted in the evening about tomorrow needs - see
+     * {@link #aSeriesCanStartAheadOfTheClock}. The invariant that remains is
+     * that the window cannot end before it begins.</p>
+     */
     @Test
     void theReachIntoThePastIsCapped() {
         final GribSelection sel = new GribSelection();
         assertThrows(IllegalArgumentException.class,
                      () -> sel.setSeries(3, GribSelection.MAX_SERIES_HOURS_BACK + 1, 12));
-        assertThrows(IllegalArgumentException.class, () -> sel.setSeries(3, -6, 12));
+
+        sel.setSeries(3, -6, 12);
+        assertEquals(-6, sel.seriesHoursBack(), "a negative reach starts the series ahead");
     }
 
     @Test
@@ -185,5 +196,87 @@ class ChartRequestSeriesTest {
         assertEquals(9, request.leadHours());
         assertFalse(request.isAnalysis());
         assertTrue(new ChartRequest(java.time.LocalDate.of(2026, 9, 12), 6, 0).isAnalysis());
+    }
+
+    // ---- a series that starts later than now -------------------------------
+
+    private static java.time.ZonedDateTime bangkok(int hour, int minute, int second) {
+        return java.time.ZonedDateTime.of(2026, 9, 14, hour, minute, second, 0,
+                                          java.time.ZoneId.of("Asia/Bangkok"));
+    }
+
+    private static java.time.LocalDateTime firstChartLocal(GribSelection selection,
+                                                           java.time.ZonedDateTime now) {
+        return selection.chartRequests(now).get(0).validTime()
+                .atZone(now.getZone()).toLocalDateTime();
+    }
+
+    /**
+     * The evening run, and the second that decides what it is a chart of.
+     *
+     * <p>A six-hourly series is aligned to the UTC grid, so in Bangkok the
+     * charts fall at 01:00, 07:00, 13:00 and 19:00 local. Started in the
+     * evening the first one is therefore 01:00 tomorrow, which is the whole
+     * reason for posting then - but only just. At 19:00:00 exactly the window
+     * still begins on the 19:00 chart, which is today; a second later it does
+     * not.</p>
+     *
+     * <p>That is a knife edge for anything scheduled at 19:00, where whether
+     * the post is about today or tomorrow comes down to how long the machine
+     * took to start. A few minutes past the hour, or {@code --start}, settles
+     * it.</p>
+     */
+    @Test
+    void anEveningSeriesBeginsWithTomorrowButOnlyJustAfterSeven() {
+        final GribSelection selection = new GribSelection();
+        selection.setSeries(6, 0, 48);
+
+        assertEquals(java.time.LocalDateTime.of(2026, 9, 14, 19, 0),
+                firstChartLocal(selection, bangkok(19, 0, 0)),
+                "at exactly 19:00 the first chart is still this evening");
+        assertEquals(java.time.LocalDateTime.of(2026, 9, 15, 1, 0),
+                firstChartLocal(selection, bangkok(19, 0, 1)),
+                "one second later it is tomorrow");
+        assertEquals(java.time.LocalDateTime.of(2026, 9, 15, 1, 0),
+                firstChartLocal(selection, bangkok(19, 5, 0)),
+                "which is why a schedule should not sit on the hour");
+    }
+
+    /**
+     * A negative {@code hoursBack} starts the series in the future.
+     *
+     * <p>Without it a series can only begin at "now", and a chart posted in the
+     * evening that is meant to be about tomorrow begins with one of this
+     * evening. Only the window moves - which run each chart is drawn from is
+     * still decided against the real clock.</p>
+     */
+    @Test
+    void aSeriesCanStartAheadOfTheClock() {
+        final GribSelection selection = new GribSelection();
+        selection.setSeries(3, -12, 12 + 24);      // from 12 hours ahead, for 24 hours
+
+        final java.time.ZonedDateTime now = bangkok(19, 30, 0);
+        final var requests = selection.chartRequests(now);
+
+        final java.time.LocalDateTime first = firstChartLocal(selection, now);
+        assertTrue(first.isAfter(now.toLocalDateTime().plusHours(11)),
+                "the series should begin about twelve hours out, not now: " + first);
+
+        // At or after the moment asked for, never before it: 19:30 +07 is
+        // 12:30Z, twelve hours on is 00:30Z, and the next three-hourly slot on
+        // the UTC grid is 03:00Z - 10:00 in Bangkok. The grid is what makes two
+        // runs twenty minutes apart name the same charts, so it wins.
+        assertEquals(java.time.LocalDateTime.of(2026, 9, 15, 10, 0), first);
+
+        // Still drawn from runs that have actually been published.
+        for (ChartRequest request : requests) {
+            assertTrue(request.leadHours() >= 0, "lead " + request.leadHours());
+        }
+    }
+
+    @Test
+    void aWindowThatStartsAfterItEndsIsRefused() {
+        final GribSelection selection = new GribSelection();
+        assertThrows(IllegalArgumentException.class, () -> selection.setSeries(3, -48, 12));
     }
 }

@@ -379,6 +379,33 @@ to post a caption whose parameters cannot be worked out — a post is published
 before anyone reads it, and that is the one place a mistake cannot be taken
 back.
 
+## Posting from the command line
+
+The same account, the same caption, the same publishing path — there is one of
+each, so a post made from cron cannot differ from one made by hand.
+
+```bash
+java -jar weathermap.jar --cli --profile "BoB to East Sea" --post --count 4
+```
+
+The account is read from `~/.weathermap/instagram.properties`, written by the
+dialog. **There is no flag for the token.** A command-line argument is visible
+in `ps` to every user on the machine and is written to the shell history, which
+is no place for a credential that can post as you until it is revoked.
+
+The caption is the stored one unless `--caption` or `--caption-file` says
+otherwise, and its parameters are expanded at the moment of posting exactly as
+they are from the window.
+
+Everything that can be checked is checked before the download starts: the
+account is complete, the caption expands, and the count is between 2 and 10.
+Failing after fetching and compositing eight charts wastes the work and reports
+the problem a long way from its cause.
+
+See [Build and run](build-and-run.md) for the scheduling, including which local
+times the charts fall on and why a nightly job should not sit exactly on the
+hour.
+
 ## A container is not ready when its ID comes back
 
 Creating a container returns an ID straight away, and then Meta goes off to

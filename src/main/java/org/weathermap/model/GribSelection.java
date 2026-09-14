@@ -165,15 +165,20 @@ public final class GribSelection {
      * Asks for a chart every {@code step} hours, from {@code hoursBack} before
      * now to {@code hoursAhead} after it.
      *
+     * <p><b>{@code hoursBack} may be negative</b>, which starts the series that
+     * many hours in the future. A chart posted in the evening is usually about
+     * tomorrow, and a series that can only begin at "now" begins with a chart of
+     * this evening - so the window has to be able to start ahead of the clock.
+     * Only the window moves: which run each chart comes from is still decided
+     * against the real time, so a series starting tomorrow is still drawn from
+     * runs that have actually been published.</p>
+     *
      * @throws IllegalArgumentException if the step is not positive, the window
      *                                  is shorter than one step, or the past
      *                                  reaches beyond {@link #MAX_SERIES_HOURS_BACK}
      */
     public void setSeries(int step, int hoursBack, int hoursAhead) {
         if (step <= 0) throw new IllegalArgumentException("series step must be at least 1 hour");
-        if (hoursBack < 0) {
-            throw new IllegalArgumentException("a series cannot start " + hoursBack + " hours ago");
-        }
         if (hoursBack > MAX_SERIES_HOURS_BACK) {
             throw new IllegalArgumentException(
                     "a series may start at most " + MAX_SERIES_HOURS_BACK
@@ -185,7 +190,9 @@ public final class GribSelection {
         if (hoursBack + hoursAhead < step) {
             throw new IllegalArgumentException(
                     "a series covering " + (hoursBack + hoursAhead)
-                    + " hours cannot step " + step);
+                    + " hours cannot step " + step
+                    + (hoursBack < 0 ? " - it starts " + (-hoursBack)
+                                       + " hours ahead and ends " + hoursAhead : ""));
         }
         this.seriesStepHours = step;
         this.seriesHoursBack = hoursBack;

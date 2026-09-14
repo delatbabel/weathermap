@@ -38,6 +38,14 @@ that repeats a stored selection or a named profile.
   so their lead is short and often zero.
 - Named profiles for an area and a data selection, savable from the window and
   usable from the command line with `--profile`.
+- The command line can post: `--post` publishes the charts as a carousel using
+  the account and caption stored by the desktop application, with `--caption`,
+  `--caption-file` and `--count` to override. Everything it can check it checks
+  before downloading anything, so a scheduled run that cannot succeed fails at
+  the start rather than after the work.
+- `--start WHEN` begins a series at a named moment — `'tomorrow 06:00'`, the
+  same expressions a caption parameter takes — rather than at now, which is what
+  a chart posted in the evening about tomorrow needs.
 
 **The application**
 

@@ -65,11 +65,25 @@ public final class WeatherMapCli {
               --mercator            use Mercator instead of equirectangular
               --timezone ZONE       write chart times in this zone, e.g.
                                     Asia/Bangkok or UTC (default: this machine's)
+              --start WHEN          begin the series at WHEN instead of now, as
+                                    a date(1) expression: 'tomorrow 06:00',
+                                    '+12 hours'. A series posted in the evening
+                                    is usually about tomorrow, and one starting
+                                    at "now" begins with a chart of this evening
               --profile NAME        download the named saved profile - its area,
                                     model, hours or series, variables and levels.
                                     Other options still override it.
               --list-profiles       print the saved profile names and exit
               --config FILE         a preferences file other than the default
+              --post                post the charts to Instagram as a carousel,
+                                    using the account set up in the desktop
+                                    application (Share -> Post to Instagram...)
+              --caption TEXT        the caption, overriding the stored one.
+                                    Parameters are expanded when it is posted:
+                                    ${tomorrow:'+%A %e %B %Y'}
+              --caption-file FILE   read the caption from a file, for one with
+                                    line breaks in it
+              --count N             how many charts to post, 2 to 10 (default 4)
               --save                store the overrides as the new defaults
               --dry-run             report what would be fetched, fetch nothing
               --quiet               only report errors
@@ -134,6 +148,44 @@ public final class WeatherMapCli {
         final RenderSpec spec = buildRenderSpec(prefs, options);
         final Path outputDir = (options.outputDir != null) ? options.outputDir : prefs.outputDir();
 
+        // --start moves the whole window rather than only its beginning, so
+        // "--start 'tomorrow 06:00' --series 3,48" is 48 hours of charts from
+        // tomorrow morning and not 48 hours from now with the front cut off.
+        if (options.start != null) {
+            if (!selection.hasSeries()) {
+                System.err.println("weathermap: --start needs a series; add --series STEP,AHEAD");
+                return 2;
+            }
+            try {
+                final java.time.ZonedDateTime from = java.time.ZonedDateTime.now(spec.zone());
+                final java.time.ZonedDateTime begin =
+                        org.weathermap.text.DateExpression.evaluate(options.start, from);
+                final int ahead = (int) java.time.Duration.between(from, begin).toHours();
+                selection.setSeries(selection.seriesStepHours(), -ahead,
+                                    ahead + selection.seriesSpanHours());
+                if (!options.quiet) {
+                    System.out.println("start     " + begin + " (" + options.start + ")");
+                }
+            }
+            catch (IllegalArgumentException e) {
+                System.err.println("weathermap: --start " + options.start + ": " + e.getMessage());
+                return 2;
+            }
+        }
+
+        // Everything Instagram needs is checked before anything is downloaded.
+        // This runs from cron: finding out that the token is missing after
+        // fetching and compositing eight charts wastes the work and, worse,
+        // reports the failure far from its cause.
+        org.weathermap.model.InstagramAccount account = null;
+        String caption = null;
+        if (options.post) {
+            final Object[] checked = prepareToPost(options, spec);
+            if (checked == null) return 2;
+            account = (org.weathermap.model.InstagramAccount) checked[0];
+            caption = (String) checked[1];
+        }
+
         // Repair the selection rather than report it. A variable asked for at a
         // level it is not published at makes the whole request match nothing -
         // NOMADS applies the level filter across every variable - and the
@@ -160,10 +212,16 @@ public final class WeatherMapCli {
                         + "levels that were stored");
             }
             System.out.println("output    " + outputDir);
+            if (options.post) {
+                System.out.println("instagram " + account + ", " + options.postCount + " charts");
+                // Already expanded, so this is the text that will be published.
+                System.out.println("caption   " + caption.strip().replace("\n", " / "));
+            }
         }
 
         if (options.dryRun) {
-            System.out.println("dry run - nothing downloaded");
+            System.out.println("dry run - nothing downloaded"
+                    + (options.post ? ", nothing posted" : ""));
             return 0;
         }
 
@@ -185,6 +243,10 @@ public final class WeatherMapCli {
             for (MapService.Result r : results) {
                 System.out.println(r.pngFile());
             }
+            if (options.post) {
+                final int status = post(results, account, caption, options);
+                if (status != 0) return status;
+            }
             if (options.save) {
                 prefs.setArea(area);
                 prefs.setSelection(selection);
@@ -201,6 +263,118 @@ public final class WeatherMapCli {
         }
         catch (Exception e) {
             System.err.println("weathermap: " + e.getMessage());
+            return 1;
+        }
+    }
+
+    /**
+     * Reads and checks everything needed to post, before anything is fetched.
+     *
+     * <p>The account is the one the desktop application stored - there is no
+     * separate command-line copy of it, and no way to pass a token as an
+     * argument, because an argument is visible in {@code ps} to every user on
+     * the machine and ends up in the shell history besides.</p>
+     *
+     * @return {account, caption}, or null when something is wrong, having said
+     *         what on stderr
+     */
+    private static Object[] prepareToPost(Options options, RenderSpec spec) {
+        final java.nio.file.Path file = org.weathermap.model.InstagramAccount.defaultFile();
+        final org.weathermap.model.InstagramAccount account =
+                org.weathermap.model.InstagramAccount.load(file).orElse(null);
+
+        if (account == null) {
+            System.err.println("weathermap: no Instagram account in " + file);
+            System.err.println("  Set one up in the desktop application: "
+                    + "Share -> Post to Instagram..., then Check settings.");
+            return null;
+        }
+        if (!account.isComplete()) {
+            System.err.println("weathermap: the stored Instagram account is incomplete: "
+                    + account);
+            System.err.println("  It needs an account ID, a token, a publish folder and "
+                    + "that folder's public URL.");
+            return null;
+        }
+
+        String caption = options.caption;
+        if (options.captionFile != null) {
+            try {
+                caption = java.nio.file.Files.readString(options.captionFile);
+            }
+            catch (java.io.IOException e) {
+                System.err.println("weathermap: could not read " + options.captionFile
+                        + ": " + e.getMessage());
+                return null;
+            }
+        }
+        if (caption == null) caption = account.caption();
+
+        // Expanded now rather than after the download, so a caption that cannot
+        // be worked out costs nothing and is reported before the work.
+        final java.time.ZonedDateTime now = java.time.ZonedDateTime.now(spec.zone());
+        final var broken = org.weathermap.text.CaptionTemplate.problems(
+                caption, now, java.util.Locale.getDefault());
+        if (!broken.isEmpty()) {
+            System.err.println("weathermap: the caption has a parameter that cannot "
+                    + "be worked out:");
+            for (var problem : broken) System.err.println("  " + problem);
+            return null;
+        }
+
+        if (options.postCount < 2
+                || options.postCount > org.weathermap.instagram.InstagramClient.MAX_CAROUSEL) {
+            System.err.println("weathermap: --count must be 2 to "
+                    + org.weathermap.instagram.InstagramClient.MAX_CAROUSEL
+                    + ", not " + options.postCount);
+            return null;
+        }
+        return new Object[]{account,
+                org.weathermap.text.CaptionTemplate.expand(
+                        caption, now, java.util.Locale.getDefault())};
+    }
+
+    /**
+     * Writes the images, waits for them to be fetchable, and posts them.
+     *
+     * <p>The same three steps the window takes, in the same order and through
+     * the same classes: there is one publishing path, so a post made from cron
+     * cannot differ from one made by hand.</p>
+     */
+    private static int post(List<MapService.Result> results,
+                            org.weathermap.model.InstagramAccount account,
+                            String caption, Options options) {
+        final java.util.function.Consumer<String> say =
+                options.quiet ? m -> { } : System.out::println;
+        try {
+            final List<MapService.Result> charts =
+                    org.weathermap.instagram.ChartPublisher.selectFrom(
+                            results, 0, options.postCount);
+            if (charts.size() < 2) {
+                System.err.println("weathermap: a carousel needs at least two charts, and "
+                        + "only " + charts.size() + " was rendered - ask for a series");
+                return 1;
+            }
+
+            say.accept("writing " + charts.size() + " images for Instagram to fetch");
+            final var images = new org.weathermap.instagram.ChartPublisher(account).publish(charts);
+
+            org.weathermap.instagram.PublishGate.sync(account, say);
+            org.weathermap.instagram.PublishGate.awaitReachable(images, say);
+
+            final var client = new org.weathermap.instagram.InstagramClient(account);
+            final String mediaId = client.postCarousel(images, caption, say);
+            System.out.println("posted    " + mediaId);
+            client.permalink(mediaId).ifPresent(link -> System.out.println("post      " + link));
+            return 0;
+        }
+        catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            System.err.println("weathermap: interrupted while posting");
+            return 130;
+        }
+        catch (Exception e) {
+            System.err.println("weathermap: the post failed: " + e.getMessage());
             return 1;
         }
     }
@@ -290,6 +464,11 @@ public final class WeatherMapCli {
         int seriesBack;
         int seriesSpan = org.weathermap.model.GribSelection.DEFAULT_SERIES_SPAN_HOURS;
         boolean save;
+        boolean post;
+        String caption;
+        Path captionFile;
+        int postCount = 4;
+        String start;
         boolean dryRun;
         boolean quiet;
         boolean help;
@@ -334,6 +513,11 @@ public final class WeatherMapCli {
                         }
                     }
                     case "--save" -> o.save = true;
+                    case "--post" -> o.post = true;
+                    case "--caption" -> o.caption = next(args, ++i, a);
+                    case "--caption-file" -> o.captionFile = Path.of(next(args, ++i, a));
+                    case "--count" -> o.postCount = Integer.parseInt(next(args, ++i, a));
+                    case "--start" -> o.start = next(args, ++i, a);
                     case "--dry-run" -> o.dryRun = true;
                     case "--quiet", "-q" -> o.quiet = true;
                     case "--area" -> o.area = parseArea(next(args, ++i, a));
