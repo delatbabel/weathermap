@@ -18,6 +18,7 @@ class TideChartTest {
 
     private static final ZoneId ZONE = ZoneId.of("Asia/Bangkok");
     private static final LocalDate DAY = LocalDate.of(2026, 9, 26);
+    private static final TidePoint VUNG_TAU = new TidePoint("Vung Tau", 10.34, 107.08);
 
     /** A semidiurnal day: hourly samples, and the turning points between them. */
     private static TideData sample() {
@@ -137,7 +138,7 @@ class TideChartTest {
     @Test
     void drawsTheWaterAndMarksThePeaks() {
         final BufferedImage image =
-                TideChart.render(sample(), DAY, ZONE, "Vung Tau", 960, 540);
+                TideChart.render(sample(), DAY, ZONE, VUNG_TAU, 960, 540);
 
         assertEquals(960, image.getWidth());
         assertEquals(540, image.getHeight());
@@ -154,7 +155,7 @@ class TideChartTest {
     @Test
     void theChartIsALightDocumentWhateverTheWindowIsDoing() {
         final BufferedImage image =
-                TideChart.render(sample(), DAY, ZONE, "Vung Tau", 960, 540);
+                TideChart.render(sample(), DAY, ZONE, VUNG_TAU, 960, 540);
         assertEquals(java.awt.Color.WHITE.getRGB(), image.getRGB(2, 2));
         assertEquals(java.awt.Color.WHITE.getRGB(),
                      image.getRGB(image.getWidth() - 2, image.getHeight() - 2));
@@ -166,7 +167,8 @@ class TideChartTest {
                 new TideData.Station("Nowhere", "sg", 5, 0, 0), "MSL",
                 List.of(), List.of(), TideData.Quota.UNKNOWN, Instant.now(), false);
 
-        final BufferedImage image = TideChart.render(empty, DAY, ZONE, "Nowhere", 960, 540);
+        final BufferedImage image = TideChart.render(
+                empty, DAY, ZONE, new TidePoint("Nowhere", 0, 0), 960, 540);
         assertEquals(960, image.getWidth());
         assertFalse(contains(image, new java.awt.Color(207, 227, 243)), "no water drawn");
     }
@@ -174,7 +176,7 @@ class TideChartTest {
     @Test
     void aDayOutsideTheFetchedRangeIsNotAnError() {
         final BufferedImage image =
-                TideChart.render(sample(), DAY.plusYears(1), ZONE, "Vung Tau", 960, 540);
+                TideChart.render(sample(), DAY.plusYears(1), ZONE, VUNG_TAU, 960, 540);
         assertEquals(540, image.getHeight());
     }
 }

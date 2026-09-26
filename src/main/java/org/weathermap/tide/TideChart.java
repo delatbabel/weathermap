@@ -111,10 +111,10 @@ public final class TideChart {
      * @param day   the local day to draw
      * @param zone  the zone that decides where that day starts and ends, and
      *              which every time on the chart is written in
-     * @param place what to call this place, above the station line; may be null
+     * @param place where this is, and what it is called; may be null
      */
     public static BufferedImage render(TideData data, LocalDate day, ZoneId zone,
-                                       String place, int width, int height) {
+                                       TidePoint place, int width, int height) {
         final BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         final Graphics2D g = image.createGraphics();
         try {
@@ -411,18 +411,23 @@ public final class TideChart {
     // ---- words --------------------------------------------------------------
 
     private static void drawHeading(Graphics2D g, Layout layout, TideData data,
-                                    LocalDate day, ZoneId zone, String place) {
+                                    LocalDate day, ZoneId zone, TidePoint place) {
         final int left = layout.plot.x;
         g.setFont(layout.font(Font.BOLD, 17));
         g.setColor(TITLE_TEXT);
-        final String title = (place == null || place.isBlank())
+        final String title = (place == null)
                 ? "Tides for " + DAY_TITLE.format(day)
-                : place + " — " + DAY_TITLE.format(day);
+                : place.title() + " — " + DAY_TITLE.format(day);
         g.drawString(title, left, Layout.round(32 * layout.scale));
 
         g.setFont(layout.font(Font.PLAIN, 11));
         g.setColor(SUBTITLE_TEXT);
         final StringBuilder sub = new StringBuilder();
+        // The coordinates go on the chart even when there is a name above
+        // them. A name is what the reader recognises the place by and the
+        // position is what was actually asked for; a saved chart that carries
+        // only the first cannot be checked or repeated.
+        if (place != null && place.isNamed()) sub.append(place.coordinates()).append("  ·  ");
         if (data.station() != null && !Double.isNaN(data.station().distanceKm())) {
             sub.append(data.station().describe()).append("  ·  ");
         }

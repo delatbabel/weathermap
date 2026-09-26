@@ -15,19 +15,27 @@ The map starts on the last area you used, or a default box the first time.
 | Select an area | Shift-drag, or press **Select area** and drag |
 | Type an area | Fill in North / South / West / East and press **Apply** |
 | Frame the selection | **Zoom to area** |
-| Fetch detail now | **Load detail** |
+| Fetch detail now | **Load detail** — the coastline, boundaries and place names a chart of this view would use |
+| Pick a tide point | **Tide → Tide chart…**, then click the map |
 
 The selection map shows the base map only — never the weather — because a
 translucent field over a coastline makes choosing an area harder, not easier.
 
-**Tide → Tide chart…** opens a tide chart for the middle of the selected area.
-It needs a Storm Glass API key, and there is a daily request limit worth
-understanding before you start clicking around the coast — see
+**Tide → Tide chart…** hands the map over so you can click the place to read
+the tide at; it names what you clicked from the map data and asks before
+fetching anything. It needs a Storm Glass API key, and there is a daily request
+limit worth understanding before you start clicking around the coast — see
 [Tide charts](tides.md).
 
-Below about 8° of view the application fetches OpenStreetMap coastline and place
-names for what you are looking at. Above that it draws a bundled world outline,
-which is coarse but instant and never blank.
+Below about 8° of view the application fetches OpenStreetMap **place names** for
+what you are looking at, on its own, a moment after you stop moving. Above that
+it draws a bundled world outline, which is coarse but instant and never blank.
+
+Only names, because a coastline query repeated on every pan is tens of megabytes
+and gets this client rate-limited. **Load detail** is the button that asks for
+the rest — the coastline and boundaries as well, exactly what a chart of this
+view would be drawn from — once, when you have decided you want it. The real
+coastline replaces the bundled outline rather than being drawn over it.
 
 ### Across the 180° meridian
 

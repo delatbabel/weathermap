@@ -8,18 +8,27 @@
   and low waters marked on it, and their times and heights on cards
   underneath. The figures are drawn on the chart rather than beside it in the
   window, so a chart that gets shared still carries its own numbers. Arrows
-  page through a fortnight; **Copy** and **Save PNG…** take it away.
+  page through ten days; **Copy** and **Save PNG…** take it away.
+- **The place is chosen on the map, by clicking it.** Scroll and zoom to the
+  harbour, click, and confirm: the click is named from the map data —
+  "Vũng Tàu (town) — 3.1 km away" — before anything is fetched. A latitude and
+  a longitude are exact and unreadable, and a name and a distance can be
+  checked at a glance. The question also says whether pressing the button
+  costs two of the day's requests or none, and whether the name came from OSM
+  or from the bundled gazetteer, because those two mean different things and
+  read identically. Panning and zooming keep working while the map waits;
+  Esc abandons it.
 - The data comes from [Storm Glass](https://stormglass.io). The curve and the
   turning points are two endpoints and both are needed: picking the maxima out
   of hourly samples would put every high water on the hour and understate it.
   The line is drawn through both sets, so the marks sit where the printed times
   say they do.
 - **The daily request limit shaped the design.** The free tier allows ten
-  requests a day and one chart costs two, so a fortnight is fetched at once and
+  requests a day and one chart costs two, so ten days are fetched at once and
   kept for 24 hours; a second look at the same place costs nothing, and the
   status line says whether anything was spent. Coordinates are rounded to about
   a hundred metres first, so nudging the map selection does not buy the same
-  fortnight twice. A spent quota is reported as what it is rather than as
+  ten days twice. A spent quota is reported as what it is rather than as
   "Payment Required".
 - Tides are astronomical only — pressure, wind and surge are not in them, which
   the documentation says plainly.
@@ -33,6 +42,22 @@
   whim should not be two clicks deeper than it was.
 - The preferences file now holds a credential, so it is written readable by its
   owner only.
+
+**Load detail fetches what the chart would fetch**
+
+- The button asked Overpass for place names while its tooltip promised a
+  coastline, so on a view that already had its names, pressing it changed
+  nothing and looked broken. It now asks for the coastline, the boundaries and
+  the names — whichever of them the enabled layers mean, decided by the same
+  code the chart uses, so the two cannot drift again.
+- The real coastline replaces the bundled world outline rather than being
+  drawn over it. Both at once is not a richer map, it is two coastlines a few
+  kilometres apart.
+- The automatic fetch while panning is unchanged and still asks for names
+  alone: a coastline query repeated on every pan is what got this client
+  answered with 429s. A button press is a different thing — it happens once,
+  when someone has decided they want it.
+- The status line now says what arrived, by kind, rather than a single total.
 
 **A JSON reader**
 

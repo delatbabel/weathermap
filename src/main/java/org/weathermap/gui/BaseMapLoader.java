@@ -4,6 +4,7 @@ import org.weathermap.model.BoundingBox;
 import org.weathermap.osm.Feature;
 import org.weathermap.osm.FeatureKind;
 import org.weathermap.osm.OsmSource;
+import org.weathermap.osm.OverpassClient;
 import org.weathermap.osm.WorldBaseMap;
 
 import javax.swing.SwingUtilities;
@@ -94,7 +95,18 @@ public final class BaseMapLoader {
     private BoundingBox loadedFor;
     private List<Feature> detail = List.of();
 
+    /**
+     * True when {@link #detail} carries the shape of the land, not only names.
+     *
+     * <p>Which decides whether the bundled outline is drawn underneath it. Both
+     * at once is not a richer map, it is two coastlines a few kilometres apart:
+     * Natural Earth 1:110m is good to a kilometre or so, which at four degrees
+     * across a window is tens of pixels of visible disagreement.</p>
+     */
+    private boolean detailHasShape;
+
     private BoundingBox pending;
+    private List<FeatureKind> pendingKinds = KINDS;
     private long generation;
 
     public BaseMapLoader(OsmSource source) {
@@ -113,12 +125,24 @@ public final class BaseMapLoader {
         this.onStatus = listener;
     }
 
-    /** The world outline plus whatever detail has been loaded, ready to draw. */
+    /**
+     * Everything the selection map should draw.
+     *
+     * <p>The bundled outline <em>or</em> the real coastline, not both - the
+     * same either/or {@link org.weathermap.MapService} makes when it composites
+     * a chart. Place names layer over the outline happily because the outline
+     * has none; a coastline does not, so when a real one has been loaded the
+     * coarse one gets out of the way.</p>
+     */
     public List<Feature> features() {
-        final List<Feature> out = new ArrayList<>(WorldBaseMap.features());
+        final List<Feature> out = new ArrayList<>();
+        if (!detailHasShape) out.addAll(WorldBaseMap.features());
         out.addAll(detail);
         return out;
     }
+
+    /** True when the map is showing real OSM geometry rather than the outline. */
+    public boolean hasDetailedShape() { return detailHasShape; }
 
     /**
      * Tells the loader where the user is now looking.
@@ -137,24 +161,52 @@ public final class BaseMapLoader {
         if (covers(loadedFor, view)) return;          // already in hand
 
         pending = withMargin(view);
+        pendingKinds = KINDS;
         debounce.restart();
         onStatus.accept("Detail will load when you stop moving…");
     }
 
-    /** Skips the quiet period - for an explicit "load detail here" action. */
-    public void loadNow(BoundingBox view) {
-        if (view.widthDegrees() > MAX_DETAIL_SPAN) {
+    /**
+     * Fetches everything a chart of this view would be drawn from, now.
+     *
+     * <p><b>This is not the automatic path with the waiting removed.</b> That
+     * one asks for place names only, and must: a coastline query repeated on
+     * every pan is what got this client answered with 429s. A button press is
+     * a different thing - it happens once, when someone has decided they want
+     * it - so it asks for what the chart asks for, and the selection map then
+     * shows the geography the chart would show, minus the weather.</p>
+     *
+     * <p>Which kinds those are comes from
+     * {@link org.weathermap.MapService#featureKindsFor}, so the two cannot
+     * drift. They already had: the button fetched names while its tooltip
+     * promised a coastline, and pressing it looked like it did nothing.</p>
+     *
+     * @param kinds what to ask for, usually the chart's own kinds
+     */
+    public void loadNow(BoundingBox view, List<FeatureKind> kinds) {
+        if (kinds.isEmpty()) {
+            onStatus.accept("No map layers are switched on - nothing to load");
+            return;
+        }
+        // The chart's own ceiling, not the automatic path's more cautious one:
+        // above this Overpass will not serve the query at all, and below it an
+        // explicit request is a reasonable thing to make.
+        if (OverpassClient.isTooLarge(view)) {
             onStatus.accept(String.format(
-                    "Zoom in below %.0f° before loading detail", MAX_DETAIL_SPAN));
+                    "Area spans %.0f° - zoom in below %.0f° to load map detail",
+                    Math.max(view.widthDegrees(), view.heightDegrees()),
+                    OverpassClient.MAX_SERVABLE_SPAN));
             return;
         }
         pending = withMargin(view);
+        pendingKinds = List.copyOf(kinds);
         debounce.stop();
         fetchNow();
     }
 
     private void fetchNow() {
         final BoundingBox target = pending;
+        final List<FeatureKind> kinds = pendingKinds;
         if (target == null) return;
         pending = null;
 
@@ -163,16 +215,15 @@ public final class BaseMapLoader {
 
         worker.submit(() -> {
             try {
-                final List<Feature> fetched = source.fetch(target, KINDS);
+                final List<Feature> fetched = source.fetch(target, kinds);
                 SwingUtilities.invokeLater(() -> {
                     // A later view change has already superseded this request;
                     // dropping it keeps the map consistent with the viewport.
                     if (mine != generation) return;
                     detail = fetched;
                     loadedFor = target;
-                    onStatus.accept(fetched.isEmpty()
-                            ? "No named places here"
-                            : fetched.size() + " place names loaded");
+                    detailHasShape = hasShape(fetched);
+                    onStatus.accept(describe(fetched));
                     onLoaded.accept(features());
                 });
             }
@@ -180,18 +231,57 @@ public final class BaseMapLoader {
                 Thread.currentThread().interrupt();
             }
             catch (Exception e) {
-                LOG.log(Level.FINE, "Place-name detail unavailable", e);
+                LOG.log(Level.FINE, "Map detail unavailable", e);
                 SwingUtilities.invokeLater(() -> {
                     if (mine != generation) return;
                     // Overpass rate-limits and times out routinely. The world
                     // outline is still on screen, so this is a note, not a
                     // failure - saying so keeps the user from waiting for
                     // something that is not coming.
-                    onStatus.accept("Place names unavailable: " + shortReason(e)
+                    onStatus.accept("Map detail unavailable: " + shortReason(e)
                             + " - showing the world outline");
                 });
             }
         });
+    }
+
+    /** True when what came back includes the shape of the land, not just names. */
+    private static boolean hasShape(List<Feature> features) {
+        for (Feature f : features) {
+            if (f.kind() == FeatureKind.COASTLINE || f.kind() == FeatureKind.BOUNDARY) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * What arrived, counted by kind.
+     *
+     * <p>Named rather than totalled, because "1,482 features loaded" does not
+     * tell you whether the thing you pressed the button for is among them.</p>
+     */
+    private static String describe(List<Feature> features) {
+        if (features.isEmpty()) return "Nothing mapped here";
+
+        int coastline = 0;
+        int boundaries = 0;
+        int places = 0;
+        for (Feature f : features) {
+            switch (f.kind()) {
+                case COASTLINE -> coastline++;
+                case BOUNDARY -> boundaries++;
+                case PLACE -> places++;
+                default -> { }
+            }
+        }
+        final List<String> parts = new ArrayList<>();
+        if (coastline > 0) parts.add(coastline + " coastline");
+        if (boundaries > 0) parts.add(boundaries + " boundary");
+        if (places > 0) parts.add(places + " place name" + (places == 1 ? "" : "s"));
+        return parts.isEmpty()
+                ? features.size() + " features loaded"
+                : "Loaded " + String.join(", ", parts);
     }
 
     private static String shortReason(Exception e) {

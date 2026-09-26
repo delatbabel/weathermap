@@ -97,9 +97,24 @@ public final class MapPanel extends JPanel {
     private Consumer<BoundingBox> selectionListener = bbox -> { };
     private Consumer<BoundingBox> viewListener = bbox -> { };
 
+    /** Told when Escape abandons a pick, so the status line can stop asking. */
+    private Runnable pickCancelled = () -> { };
+
     private Point dragStart;
     private Point dragNow;
     private boolean draggingSelection;
+
+    /**
+     * Armed while the next click is to be taken as a point rather than a pan.
+     *
+     * <p>A one-shot, not a {@link Mode}. Picking a point is something that
+     * happens once at the start of a task - the tide chart asks where before
+     * it asks anything else - and a mode would have to be left as well as
+     * entered, which is a state to get stuck in for no gain. Panning and
+     * zooming carry on meanwhile, because finding the spot is most of the
+     * job.</p>
+     */
+    private Consumer<double[]> pointPicker;
 
     /**
      * Re-reads the theme's colours when the look and feel changes.
@@ -185,6 +200,10 @@ public final class MapPanel extends JPanel {
 
             @Override
             public void mouseClicked(MouseEvent e) {
+                if (pointPicker != null) {
+                    if (SwingUtilities.isLeftMouseButton(e)) takePoint(e.getPoint());
+                    return;                  // no zoom-on-double-click while picking
+                }
                 if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
                     final double[] under = latLonAt(e.getPoint());
                     if (under == null) return;
@@ -196,6 +215,20 @@ public final class MapPanel extends JPanel {
         addMouseListener(mouse);
         addMouseMotionListener(mouse);
         addMouseWheelListener(mouse);
+
+        // Escape belongs to the pick and to nothing else here, so the action
+        // is registered once and does nothing when no pick is armed rather
+        // than being bound and unbound around it.
+        getInputMap(WHEN_IN_FOCUSED_WINDOW)
+                .put(javax.swing.KeyStroke.getKeyStroke("ESCAPE"), "cancelPick");
+        getActionMap().put("cancelPick", new javax.swing.AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (pointPicker == null) return;
+                cancelPick();
+                pickCancelled.run();
+            }
+        });
 
         addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
@@ -213,6 +246,10 @@ public final class MapPanel extends JPanel {
         if (SwingUtilities.isRightMouseButton(e) || SwingUtilities.isMiddleMouseButton(e)) {
             return false;
         }
+        // While a point is being picked, every drag pans. Dragging out a
+        // download rectangle when the question on screen is "where?" would be
+        // answering a different one.
+        if (pointPicker != null) return false;
         return e.isShiftDown() || mode == Mode.SELECT;
     }
 
@@ -225,6 +262,52 @@ public final class MapPanel extends JPanel {
     /** Told whenever the visible area changes, so detail can be loaded for it. */
     public void setViewListener(Consumer<BoundingBox> listener) {
         this.viewListener = listener;
+    }
+
+    /** Told when Escape abandons an armed pick. */
+    public void setPickCancelledListener(Runnable listener) {
+        this.pickCancelled = listener == null ? () -> { } : listener;
+    }
+
+    /**
+     * Takes the next left click as a geographic point.
+     *
+     * <p>Panning, zooming and the wheel all keep working while this is armed -
+     * scrolling to the right place is most of what choosing a point consists
+     * of. Escape cancels, and so does a second call to
+     * {@link #cancelPick()}.</p>
+     *
+     * @param whenPicked given {@code {lat, lon}} on the EDT, once
+     */
+    public void pickPoint(Consumer<double[]> whenPicked) {
+        this.pointPicker = whenPicked;
+        setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
+        requestFocusInWindow();
+        repaint();
+    }
+
+    /** Disarms a pick, leaving the map as it was. */
+    public void cancelPick() {
+        if (pointPicker == null) return;
+        pointPicker = null;
+        setCursor(Cursor.getPredefinedCursor(
+                mode == Mode.SELECT ? Cursor.CROSSHAIR_CURSOR : Cursor.MOVE_CURSOR));
+        repaint();
+    }
+
+    /** True while the next click will be taken as a point. */
+    public boolean isPicking() { return pointPicker != null; }
+
+    /** Hands the picker the position under {@code p} and disarms. */
+    private void takePoint(Point p) {
+        final double[] at = latLonAt(p);
+        if (at == null) return;
+        final Consumer<double[]> picker = pointPicker;
+        // Disarmed before the callback, not after: the callback puts a modal
+        // dialog on screen, and a pick still armed underneath it takes the
+        // click that dismisses it as a second point.
+        cancelPick();
+        picker.accept(at);
     }
 
     public void setMode(Mode mode) {
@@ -506,9 +589,16 @@ public final class MapPanel extends JPanel {
 
     private void paintHint(Graphics2D g) {
         g.setFont(g.getFont().deriveFont(Font.PLAIN, 11f));
-        final String hint = mode == Mode.SELECT
-                ? "Drag to select an area · right-drag to pan · wheel to zoom"
-                : "Drag to pan · shift-drag to select an area · wheel to zoom";
+        final String hint;
+        if (pointPicker != null) {
+            hint = "Click the point to read the tide at · drag to pan · wheel to zoom "
+                    + "· Esc to cancel";
+        }
+        else {
+            hint = mode == Mode.SELECT
+                    ? "Drag to select an area · right-drag to pan · wheel to zoom"
+                    : "Drag to pan · shift-drag to select an area · wheel to zoom";
+        }
         final int textWidth = g.getFontMetrics().stringWidth(hint);
         // Clear of the graticule's longitude labels, which run along the very
         // bottom edge.

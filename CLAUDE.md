@@ -98,7 +98,7 @@ pixels. Like the map, the tide chart is deliberately unthemed.
 **The Storm Glass daily quota is the constraint everything there answers to.**
 The free tier allows ten requests a day and one chart costs two (the curve and
 the turning points are separate endpoints). So `StormglassClient` asks for a
-fortnight at once, caches for 24 hours, and rounds coordinates to three
+ten days at once, caches for 24 hours, and rounds coordinates to three
 decimals first so the cache key stops moving. Before changing anything about
 when it fetches, read `docs/tides.md`.
 
@@ -106,6 +106,12 @@ when it fetches, read `docs/tides.md`.
 with a nested `meta.station`, which the regex field-grab in `InstagramClient`
 cannot read. No dependency was added, for the same reason there is no
 third-party GRIB decoder.
+
+The place is picked on the map before the window opens: `MapPanel.pickPoint`
+arms a one-shot click (not a `Mode` — picking is a step, not a state to get
+stuck in), `osm.NearestPlace` names it from whatever features are loaded, and
+`MainWindow.tidePointMessage` asks before a request is spent. That message is
+package-private and static so the words can be asserted without a window.
 
 ### Sources are interfaces, and failures are soft
 
@@ -125,6 +131,12 @@ degrade rather than abort:
 - Any Overpass failure falls back to the bundled Natural Earth outline
   (`osm.WorldBaseMap`) and gazetteer (`osm.WorldGazetteer`), built by
   `tools/make-*.py` into `src/main/resources/basemap/*.bin`.
+- `BaseMapLoader` has **two** paths and they ask for different things
+  deliberately: panning fetches place names only (a coastline query on every
+  pan is what earned this client 429s), while **Load detail** is an explicit
+  one-off and fetches whatever `MapService.featureKindsFor` says the chart
+  needs. When real coastline arrives the bundled outline is dropped rather
+  than drawn under it.
 - A GRIB variable that is absent is reported through `Progress.stage` rather
   than thrown, because an absent field renders identically to a flat one.
 

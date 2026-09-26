@@ -8,6 +8,8 @@ import org.weathermap.model.Preferences;
 import org.weathermap.model.RenderSpec;
 import org.weathermap.model.Theme;
 import org.weathermap.model.UiLayout;
+import org.weathermap.osm.NearestPlace;
+import org.weathermap.tide.TidePoint;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -137,6 +139,7 @@ public final class MainWindow extends JFrame {
             showResult.setSelected(false);
         });
         mapPanel.setViewListener(baseMap::viewChanged);
+        mapPanel.setPickCancelledListener(() -> setStatus("Tide chart cancelled"));
 
         baseMap.setOnLoaded(mapPanel::setFeatures);
         baseMap.setOnStatus(mapStatus::setText);
@@ -360,8 +363,13 @@ public final class MainWindow extends JFrame {
 
         bar.add(Box.createHorizontalStrut(6));
         final JButton loadDetail = new JButton("Load detail");
-        loadDetail.setToolTipText("Fetch OSM coastline and place names for the visible area now");
-        loadDetail.addActionListener(e -> baseMap.loadNow(mapPanel.viewBounds()));
+        loadDetail.setToolTipText("Fetch the coastline, boundaries and place names "
+                + "the chart would use, for the visible area, now");
+        // The chart's own kinds, so pressing this shows the geography a chart
+        // of this view would be drawn from - which is what the button has
+        // always claimed and, until now, did not do.
+        loadDetail.addActionListener(e -> baseMap.loadNow(
+                mapPanel.viewBounds(), org.weathermap.MapService.featureKindsFor(renderSpec)));
         bar.add(loadDetail);
 
         bar.add(Box.createHorizontalStrut(18));
@@ -690,15 +698,116 @@ public final class MainWindow extends JFrame {
      * setting not working rather than the name being wrong.</p>
      */
     /**
-     * Opens the tide chart on the middle of the selected area.
+     * Starts a tide chart, which begins by asking where.
      *
-     * <p>The middle of the rectangle rather than a corner, and the selection
-     * rather than the view: the selection is the place the user has said they
-     * care about, and its centre is the point most likely to be the water
-     * rather than the land beside it.</p>
+     * <p>The map, not a dialog full of numbers. A tide belongs to a point and
+     * the point that matters is a harbour or an anchorage someone can see on
+     * the chart, so the interaction is the one that fits: scroll to it, click
+     * it. Storm Glass is not touched until the click has been confirmed,
+     * because a stray one would otherwise spend two of a ten-a-day quota on
+     * open ocean.</p>
      */
     private void showTideChart() {
-        TideWindow.show(this, preferences, renderSpec, area);
+        setStatus("Click the point on the map to read the tide at, or press Esc");
+        mapPanel.pickPoint(this::tidePointPicked);
+    }
+
+    /**
+     * Names the clicked point from the map data and asks before fetching.
+     *
+     * <p>The name is the whole point of the confirmation. A latitude and a
+     * longitude are exact and unreadable - 10.35, 107.08 is a harbour, a
+     * headland or forty kilometres of open water, and only one of those is
+     * worth a tide chart. "Vũng Tàu (town) — 4 km away" is checkable at a
+     * glance, and if it says 180 km the click was somewhere nobody meant.</p>
+     */
+    private void tidePointPicked(double[] at) {
+        setStatus(" ");
+        final NearestPlace.Match nearest =
+                NearestPlace.near(at[0], at[1], baseMap.features(), NearestPlace.NAMEABLE);
+        final TidePoint point =
+                new TidePoint(nearest == null ? null : nearest.name(), at[0], at[1]);
+
+        if (!confirmTidePoint(point, nearest)) {
+            setStatus("Tide chart cancelled");
+            return;
+        }
+        TideWindow.show(this, preferences, renderSpec, point);
+    }
+
+    /** @return true when the user confirmed reading the tide at this point */
+    private boolean confirmTidePoint(TidePoint point, NearestPlace.Match nearest) {
+        final boolean cached = new org.weathermap.tide.StormglassClient(
+                preferences::stormglassApiKey).hasCachedForecast(point.lat(), point.lon());
+
+        final int choice = JOptionPane.showConfirmDialog(
+                this, new JLabel(tidePointMessage(point, nearest, cached)),
+                "Read the tide here?", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+        return choice == JOptionPane.OK_OPTION;
+    }
+
+    /**
+     * What the confirmation actually says.
+     *
+     * <p>Separate from showing it, and package-private, because the words are
+     * the substance and the dialog is only the box they arrive in - this way
+     * they can be asserted without a window.</p>
+     *
+     * @param cached true when the answer is already on disk, so pressing the
+     *               button spends nothing
+     */
+    static String tidePointMessage(TidePoint point, NearestPlace.Match nearest, boolean cached) {
+        final StringBuilder said = new StringBuilder("<html><body style='width:340px'>");
+        said.append("<p>").append(point.coordinates()).append("</p>");
+
+        if (nearest == null) {
+            said.append("<p><b>No named place in the map data is anywhere near.</b> "
+                    + "Load map detail for this area to get a better answer.</p>");
+        }
+        else {
+            final boolean bundled =
+                    org.weathermap.osm.WorldGazetteer.isBundled(nearest.feature());
+            said.append("<p>Nearest place in the ")
+                .append(bundled ? "bundled world gazetteer" : "OSM data")
+                .append(":<br><b>").append(escape(nearest.describe())).append("</b></p>");
+
+            // Which of the two sets it came from is the difference between "the
+            // nearest town really is 66 km away" and "the only names here are
+            // the ones shipped with the application". They read identically -
+            // a name and a distance - and only one of them is worth doing
+            // something about, so it is said rather than left to be inferred
+            // from how far away it sounds.
+            if (bundled) {
+                said.append("<p>That is a major city from the bundled set, not "
+                        + "necessarily the nearest place. <b>Load detail</b> to "
+                        + "name this point from OSM.</p>");
+            }
+            else if (nearest.distanceKm() > FAR_ENOUGH_TO_DOUBT_KM) {
+                said.append("<p>That is a long way off, so this point is well "
+                        + "away from anything named.</p>");
+            }
+        }
+
+        said.append("<p>").append(cached
+                ? "Already fetched today — this costs no requests."
+                : "Storm Glass will be asked for "
+                        + org.weathermap.tide.StormglassClient.DAYS_AHEAD
+                        + " days of tide here, which costs 2 of today's requests.")
+            .append("</p></body></html>");
+        return said.toString();
+    }
+
+    /**
+     * Beyond this, the nearest name is telling you about the data rather than
+     * about the place. A hundred kilometres is roughly how far apart the
+     * bundled gazetteer's cities are in open country.
+     */
+    static final double FAR_ENOUGH_TO_DOUBT_KM = 100;
+
+    /** A place name is map data, and map data is not HTML. */
+    private static String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     /**

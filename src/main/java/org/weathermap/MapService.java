@@ -248,7 +248,15 @@ public final class MapService {
      * coastline is still a weather map. The GRIB field is the point; the base map
      * is context. So this logs and returns empty rather than aborting the run.</p>
      */
-    private List<Feature> fetchFeatures(BoundingBox bbox, RenderSpec spec, Progress p) {
+    /**
+     * Which feature kinds a chart drawn to this spec needs fetching.
+     *
+     * <p>Public and static because the selection map's <b>Load detail</b>
+     * button asks the same question: its whole purpose is to show what the
+     * chart would show, and the two answering it differently is how the button
+     * came to fetch place names while its tooltip promised a coastline.</p>
+     */
+    public static List<FeatureKind> featureKindsFor(RenderSpec spec) {
         final List<FeatureKind> kinds = new ArrayList<>();
         if (spec.isEnabled(RenderSpec.LayerKind.COASTLINE)
                 || spec.isEnabled(RenderSpec.LayerKind.LAND_SEA)) {
@@ -256,6 +264,11 @@ public final class MapService {
         }
         if (spec.isEnabled(RenderSpec.LayerKind.BOUNDARIES)) kinds.add(FeatureKind.BOUNDARY);
         if (spec.isEnabled(RenderSpec.LayerKind.PLACE_LABELS)) kinds.add(FeatureKind.PLACE);
+        return kinds;
+    }
+
+    private List<Feature> fetchFeatures(BoundingBox bbox, RenderSpec spec, Progress p) {
+        final List<FeatureKind> kinds = featureKindsFor(spec);
         if (kinds.isEmpty()) return List.of();
 
         final List<Feature> out = new ArrayList<>(baseMapFor(bbox, kinds, p));

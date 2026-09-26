@@ -180,7 +180,7 @@ class StormglassClientTest {
             // Both extremes fall on the 26th in Madrid, two hours ahead. Seven
             // hours behind, in Los Angeles, the first of them is the evening of
             // the 25th and only the second is the 26th - which is the whole
-            // reason the window asks for a day either side of the fortnight
+            // reason the window asks for a day either side of the ten days
             // rather than exactly the days it means to draw.
             assertEquals(2, data.extremesFor(LocalDate.of(2026, 9, 26),
                                              ZoneId.of("Europe/Madrid")).size());

@@ -7,6 +7,7 @@ import org.weathermap.render.PngWriter;
 import org.weathermap.tide.StormglassClient;
 import org.weathermap.tide.TideChart;
 import org.weathermap.tide.TideData;
+import org.weathermap.tide.TidePoint;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -38,19 +39,24 @@ import java.util.logging.Logger;
 /**
  * The tide chart: a place, a day, and the water either side of it.
  *
- * <h2>A point, from an area</h2>
+ * <h2>The place is chosen before the window opens</h2>
  *
- * <p>Everything else here works on a rectangle; a tide belongs to a spot. The
- * window opens on the middle of whatever area is selected on the map, which is
- * almost always the right guess and is one click from being corrected - the
- * coordinates are fields, not a readout. Storm Glass then answers from the
- * nearest gauge it has, and says which and how far away, because "the tide
- * here" from a station sixty kilometres up the coast is a different claim from
- * one four kilometres away.</p>
+ * <p>Everything else here works on a rectangle; a tide belongs to a spot. So
+ * the first step is on the map - scroll to the place, click it, and confirm
+ * what the map data says is nearest - and this window opens on the answer and
+ * fetches straight away. Opening it first and asking afterwards was the other
+ * way round: a window full of controls before the one decision that matters
+ * had been made.</p>
+ *
+ * <p>The coordinates are still fields rather than a readout, for correcting
+ * the pick by hand. Storm Glass then answers from the nearest gauge it has and
+ * says which, and how far away, because "the tide here" from a station sixty
+ * kilometres up the coast is a different claim from one four kilometres
+ * away.</p>
  *
  * <h2>Paging days costs nothing</h2>
  *
- * <p>A fortnight is fetched at once and kept for a day, so the arrows move
+ * <p>Ten days are fetched at once and kept for a day, so the arrows move
  * through it without touching the network. That is the whole reason the window
  * is built around a day at a time rather than asking per day: the service
  * rations requests, and the free tier would be gone by Thursday.</p>
@@ -64,7 +70,7 @@ public final class TideWindow extends JFrame {
     private static final DateTimeFormatter RETRIEVED =
             DateTimeFormatter.ofPattern("HH:mm");
 
-    /** One at a time: a second tide window would fetch the same fortnight again. */
+    /** One at a time: a second tide window would fetch the same ten days again. */
     private static TideWindow open;
 
     private final Preferences preferences;
@@ -87,7 +93,10 @@ public final class TideWindow extends JFrame {
     private BufferedImage image;
     private SwingWorker<TideData, Void> worker;
 
-    private TideWindow(Preferences preferences, RenderSpec renderSpec, BoundingBox area) {
+    /** The place that was picked, and what the map data called it. */
+    private TidePoint point;
+
+    private TideWindow(Preferences preferences, RenderSpec renderSpec, TidePoint point) {
         super("Tide chart");
         this.preferences = preferences;
         this.renderSpec = renderSpec;
@@ -95,11 +104,17 @@ public final class TideWindow extends JFrame {
 
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setIconImages(MainWindow.appIcons());
-        latitude.setText(format(area.centreLat()));
-        longitude.setText(format(area.centreLon()));
+        setPoint(point);
         setContentPane(buildContent());
         setPreferredSize(new Dimension(1000, 680));
         pack();
+    }
+
+    private void setPoint(TidePoint chosen) {
+        this.point = chosen;
+        latitude.setText(format(chosen.lat()));
+        longitude.setText(format(chosen.lon()));
+        setTitle(chosen.isNamed() ? "Tide chart — " + chosen.name() : "Tide chart");
     }
 
     private static String format(double degrees) {
@@ -189,7 +204,7 @@ public final class TideWindow extends JFrame {
     // ---- fetching ----------------------------------------------------------
 
     /**
-     * Fetches the fortnight for whatever is in the coordinate fields.
+     * Fetches the ten days for whatever is in the coordinate fields.
      *
      * <p>The missing-key case is caught here rather than left to the request,
      * because "403 Forbidden" is a poor way to learn that a field in another
@@ -303,20 +318,28 @@ public final class TideWindow extends JFrame {
     private void draw() {
         if (data == null || day == null) return;
         final int[] size = TideChart.fitSize(renderSpec.maxWidth(), renderSpec.maxHeight());
-        image = TideChart.render(data, day, renderSpec.zone(), placeName(), size[0], size[1]);
+        image = TideChart.render(data, day, renderSpec.zone(), heading(), size[0], size[1]);
         chart.repaint();
         dayLabel.setText(DAY_LABEL.format(day));
         setStatus(describe());
         updateControls();
     }
 
-    /** What to head the chart with: the coordinates asked for, not the station. */
-    private String placeName() {
-        final double[] point = readPoint();
-        if (point == null) return null;
-        return String.format(Locale.ROOT, "%.3f°%s %.3f°%s",
-                Math.abs(point[0]), point[0] >= 0 ? "N" : "S",
-                Math.abs(point[1]), point[1] >= 0 ? "E" : "W");
+    /**
+     * The point the chart is headed with.
+     *
+     * <p>The picked name is kept only while the fields still hold the numbers
+     * it was given for. Typing a new latitude moves the chart somewhere else,
+     * and leaving "Vũng Tàu" over it would be a caption that has stopped being
+     * true.</p>
+     */
+    private TidePoint heading() {
+        final double[] at = readPoint();
+        if (at == null) return point;
+        final boolean moved = point == null
+                || Math.abs(at[0] - point.lat()) > 1e-6
+                || Math.abs(at[1] - point.lon()) > 1e-6;
+        return moved ? new TidePoint(null, at[0], at[1]) : point;
     }
 
     private String describe() {
@@ -391,26 +414,28 @@ public final class TideWindow extends JFrame {
     // ---- opening -------------------------------------------------------------
 
     /**
-     * Shows the tide window, raising it if it is already open and moving it to
-     * the middle of {@code area}.
+     * Shows the tide for a chosen point, reusing the window if it is open.
+     *
+     * <p>Fetches straight away rather than waiting for a button. By the time
+     * this is called the user has scrolled to a place, clicked it and
+     * confirmed what it was - asking a fourth time would be asking them to
+     * repeat themselves.</p>
      */
     public static void show(Window owner, Preferences preferences,
-                            RenderSpec renderSpec, BoundingBox area) {
-        if (open != null && open.isDisplayable()) {
-            open.toFront();
-            open.requestFocus();
-            open.latitude.setText(format(area.centreLat()));
-            open.longitude.setText(format(area.centreLon()));
-            return;
+                            RenderSpec renderSpec, TidePoint point) {
+        TideWindow window = open;
+        if (window != null && window.isDisplayable()) {
+            window.setPoint(point);
+            window.toFront();
+            window.requestFocus();
         }
-        final TideWindow window = new TideWindow(preferences, renderSpec, area);
-        open = window;
-        window.setLocationRelativeTo(owner);
-        window.setVisible(true);
-
-        // Asked for straight away rather than waiting for a button: opening the
-        // window is the request. A warm cache makes it instant and costs
-        // nothing, and a cold one is the request the user came here to make.
-        SwingUtilities.invokeLater(window::load);
+        else {
+            window = new TideWindow(preferences, renderSpec, point);
+            open = window;
+            window.setLocationRelativeTo(owner);
+            window.setVisible(true);
+        }
+        final TideWindow showing = window;
+        SwingUtilities.invokeLater(showing::load);
     }
 }

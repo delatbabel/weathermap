@@ -33,11 +33,11 @@ import java.util.logging.Logger;
  * <h2>The daily limit is the design constraint</h2>
  *
  * <p>Storm Glass counts requests against a daily quota - ten a day on the free
- * tier - so this asks for a fortnight at once and keeps the answer for a day.
- * Two requests then serve every chart for that place until tomorrow, whichever
- * day of the fortnight is being looked at, and paging through the days costs
- * nothing. Asking per day instead would have spent the whole free quota on five
- * days of one harbour.</p>
+ * tier - so this asks for ten days at once and keeps the answer for a day. Two
+ * requests then serve every chart for that place until tomorrow, whichever of
+ * those days is being looked at, and paging through them costs nothing. Asking
+ * per day instead would have spent the whole free quota on five days of one
+ * harbour.</p>
  *
  * <p>The cache is keyed on the request URL, which carries the coordinates and
  * the dates, and the coordinates are rounded first - see
@@ -74,13 +74,17 @@ public final class StormglassClient implements TideSource {
     /**
      * How far ahead to ask for, in days.
      *
-     * <p>A fortnight. The astronomical tide is known indefinitely far ahead, so
-     * the limit is not the physics but the response size and what anyone
-     * actually plans against. Nothing assumes the whole fortnight arrives: if
-     * the account's plan returns less, the chart shows the days that came
-     * back.</p>
+     * <p>Ten, which is also what the API documents as the default end when no
+     * {@code end} is given - so this asks for exactly as much as the service
+     * offers without being asked, and cannot run past a plan's limit. The
+     * astronomical tide is known indefinitely far ahead; the constraint is the
+     * response size and what anyone actually plans against.</p>
+     *
+     * <p>Nothing assumes the whole ten days arrives. The days on offer in the
+     * window are built from what came back, so a shorter answer is a shorter
+     * chart rather than an error.</p>
      */
-    public static final int DAYS_AHEAD = 14;
+    public static final int DAYS_AHEAD = 10;
 
     /**
      * How long a stored answer is reused.
@@ -132,14 +136,40 @@ public final class StormglassClient implements TideSource {
         return key != null && !key.isBlank();
     }
 
-    /** The fortnight from yesterday, which is what the window asks for. */
+    /** The ten days from yesterday, which is what the window asks for. */
     public TideData fetchForecast(double lat, double lon)
             throws IOException, InterruptedException {
         // From yesterday, not today: the days on the chart are local days, and
         // for a zone ahead of UTC the local day already under way began before
         // the UTC one. Starting at today's UTC midnight leaves the first hours
         // of the chart empty for everyone east of Greenwich.
+        // Keep the window in step with hasCachedForecast, which rebuilds the
+        // same two URLs to find out whether they are already on disk.
         return fetch(lat, lon, LocalDate.now(ZoneOffset.UTC).minusDays(1), DAYS_AHEAD + 2);
+    }
+
+    /**
+     * True when {@link #fetchForecast} for this point would cost nothing.
+     *
+     * <p>Asked before the confirmation dialog, so that it can say whether
+     * pressing the button spends two of the day's requests or none. With ten a
+     * day that is the difference between idly comparing four harbours and
+     * running out before lunch, and it is not something a user can work out
+     * for themselves.</p>
+     */
+    public boolean hasCachedForecast(double lat, double lon) {
+        final LocalDate startDay = LocalDate.now(ZoneOffset.UTC).minusDays(1);
+        final long start = startDay.atStartOfDay(ZoneOffset.UTC).toEpochSecond();
+        final long end = startDay.plusDays(DAYS_AHEAD + 2).atStartOfDay(ZoneOffset.UTC)
+                .toEpochSecond();
+        final double roundedLat = round(lat);
+        final double roundedLon = round(lon);
+
+        for (String path : new String[]{"tide/sea-level/point", "tide/extremes/point"}) {
+            final URI uri = uriFor(path, roundedLat, roundedLon, start, end);
+            if (!cache.isFresh(cache.pathFor("tide", uri.toString(), ".json"), TTL)) return false;
+        }
+        return true;
     }
 
     @Override
