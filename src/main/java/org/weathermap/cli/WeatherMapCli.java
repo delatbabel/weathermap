@@ -273,6 +273,13 @@ public final class WeatherMapCli {
                 if (status != 0) return status;
             }
             if (options.save) saveDefaults(prefs, area, selection, spec, log);
+
+            // Synchronously, and here rather than in a worker: this process is
+            // about to exit, and an unattended run every hour is exactly how a
+            // cache grows without anyone watching it.
+            final org.weathermap.util.Cache.Evicted evicted =
+                    new org.weathermap.util.Cache().evictTo(prefs.cacheBudgetBytes());
+            if (evicted.didAnything()) log.say(evicted.toString());
             return 0;
         }
         catch (InterruptedException e) {

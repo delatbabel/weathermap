@@ -177,6 +177,13 @@ features parsed out of it (`osm.FeatureStore`, `.features.bin` beside the
 whenever it is older than the XML or written by a different `VERSION`. Bump
 that constant when the parser changes what it produces.
 
+The cache is **bounded by size, not policy** — `Preferences.cacheBudgetBytes`,
+2 GB by default — and `Cache.evictInBackground` is called at startup, after a
+download and after a Load detail. Eviction is oldest-*fetched* first, not LRU:
+touching a file on read would record the access but also reset the clock the
+TTLs are measured against, making a busy entry immortal. An `.osm.xml` and its
+`.features.bin` are evicted as a pair.
+
 Overpass reports a server-side timeout with **HTTP 200** and a well-formed OSM
 document containing only a `<remark>`. `OverpassClient.rejectErrorDocument`
 exists because caching one of those made an area render with no base map for

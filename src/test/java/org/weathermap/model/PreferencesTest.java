@@ -277,4 +277,44 @@ class PreferencesTest {
         assertFalse(permissions.contains(
                 java.nio.file.attribute.PosixFilePermission.OTHERS_READ), permissions.toString());
     }
+
+    // ---- the cache budget --------------------------------------------------
+
+    @Test
+    void defaultsToAGenerousCacheBudget(@TempDir Path dir) {
+        final Preferences prefs = new Preferences(dir.resolve("prefs.properties"));
+        assertEquals(Preferences.DEFAULT_CACHE_BUDGET_MB, prefs.cacheBudgetMegabytes());
+        assertEquals(Preferences.DEFAULT_CACHE_BUDGET_MB * 1024L * 1024L,
+                     prefs.cacheBudgetBytes());
+    }
+
+    @Test
+    void storesAndReadsBackTheCacheBudget(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("prefs.properties");
+        final Preferences prefs = new Preferences(file);
+        prefs.setCacheBudgetMegabytes(512);
+        prefs.saveOrThrow();
+
+        assertEquals(512, new Preferences(file).cacheBudgetMegabytes());
+    }
+
+    /** Zero is "no limit", and is a choice rather than a mistake. */
+    @Test
+    void zeroIsKeptAsNoLimit(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("prefs.properties");
+        final Preferences prefs = new Preferences(file);
+        prefs.setCacheBudgetMegabytes(0);
+        prefs.saveOrThrow();
+
+        assertEquals(0, new Preferences(file).cacheBudgetMegabytes());
+        assertEquals(0, new Preferences(file).cacheBudgetBytes());
+    }
+
+    @Test
+    void anUnreadableBudgetFallsBackToTheDefault(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("prefs.properties");
+        java.nio.file.Files.writeString(file, "cache.maxMegabytes=as much as you like\n");
+        assertEquals(Preferences.DEFAULT_CACHE_BUDGET_MB,
+                     new Preferences(file).cacheBudgetMegabytes());
+    }
 }

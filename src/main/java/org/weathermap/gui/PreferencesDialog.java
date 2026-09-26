@@ -60,6 +60,7 @@ public final class PreferencesDialog extends JDialog {
     private final JSpinner width;
     private final JSpinner height;
     private final JComboBox<Theme> theme = new JComboBox<>(Theme.values());
+    private final JSpinner cacheBudget;
 
     private boolean saved;
 
@@ -73,6 +74,9 @@ public final class PreferencesDialog extends JDialog {
         // while it is composited.
         this.width = pixelSpinner(renderSpec.maxWidth());
         this.height = pixelSpinner(renderSpec.maxHeight());
+        this.cacheBudget = new JSpinner(new SpinnerNumberModel(
+                preferences.cacheBudgetMegabytes(), 0, 200_000, 256));
+        this.cacheBudget.setEditor(new JSpinner.NumberEditor(this.cacheBudget, "#"));
 
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setContentPane(buildContent());
@@ -128,6 +132,18 @@ public final class PreferencesDialog extends JDialog {
         fields.add(hint("The largest a written chart may be; "
                 + "the area's own shape decides the rest."), c);
 
+        row = addSection(fields, c, row, "Downloads");
+        c.gridx = 0; c.gridy = row;
+        fields.add(new JLabel("Cache limit"), c);
+        final JPanel cacheRow = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 6, 0));
+        cacheRow.add(cacheBudget);
+        cacheRow.add(new JLabel("MB"));
+        c.gridx = 1; c.gridy = row++;
+        fields.add(cacheRow, c);
+
+        c.gridx = 1; c.gridy = row++;
+        fields.add(hint(cacheHint()), c);
+
         row = addSection(fields, c, row, "Appearance");
         c.gridx = 0; c.gridy = row;
         fields.add(new JLabel("Theme"), c);
@@ -163,6 +179,22 @@ public final class PreferencesDialog extends JDialog {
         c.gridwidth = 1;
         c.insets = new Insets(savedTop, 4, 4, 4);
         return row + 1;
+    }
+
+    /**
+     * What the cache holds now, so the number above it means something.
+     *
+     * <p>Measured rather than guessed at: walking a thousand files takes
+     * single-digit milliseconds, and "the oldest go when it passes 2048 MB"
+     * reads very differently when the line underneath says it is already at
+     * 943.</p>
+     */
+    private static String cacheHint() {
+        final long bytes = new org.weathermap.util.Cache().size();
+        return String.format(java.util.Locale.ROOT,
+                "Downloads are kept in ~/.weathermap/cache, now %.0f MB. "
+                + "The oldest go when it passes this. 0 means no limit.",
+                bytes / 1e6);
     }
 
     /**
@@ -242,6 +274,7 @@ public final class PreferencesDialog extends JDialog {
         renderSpec.setMaxSize((Integer) width.getValue(), (Integer) height.getValue());
         preferences.setRenderSpec(renderSpec);
         preferences.setStormglassApiKey(new String(apiKey.getPassword()));
+        preferences.setCacheBudgetMegabytes((Integer) cacheBudget.getValue());
 
         final Theme chosenTheme = (Theme) theme.getSelectedItem();
         if (chosenTheme != null && chosenTheme != Themes.current()) {

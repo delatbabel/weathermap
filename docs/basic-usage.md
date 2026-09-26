@@ -46,6 +46,8 @@ Two things about it worth knowing:
   bundled outline is close to indistinguishable anyway; zoom in first if all you
   want is place names. What was read out of it is kept beside it in a compact
   form, so the second look at an area is quick rather than merely quicker.
+  The cache is bounded — **File → Preferences → Cache limit**, 2 GB by
+  default — and the oldest downloads go when it is passed.
 - **The real coastline replaces the bundled outline** while you are inside the
   area you loaded, because two coastlines a kilometre apart is not a richer map.
   Zoom out past that area and the world outline comes back underneath.

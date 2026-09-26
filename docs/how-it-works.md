@@ -142,5 +142,31 @@ they differ in kind:
 
 | | Cached for | Why |
 |---|---|---|
-| OSM features | 28 days | Slow to fetch, rate-limited, and change slowly |
+| OSM responses | 28 days | Slow to fetch, rate-limited, and change slowly |
+| OSM features | with the response | The parsed form beside it, so 108 MB of XML is not re-read into features on every press — about 180 ms instead of 2,900 |
 | GRIB subsets | Until evicted | A published run is immutable — it will never change |
+| Tide predictions | 24 hours | Not slow, but *rationed*: Storm Glass counts every request against a daily quota |
+
+The parsed features are a **derivation**, not a second copy: the XML stays
+canonical, and anything wrong with the derivation — a different format
+version, a short file, one older than the response it came from — throws it
+away and rebuilds it rather than being trusted.
+
+### The budget
+
+Nothing in there cannot be fetched again, so the cache is bounded by size
+rather than by policy: **File → Preferences → Cache limit**, 2 GB by default,
+0 for no limit. The oldest entries go first when it is passed — checked at
+startup, after a download and after a **Load detail**, on a background thread.
+
+Oldest *fetched*, not least recently used, and that is a deliberate second
+best. Real LRU wants the time an entry was last read, and the obvious way to
+record it — touch the file on a cache hit — cannot be done here, because the
+modification time is also what the TTL is measured against. Touching on read
+would make a busy entry immortal and quietly disable expiry. Oldest-first is at
+least aligned with that: the entry nearest its own expiry is the one to go.
+
+An OSM response and the features parsed from it are evicted together, since
+they are written moments apart and taking one without the other either frees a
+tenth of what was wanted or strands a derivation of a response that has gone. A
+`.part` file is a download in progress and is neither counted nor touched.

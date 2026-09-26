@@ -105,6 +105,9 @@ public final class Preferences {
      */
     private static final String KEY_STORMGLASS_KEY = "tide.stormglass.apiKey";
 
+    /** How large the download cache may grow, in megabytes. */
+    private static final String KEY_CACHE_BUDGET_MB = "cache.maxMegabytes";
+
     /**
      * Window geometry and divider positions, as one line.
      *
@@ -458,6 +461,34 @@ public final class Preferences {
 
     public void setUiLayout(UiLayout layout) {
         props.setProperty(KEY_UI_LAYOUT, layout.toString());
+    }
+
+    // ---- the cache --------------------------------------------------------
+
+    /**
+     * How large the download cache may grow before the oldest entries go,
+     * in megabytes. Zero means no limit.
+     *
+     * <p>Two gigabytes by default, which is generous on purpose. Everything
+     * in there can be fetched again, so the only cost of keeping it is disk -
+     * and the cost of <em>not</em> keeping it is a minute of Overpass for a
+     * region already looked at once. A few months of ordinary use reached
+     * about a gigabyte, so this evicts when someone has been busy rather than
+     * routinely.</p>
+     */
+    public static final int DEFAULT_CACHE_BUDGET_MB = 2048;
+
+    public int cacheBudgetMegabytes() {
+        return Math.max(0, intProperty(KEY_CACHE_BUDGET_MB, DEFAULT_CACHE_BUDGET_MB));
+    }
+
+    public void setCacheBudgetMegabytes(int megabytes) {
+        props.setProperty(KEY_CACHE_BUDGET_MB, String.valueOf(Math.max(0, megabytes)));
+    }
+
+    /** The same budget in bytes, which is what {@code Cache} wants. */
+    public long cacheBudgetBytes() {
+        return cacheBudgetMegabytes() * 1024L * 1024L;
     }
 
     // ---- tides -----------------------------------------------------------

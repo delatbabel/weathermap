@@ -146,6 +146,8 @@ public final class MainWindow extends JFrame {
 
         setIconImages(appIcons());
         bindSeriesKeys();
+        // Whatever last session left behind, before this one adds to it.
+        trimCache();
         setJMenuBar(buildMenuBar());
         setContentPane(buildContent());
         restoreLayout(preferences.uiLayout());
@@ -696,6 +698,18 @@ public final class MainWindow extends JFrame {
      * setting not working rather than the name being wrong.</p>
      */
     /**
+     * Brings the download cache back under its budget, off the event thread.
+     *
+     * <p>Called where the cache has just grown or is about to - startup, the
+     * end of a download, the end of a detail load. Cheap enough to call
+     * freely: walking a thousand files takes single-digit milliseconds, and a
+     * pass that finds nothing to do does nothing.</p>
+     */
+    private void trimCache() {
+        new org.weathermap.util.Cache().evictInBackground(preferences.cacheBudgetBytes());
+    }
+
+    /**
      * Fetches the geography a chart of this view would be drawn from.
      *
      * <p>The chart's own kinds, so pressing this shows what the chart would
@@ -720,6 +734,8 @@ public final class MainWindow extends JFrame {
             return;
         }
         baseMap.loadNow(view, kinds);
+        // A coastline query is the other hundred-megabyte arrival.
+        trimCache();
     }
 
     /**
@@ -1045,6 +1061,9 @@ public final class MainWindow extends JFrame {
         protected void done() {
             progress.setVisible(false);
             progress.setIndeterminate(false);
+            // A series of charts is the largest single thing that gets added
+            // to the cache, so it is the natural moment to look at its size.
+            trimCache();
             try {
                 announce(get());
             }

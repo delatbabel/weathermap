@@ -95,6 +95,28 @@
   is inside what was loaded; past it, both are drawn and the disagreement that
   would be obvious close up is by then well under a pixel.
 
+**The download cache is bounded**
+
+- `Cache.evictTo` existed and was never called, so the cache grew without a
+  ceiling — a few months of ordinary use reached **943 MB**, most of it single
+  Overpass responses of a hundred megabytes and more. It is now wired to a
+  budget under **File → Preferences → Cache limit**, 2 GB by default and 0 for
+  no limit, and runs at startup, after a download and after a **Load detail**,
+  on a background thread. Walking a thousand files takes single-digit
+  milliseconds. The command-line tool trims before it exits, which is where an
+  unattended hourly run would otherwise grow one unwatched.
+- Oldest *fetched* first, not least recently used, and deliberately so:
+  recording a read would mean touching the file, and the modification time is
+  also what the 28-day and 24-hour expiries are measured against. Touching on
+  read would make a busy entry immortal and disable expiry altogether.
+- An OSM response and the features parsed from it are evicted together, since
+  taking one without the other either frees a tenth of what was wanted or
+  strands a 10 MB derivation of a response that has gone. A `.part` file is a
+  download in progress and is neither counted nor deleted.
+- The Preferences screen shows what the cache holds right now, because "the
+  oldest go when it passes 2048 MB" reads very differently beside a line
+  saying it is already at 943.
+
 **A JSON reader**
 
 - `util.Json`, a few hundred lines, because reading an array of objects with a
