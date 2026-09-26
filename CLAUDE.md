@@ -86,6 +86,19 @@ Both projections make x linear in longitude, and two places rely on it:
 `VectorLayers.pathOf`, which unwraps a polyline so a way on the far side of the
 world is not drawn across the picture, and `MapPanel.paintSelection`.
 
+**`MapPanel` composites on a worker thread, not in `paintComponent`.** Three
+counters carry the state: `renderGeneration` (what the map should show, bumped
+by any view, size or feature change), `shownGeneration` (what `baseImage` was
+drawn for) and `renderingGeneration` (what the worker is busy with). Painting
+starts a render when the first two disagree and the third is idle, so a
+superseded result is dropped rather than cancelled.
+
+Two consequences worth knowing before touching it: the frame on screen may be
+a view behind, so **everything that maps pixels to ground must use
+`viewProjection()`** — the current view — and not `baseProjection`, which
+belongs to the frame; and a stale frame is drawn stretched to where its ground
+now falls, which is why a pan looks like a map catching up rather than a jump.
+
 `pathOf` also **drops points closer than `MIN_STEP_PX` to the last one kept**.
 OSM coastline is surveyed, not drawn for a screen: 13° of South-East Asia is
 1.2 M points, over a thousand per pixel column, and the selection map renders

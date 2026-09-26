@@ -69,6 +69,20 @@
   went from 430 ms to 130 ms and the first one from 1.8 s to 0.36 s. Nothing
   is lost that could have been seen, and the map is legible rather than a dark
   smear where the coast is.
+- **The selection map is drawn on a worker thread.** It used to be composited
+  inside `paintComponent`, so every pan, zoom and resize froze the window for
+  as long as the render took — a tenth of a second with detail loaded, and
+  half a second before the thinning above. Painting now costs about 2 ms
+  whatever is loaded.
+- While a render is behind, the last finished frame is stretched to where its
+  ground falls in the view as it is now, which makes a pan or a zoom look like
+  a map catching up rather than a stutter. Drawing the old frame square at the
+  origin instead — the obvious thing — showed the map jumping back and then
+  forward, which is worse than the freeze it replaced.
+- Mouse hit-testing no longer needs a render to have happened. It used to ask
+  the last frame's projection where a click had landed, which would have been
+  a view behind for as long as a render took; it asks the current view
+  instead, and so does every overlay.
 - Zooming out after loading detail for a small area no longer leaves that area
   drawn on an empty world. The bundled outline steps aside only while the view
   is inside what was loaded; past it, both are drawn and the disagreement that

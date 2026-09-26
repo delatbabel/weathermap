@@ -59,6 +59,9 @@ import java.util.function.Consumer;
  */
 public final class MapPanel extends JPanel {
 
+    private static final java.util.logging.Logger LOG =
+            java.util.logging.Logger.getLogger(MapPanel.class.getName());
+
     /** What a plain drag does. */
     public enum Mode {
         /** Drag moves the map. Shift-drag still selects. */
@@ -82,9 +85,44 @@ public final class MapPanel extends JPanel {
     private List<Feature> features = List.of();
     private Mode mode = Mode.PAN;
 
-    /** The current base-map render, and the view it was drawn for. */
+    /** The last finished base-map render, and the view it was drawn for. */
     private BufferedImage baseImage;
     private MapProjection baseProjection;
+
+    /**
+     * Which state the map is in, which state is on screen, and which is being
+     * drawn - all three as counter values.
+     *
+     * <p>{@link #renderGeneration} goes up whenever the view, the size or the
+     * features change. {@link #shownGeneration} is the one {@link #baseImage}
+     * was drawn for, and {@link #renderingGeneration} the one the worker is
+     * busy with. The frame is current when the first two agree, and everything
+     * else follows from comparing them.</p>
+     */
+    private long renderGeneration;
+    private long shownGeneration = -1;
+    private long renderingGeneration = -1;
+
+    /**
+     * Where the base map is drawn, which is not the event thread.
+     *
+     * <p>Thirteen degrees of loaded OSM coastline takes over a hundred
+     * milliseconds to composite, and it used to take it inside
+     * {@code paintComponent} - so every pan, zoom and resize froze the window
+     * for that long, and a big enough area froze it for half a second at a
+     * time. The last finished frame is shown, stretched to where its ground
+     * now falls, until the new one arrives.</p>
+     *
+     * <p>One thread, so two renders never run at once and the newest request
+     * simply waits for the one in flight; a superseded result is dropped when
+     * it lands rather than cancelled mid-draw.</p>
+     */
+    private final java.util.concurrent.ExecutorService renderer =
+            java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+                final Thread t = new Thread(r, "map-render");
+                t.setDaemon(true);
+                return t;
+            });
 
     /** A composited weather map, shown until the view moves. */
     private BufferedImage resultImage;
@@ -371,9 +409,14 @@ public final class MapPanel extends JPanel {
         viewListener.accept(viewBounds());
     }
 
+    /**
+     * Marks the frame on screen as out of date without throwing it away.
+     *
+     * <p>Keeping it is the whole point: it is what there is to show while the
+     * next one is drawn. Clearing it here is what made a pan blank the map.</p>
+     */
     private void invalidateRender() {
-        baseImage = null;
-        baseProjection = null;
+        renderGeneration++;
     }
 
     private void finishPan(Point from, Point to) {
@@ -381,7 +424,7 @@ public final class MapPanel extends JPanel {
         final int dy = to.y - from.y;
         if (dx == 0 && dy == 0) return;
 
-        final BoundingBox bounds = currentProjection().bounds();
+        final BoundingBox bounds = view.bounds(Math.max(1, getWidth()), Math.max(1, getHeight()));
         final double perPixelLon = bounds.widthDegrees() / Math.max(1, getWidth());
         final double perPixelLat = bounds.heightDegrees() / Math.max(1, getHeight());
         // Dragging right moves the map right, so the view moves west.
@@ -434,7 +477,7 @@ public final class MapPanel extends JPanel {
 
     /** @return {@code {lat, lon}} under a panel point, or null before first render */
     private double[] latLonAt(Point p) {
-        final MapProjection projection = currentProjection();
+        final MapProjection projection = viewProjection();
         if (projection == null) return null;
         return projection.toLatLon(p.x, p.y);
     }
@@ -442,36 +485,102 @@ public final class MapPanel extends JPanel {
     // ---- rendering ------------------------------------------------------
 
     /**
-     * The projection for the current viewport, rendering the base map if it is
-     * not already in hand.
+     * The projection for where the map is looking <em>now</em>, drawn or not.
+     *
+     * <p>Which is the one every mouse calculation wants. It used to be the
+     * projection of the last render, and getting one meant doing a render -
+     * so a click had to wait for a repaint before it knew what it had hit.
+     * Now that a frame on screen may be one view behind, the two are
+     * different things and asking for the wrong one would put a click in the
+     * wrong place for as long as a render takes.</p>
      */
-    private MapProjection currentProjection() {
-        if (getWidth() <= 0 || getHeight() <= 0) return null;
-        if (baseProjection == null) renderBase();
-        return baseProjection;
+    private MapProjection viewProjection() {
+        final int w = getWidth();
+        final int h = getHeight();
+        if (w <= 0 || h <= 0) return null;
+        return baseSpec(w, h).projectionFor(view.bounds(w, h));
     }
 
     /**
-     * Draws the base map at exactly panel size.
+     * The render settings for the selection map: everything the chart has,
+     * without the weather.
      *
-     * <p>Panel size rather than {@link RenderSpec}'s output size, so that panel
-     * pixels and image pixels are the same thing - which is what makes the hit
-     * testing for pan, zoom and selection exact instead of approximately right.</p>
+     * <p>At panel size rather than {@link RenderSpec}'s output size, so that
+     * panel pixels and image pixels are the same thing - which is what makes
+     * the hit testing for pan, zoom and selection exact instead of
+     * approximately right.</p>
      */
-    private void renderBase() {
-        final int w = getWidth();
-        final int h = getHeight();
-        if (w <= 0 || h <= 0) return;
-
-        final BoundingBox bounds = view.bounds(w, h);
+    private RenderSpec baseSpec(int w, int h) {
         final RenderSpec base = spec.copy();
         base.setMaxSize(w, h);
         base.setEnabled(RenderSpec.LayerKind.GRIB, false);
         base.setEnabled(RenderSpec.LayerKind.GRATICULE, true);
         base.setEnabled(RenderSpec.LayerKind.ANNOTATION, false);   // no legend to show
+        return base;
+    }
 
-        baseProjection = base.projectionFor(bounds);
-        baseImage = new Compositor(base).render(bounds, features, List.of(), "");
+    /**
+     * True when what is on screen was drawn for the view as it is now.
+     *
+     * <p>False between a pan and the frame that answers it, while the last
+     * one is stretched into place.</p>
+     */
+    public boolean hasCurrentFrame() {
+        return baseImage != null && shownGeneration == renderGeneration;
+    }
+
+    /** True when the frame on screen is neither current nor already being replaced. */
+    private boolean needsRender() {
+        return getWidth() > 0 && getHeight() > 0
+                && shownGeneration != renderGeneration
+                && renderingGeneration != renderGeneration;
+    }
+
+    /**
+     * Starts drawing the current state on the render thread.
+     *
+     * <p>Everything the worker needs is taken here, on the event thread, and
+     * nothing shared is touched over there: the spec is a copy, the feature
+     * list is replaced wholesale rather than mutated, and the result is handed
+     * back through {@code invokeLater}.</p>
+     */
+    private void startRender() {
+        final int w = getWidth();
+        final int h = getHeight();
+        final long mine = renderGeneration;
+        renderingGeneration = mine;
+
+        final BoundingBox bounds = view.bounds(w, h);
+        final RenderSpec base = baseSpec(w, h);
+        final List<Feature> drawing = features;
+
+        renderer.submit(() -> {
+            final MapProjection projection = base.projectionFor(bounds);
+            final BufferedImage image;
+            try {
+                image = new Compositor(base).render(bounds, drawing, List.of(), "");
+            }
+            catch (RuntimeException e) {
+                // A render that throws must not take the thread with it, or
+                // the map silently stops updating for the rest of the session.
+                LOG.log(java.util.logging.Level.WARNING, "Could not draw the base map", e);
+                SwingUtilities.invokeLater(() -> renderingGeneration = -1);
+                return;
+            }
+            SwingUtilities.invokeLater(() -> {
+                renderingGeneration = -1;
+                if (mine <= shownGeneration) return;    // a newer frame won the race
+                baseImage = image;
+                baseProjection = projection;
+                shownGeneration = mine;
+                repaint();
+            });
+        });
+    }
+
+    /** Stops the render thread. Call when the window closes. */
+    public void dispose() {
+        renderer.shutdownNow();
     }
 
     @Override
@@ -489,8 +598,11 @@ public final class MapPanel extends JPanel {
                 return;
             }
 
-            if (baseProjection == null) renderBase();
-            if (baseImage == null) return;
+            if (needsRender()) startRender();
+            if (baseImage == null) {
+                paintNothingYet(g);
+                return;
+            }
 
             // A pan in progress is shown by offsetting the last render; the
             // real one happens on release.
@@ -500,13 +612,27 @@ public final class MapPanel extends JPanel {
                 ox = dragNow.x - dragStart.x;
                 oy = dragNow.y - dragStart.y;
             }
-            g.drawImage(baseImage, ox, oy, null);
+
+            // Whatever is drawn below, the pixels end up showing the view as
+            // it is now: a current frame one-to-one, a stale one stretched to
+            // where its ground falls. So every overlay is placed against the
+            // current view, and none of them against the frame's own
+            // projection - which is a view behind for as long as a render
+            // takes, and put the selection rectangle in the wrong place for
+            // exactly that long.
+            final MapProjection now = viewProjection();
+            if (shownGeneration == renderGeneration || now == null) {
+                g.drawImage(baseImage, ox, oy, null);
+            }
+            else {
+                paintLastFrameWhereItNowFalls(g, now, ox, oy);
+            }
 
             if (ox != 0 || oy != 0) {
                 paintPanGap(g, ox, oy);
             }
             else {
-                paintSelection(g);
+                paintSelection(g, now);
                 paintDragRectangle(g);
                 paintHint(g);
             }
@@ -514,6 +640,54 @@ public final class MapPanel extends JPanel {
         finally {
             g.dispose();
         }
+    }
+
+    /**
+     * Draws the last finished frame stretched to where its ground falls in the
+     * view as it is now.
+     *
+     * <p>This is what makes an off-thread render feel like a map rather than a
+     * stutter. The alternative - drawing the old frame square at the origin
+     * until the new one lands - shows the map jumping back to where it was and
+     * then forward again, which is worse than the freeze it replaced.</p>
+     *
+     * <p>A pure pan makes this a translation and a zoom makes it a scale, both
+     * exact; only a change of projection or of aspect makes it an
+     * approximation, and then only for the tenth of a second before the real
+     * frame arrives.</p>
+     */
+    private void paintLastFrameWhereItNowFalls(Graphics2D g, MapProjection now, int ox, int oy) {
+        final BoundingBox was = baseProjection.bounds();
+        final Point2D.Double nw = now.toPixel(was.north(), was.west());
+        final Point2D.Double se = now.toPixel(was.south(), was.east());
+
+        // The east edge is east of the west edge by definition, so an x that
+        // has come out to the left of it has wrapped - the same correction
+        // the selection overlay needs, and for the same reason.
+        final double turn = 360.0 / now.bounds().widthDegrees() * now.imageWidth();
+        double right = se.x;
+        while (right <= nw.x) right += turn;
+
+        final int x1 = (int) Math.round(nw.x) + ox;
+        final int y1 = (int) Math.round(nw.y) + oy;
+        final int x2 = (int) Math.round(right) + ox;
+        final int y2 = (int) Math.round(se.y) + oy;
+        if (x2 <= x1 || y2 <= y1) return;
+
+        g.setColor(getBackground());
+        g.fillRect(0, 0, getWidth(), getHeight());
+        g.drawImage(baseImage, x1, y1, x2, y2, 0, 0,
+                    baseImage.getWidth(), baseImage.getHeight(), null);
+    }
+
+    /** Before the very first frame there is nothing to stretch, so say so. */
+    private void paintNothingYet(Graphics2D g) {
+        g.setFont(g.getFont().deriveFont(Font.PLAIN, 11f));
+        g.setColor(hintForeground());
+        final String message = "Drawing the map…";
+        g.drawString(message,
+                     (getWidth() - g.getFontMetrics().stringWidth(message)) / 2,
+                     getHeight() / 2);
     }
 
     /** Fills the strip a pan has dragged into view, so it reads as empty, not stale. */
@@ -534,16 +708,15 @@ public final class MapPanel extends JPanel {
      * selection straddling the edge has to appear at both. One of the two
      * copies is almost always off the panel entirely, and clipping is free.</p>
      */
-    private void paintSelection(Graphics2D g) {
-        if (selection == null || baseProjection == null) return;
-        final Point2D.Double nw = baseProjection.toPixel(selection.north(), selection.west());
-        final Point2D.Double se = baseProjection.toPixel(selection.south(), selection.east());
+    private void paintSelection(Graphics2D g, MapProjection now) {
+        if (selection == null || now == null) return;
+        final Point2D.Double nw = now.toPixel(selection.north(), selection.west());
+        final Point2D.Double se = now.toPixel(selection.south(), selection.east());
 
         // The east edge is east of the west edge by definition, so a pixel x
         // that has come out to the left of it has wrapped and belongs a whole
         // turn further on.
-        final double turn = 360.0 / baseProjection.bounds().widthDegrees()
-                * baseProjection.imageWidth();
+        final double turn = 360.0 / now.bounds().widthDegrees() * now.imageWidth();
         // Not <, but <=: a selection of the whole world puts both edges on the
         // same pixel, and it is a full turn wide rather than nothing wide.
         double right = se.x;

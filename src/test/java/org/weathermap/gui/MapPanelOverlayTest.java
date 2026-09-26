@@ -27,11 +27,11 @@ class MapPanelOverlayTest {
     /**
      * Which columns of the painted panel carry any of the overlay.
      *
-     * <p>On the EDT, and in two steps, because {@code setSize} posts a resize
-     * event and the panel throws its cached render away when it arrives.
-     * Painting from the test thread raced that: about one run in five the
-     * render was discarded between being made and being drawn, and the panel
-     * came out blank.</p>
+     * <p>On the EDT, and in stages, for two reasons. {@code setSize} posts a
+     * resize event that marks the render stale, so painting from the test
+     * thread raced it and about one run in five came out blank. And the base
+     * map is now drawn on a worker: the first paint only starts it, so the
+     * frame has to be waited for before there is anything to assert on.</p>
      */
     private static boolean[] overlayColumns(BoundingBox view, BoundingBox selection)
             throws Exception {
@@ -42,15 +42,8 @@ class MapPanelOverlayTest {
             panel.setSize(W, H);
             panel.setSelection(selection);
         });
-        javax.swing.SwingUtilities.invokeAndWait(() -> {
-            final Graphics2D g = image.createGraphics();
-            try {
-                panel.paint(g);
-            }
-            finally {
-                g.dispose();
-            }
-        });
+        awaitFrame(panel, image);
+        paintOnce(panel, image);
 
         final boolean[] columns = new boolean[W];
         for (int x = 0; x < W; x++) {
@@ -62,6 +55,33 @@ class MapPanelOverlayTest {
             }
         }
         return columns;
+    }
+
+    private static void paintOnce(MapPanel panel, BufferedImage image) throws Exception {
+        javax.swing.SwingUtilities.invokeAndWait(() -> {
+            final Graphics2D g = image.createGraphics();
+            try {
+                panel.paint(g);
+            }
+            finally {
+                g.dispose();
+            }
+        });
+    }
+
+    /** Paints until the worker has produced a frame for the current view. */
+    private static void awaitFrame(MapPanel panel, BufferedImage image) throws Exception {
+        final long deadline = System.currentTimeMillis() + 15_000;
+        while (System.currentTimeMillis() < deadline) {
+            // Painting is what starts the render, so this both kicks it off
+            // and picks up the result.
+            paintOnce(panel, image);
+            final boolean[] ready = {false};
+            javax.swing.SwingUtilities.invokeAndWait(() -> ready[0] = panel.hasCurrentFrame());
+            if (ready[0]) return;
+            Thread.sleep(20);
+        }
+        throw new AssertionError("the base map was never drawn");
     }
 
     private static int first(boolean[] columns) {

@@ -155,6 +155,7 @@ public final class MainWindow extends JFrame {
             public void windowClosing(WindowEvent e) {
                 savePreferences();
                 baseMap.dispose();
+                mapPanel.dispose();
                 dispose();
             }
         });
@@ -476,6 +477,7 @@ public final class MainWindow extends JFrame {
         quit.addActionListener(e -> {
             savePreferences();
             baseMap.dispose();
+            mapPanel.dispose();
             dispose();
         });
         file.add(quit);
