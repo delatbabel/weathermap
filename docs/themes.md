@@ -1,11 +1,19 @@
 # Themes
 
-Three choices in the **Appearance** menu, switchable without a restart: FlatLaf
+Three choices, in the **Appearance** menu or under **File → Preferences**,
+switchable without a restart: FlatLaf
 **Light**, FlatLaf **Dark**, and **System** — the platform look and feel, for
 anyone who would rather the application stopped having opinions and matched the
 rest of their desktop. The choice is saved as soon as it is made rather than on
 close, since someone who switches theme and then kills the window has still
 expressed a preference.
+
+It is in both places deliberately. Changing theme is something people do on a
+whim when the light in the room changes, and putting it only in a dialog two
+clicks away would be a worse application than keeping the menu; putting it only
+in the menu would leave one setting out of the one screen that has all the
+others. The two are kept in step — the dialog moves the menu's dot when it
+changes the theme.
 
 The two FlatLaf themes share their metrics, so switching between them changes
 only colours. System does not: the platform look and feel has its own fonts and

@@ -43,6 +43,7 @@ The same pages are in the application: **Help → User's Guide** (F1) and
 | [How it works](docs/how-it-works.md) | The rectangle, the vector base map, the bundled gazetteer, persistence, caching |
 | [Rendering](docs/rendering.md) | The layer stack, field treatments, wind barbs, isobars, highs and lows |
 | [Series, profiles and chart times](docs/series-and-profiles.md) | Charts every *n* hours across past and future, saved profiles, the time labels |
+| [Tide charts](docs/tides.md) | Storm Glass, the API key, reading the chart, and the daily request limit |
 | [Themes](docs/themes.md) | Light, dark and system, and why the map is never themed |
 | [GRIB decoding](docs/grib-decoding.md) | What probing NOMADS established, and why there is no third-party decoder |
 | [Running against public services](docs/operations.md) | The User-Agent, rate limits, polite usage, data licensing |

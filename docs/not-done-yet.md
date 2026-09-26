@@ -20,4 +20,7 @@ Ordered by how much they matter.
 | Isoline segments are not stitched into paths | `IsolineLayer` | Marching squares emits unordered segments, which draw correctly and label adequately. Stitching would buy smoothing and a gap in the line under each label. |
 | A marine label point can land on land | `tools/make-gazetteer.py` | The centroid-then-chord rule holds for convex and crescent shapes; a many-armed one such as "Inner Seas off the West Coast of Scotland" can still put its name over an island. A pole of inaccessibility would fix it. |
 | Cache eviction is never called | `Cache.evictTo` | Implemented but unwired; needs a configured budget. |
+| A tide chart is one point at a time | `tide/` | No station picker and no way to compare two places side by side. The nearest-station answer is taken as given, so a point with a better gauge just out of reach cannot be nudged towards it except by moving the coordinates by hand. |
+| Tides are not in the command-line tool | `cli/` | Only the window draws them, so a daily tide chart cannot be produced unattended the way a weather chart can. |
+| Tide requests are not counted locally | `StormglassClient` | The quota shown is whatever the last response said. Nothing warns before the second-to-last request, and a cached day reports a count that may be from yesterday. |
 | Elevation | — | Left out by decision. OSM has `ele` tags on peaks but no terrain model; shaded relief needs SRTM or Copernicus DEM as a separate source. |

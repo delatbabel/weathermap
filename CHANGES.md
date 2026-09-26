@@ -2,6 +2,44 @@
 
 ## 1.1.0
 
+**Tide charts**
+
+- **Tide → Tide chart…** draws a day of tide for a point: the curve, the high
+  and low waters marked on it, and their times and heights on cards
+  underneath. The figures are drawn on the chart rather than beside it in the
+  window, so a chart that gets shared still carries its own numbers. Arrows
+  page through a fortnight; **Copy** and **Save PNG…** take it away.
+- The data comes from [Storm Glass](https://stormglass.io). The curve and the
+  turning points are two endpoints and both are needed: picking the maxima out
+  of hourly samples would put every high water on the hour and understate it.
+  The line is drawn through both sets, so the marks sit where the printed times
+  say they do.
+- **The daily request limit shaped the design.** The free tier allows ten
+  requests a day and one chart costs two, so a fortnight is fetched at once and
+  kept for 24 hours; a second look at the same place costs nothing, and the
+  status line says whether anything was spent. Coordinates are rounded to about
+  a hundred metres first, so nudging the map selection does not buy the same
+  fortnight twice. A spent quota is reported as what it is rather than as
+  "Payment Required".
+- Tides are astronomical only — pressure, wind and surge are not in them, which
+  the documentation says plainly.
+
+**A Preferences screen**
+
+- **File → Preferences** collects the Storm Glass API key, the chart time zone,
+  the output size and the theme. The zone was behind the Chart menu, the theme
+  behind Appearance, the size nowhere at all. Nothing is applied until Save.
+- The Appearance menu stays, and the two are kept in step. Changing theme on a
+  whim should not be two clicks deeper than it was.
+- The preferences file now holds a credential, so it is written readable by its
+  owner only.
+
+**A JSON reader**
+
+- `util.Json`, a few hundred lines, because reading an array of objects with a
+  regular expression is not reading it. No new dependency, for the same reason
+  there is no third-party GRIB decoder.
+
 **An area may cross the antimeridian**
 
 - A rectangle can now run through 180°, so the Pacific can be chosen in one

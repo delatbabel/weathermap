@@ -100,6 +100,18 @@ public final class MainWindow extends JFrame {
     private RenderSpec renderSpec;
     private DownloadWorker worker;
 
+    /**
+     * The Appearance menu's radio buttons, kept so the Preferences dialog can
+     * move the dot when it changes the theme.
+     *
+     * <p>The theme is deliberately in both places - see
+     * {@link PreferencesDialog} - and the price of that is this: two controls
+     * for one setting have to agree, or the menu quietly claims the old theme
+     * is still current.</p>
+     */
+    private final java.util.Map<Theme, JRadioButtonMenuItem> themeItems =
+            new java.util.EnumMap<>(Theme.class);
+
     public MainWindow() {
         super("Weather Map");
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
@@ -227,7 +239,7 @@ public final class MainWindow extends JFrame {
      * rather than failing - a window without an icon is a smaller problem than
      * a window that will not open.</p>
      */
-    private static List<java.awt.Image> appIcons() {
+    static List<java.awt.Image> appIcons() {
         final List<java.awt.Image> icons = new java.util.ArrayList<>();
         for (int size : new int[]{16, 32, 48, 64, 128, 256}) {
             final java.net.URL url =
@@ -447,6 +459,14 @@ public final class MainWindow extends JFrame {
         final JMenuItem outputDir = new JMenuItem("Set output folder…");
         outputDir.addActionListener(e -> chooseOutputDir());
         file.add(outputDir);
+
+        final JMenuItem prefs = new JMenuItem("Preferences…");
+        prefs.setAccelerator(javax.swing.KeyStroke.getKeyStroke(
+                java.awt.event.KeyEvent.VK_COMMA,
+                java.awt.Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        prefs.addActionListener(e -> showPreferences());
+        file.add(prefs);
+
         file.addSeparator();
         final JMenuItem quit = new JMenuItem("Quit");
         quit.addActionListener(e -> {
@@ -492,6 +512,12 @@ public final class MainWindow extends JFrame {
         chart.add(timeZone);
         bar.add(chart);
 
+        final JMenu tide = new JMenu("Tide");
+        final JMenuItem tideChart = new JMenuItem("Tide chart…");
+        tideChart.addActionListener(e -> showTideChart());
+        tide.add(tideChart);
+        bar.add(tide);
+
         final JMenu share = new JMenu("Share");
         final JMenuItem instagram = new JMenuItem("Post to Instagram…");
         instagram.addActionListener(e -> postToInstagram());
@@ -513,6 +539,7 @@ public final class MainWindow extends JFrame {
             });
             themes.add(item);
             appearance.add(item);
+            themeItems.put(theme, item);
         }
         bar.add(appearance);
 
@@ -662,6 +689,36 @@ public final class MainWindow extends JFrame {
      * fail to parse on the next run, and silently revert - which looks like the
      * setting not working rather than the name being wrong.</p>
      */
+    /**
+     * Opens the tide chart on the middle of the selected area.
+     *
+     * <p>The middle of the rectangle rather than a corner, and the selection
+     * rather than the view: the selection is the place the user has said they
+     * care about, and its centre is the point most likely to be the water
+     * rather than the land beside it.</p>
+     */
+    private void showTideChart() {
+        TideWindow.show(this, preferences, renderSpec, area);
+    }
+
+    /**
+     * Opens Preferences and takes up whatever it changed.
+     *
+     * <p>The dialog writes straight into {@code renderSpec} and the stored
+     * preferences, so there is nothing to copy back - but the menu has to be
+     * re-pointed at the current theme, and the size and zone are worth saying
+     * out loud because neither shows up until the next download.</p>
+     */
+    private void showPreferences() {
+        if (!PreferencesDialog.show(this, preferences, renderSpec)) return;
+
+        final JRadioButtonMenuItem item = themeItems.get(Themes.current());
+        if (item != null) item.setSelected(true);
+
+        setStatus(String.format("Preferences saved - charts %d×%d in %s",
+                renderSpec.maxWidth(), renderSpec.maxHeight(), renderSpec.zone().getId()));
+    }
+
     private void chooseTimeZone() {
         final List<String> ids = new java.util.ArrayList<>(java.time.ZoneId.getAvailableZoneIds());
         java.util.Collections.sort(ids);

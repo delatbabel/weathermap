@@ -20,6 +20,11 @@ The map starts on the last area you used, or a default box the first time.
 The selection map shows the base map only — never the weather — because a
 translucent field over a coastline makes choosing an area harder, not easier.
 
+**Tide → Tide chart…** opens a tide chart for the middle of the selected area.
+It needs a Storm Glass API key, and there is a daily request limit worth
+understanding before you start clicking around the coast — see
+[Tide charts](tides.md).
+
 Below about 8° of view the application fetches OpenStreetMap coastline and place
 names for what you are looking at. Above that it draws a bundled world outline,
 which is coarse but instant and never blank.

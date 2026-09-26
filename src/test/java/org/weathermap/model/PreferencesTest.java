@@ -226,4 +226,55 @@ class PreferencesTest {
 
         assertTrue(spec.labelNames().isEmpty(), "" + spec.labelNames());
     }
+
+    // ---- the Storm Glass API key -----------------------------------------
+
+    @Test
+    void storesAndReadsBackTheApiKey(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("prefs.properties");
+        final Preferences prefs = new Preferences(file);
+        assertEquals("", prefs.stormglassApiKey(), "nothing stored to begin with");
+
+        prefs.setStormglassApiKey("  a-key-with-spaces-round-it  ");
+        prefs.saveOrThrow();
+
+        assertEquals("a-key-with-spaces-round-it", new Preferences(file).stormglassApiKey());
+    }
+
+    /** Clearing the field takes the key out of the file rather than storing "". */
+    @Test
+    void clearingTheKeyRemovesIt(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("cleared.properties");
+        final Preferences prefs = new Preferences(file);
+        prefs.setStormglassApiKey("a-key");
+        prefs.setStormglassApiKey("");
+        prefs.saveOrThrow();
+
+        assertFalse(java.nio.file.Files.readString(file).contains("stormglass"),
+                    java.nio.file.Files.readString(file));
+        assertEquals("", new Preferences(file).stormglassApiKey());
+    }
+
+    /**
+     * The file holds a credential now, so it should not be readable by every
+     * account on the machine. Best effort, and skipped where the filesystem
+     * has no such notion.
+     */
+    @Test
+    void theFileIsWrittenOwnerOnly(@TempDir Path dir) throws Exception {
+        final Path file = dir.resolve("permissions.properties");
+        final Preferences prefs = new Preferences(file);
+        prefs.setStormglassApiKey("a-key");
+        prefs.saveOrThrow();
+
+        final var view = java.nio.file.Files.getFileAttributeView(
+                file, java.nio.file.attribute.PosixFileAttributeView.class);
+        org.junit.jupiter.api.Assumptions.assumeTrue(view != null, "no POSIX permissions here");
+
+        final var permissions = java.nio.file.Files.getPosixFilePermissions(file);
+        assertFalse(permissions.contains(
+                java.nio.file.attribute.PosixFilePermission.GROUP_READ), permissions.toString());
+        assertFalse(permissions.contains(
+                java.nio.file.attribute.PosixFilePermission.OTHERS_READ), permissions.toString());
+    }
 }

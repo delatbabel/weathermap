@@ -86,6 +86,27 @@ Both projections make x linear in longitude, and two places rely on it:
 `VectorLayers.pathOf`, which unwraps a polyline so a way on the far side of the
 world is not drawn across the picture, and `MapPanel.paintSelection`.
 
+### Tides are a second, smaller pipeline
+
+`tide/` does not go through `MapService`, and should not: a tide belongs to a
+point, the map to a rectangle. It keeps the shape though — `TideSource` behind
+the client the way `GribSource` is, `TideData` as the boundary between "Storm
+Glass" and "picture" the way `Grid` is, and `TideChart` returning a
+`BufferedImage` so that what is on screen and what is copied are the same
+pixels. Like the map, the tide chart is deliberately unthemed.
+
+**The Storm Glass daily quota is the constraint everything there answers to.**
+The free tier allows ten requests a day and one chart costs two (the curve and
+the turning points are separate endpoints). So `StormglassClient` asks for a
+fortnight at once, caches for 24 hours, and rounds coordinates to three
+decimals first so the cache key stops moving. Before changing anything about
+when it fetches, read `docs/tides.md`.
+
+`util.Json` exists because of this: the tide response is an array of objects
+with a nested `meta.station`, which the regex field-grab in `InstagramClient`
+cannot read. No dependency was added, for the same reason there is no
+third-party GRIB decoder.
+
 ### Sources are interfaces, and failures are soft
 
 `osm.OsmSource`, `grib.GribSource` and `grib.GribReader` separate where data
@@ -115,7 +136,8 @@ IOException stops the run.
 
 `util.Cache` keys on the request (the full NOMADS URL, the Overpass query text —
 never the endpoint, since every instance serves the same database). A published
-GRIB run is immutable so it never expires; OSM has a 28-day TTL.
+GRIB run is immutable so it never expires; OSM has a 28-day TTL; tides have a
+24-hour one, which is a ceiling on requests rather than a guess at freshness.
 
 Overpass reports a server-side timeout with **HTTP 200** and a well-formed OSM
 document containing only a `<remark>`. `OverpassClient.rejectErrorDocument`
@@ -147,6 +169,9 @@ off where a colour has to be exact. Swing tests must size and paint **on the
 EDT** (`SwingUtilities.invokeAndWait`, in two steps) — `setSize` posts a resize
 event, and `MapPanel` discards its cached render when that arrives, so painting
 from the test thread races it and intermittently produces a blank panel.
+
+**A new `docs/*.md` page must be added to `HelpWindow`'s page list too**, or it
+ships in the jar and is unreachable from Help.
 
 **Version numbers are derived from `VNUM` at the top of the Makefile.**
 `make version-bump` moves the Makefile, the pom *and* the prose in `README.md`,

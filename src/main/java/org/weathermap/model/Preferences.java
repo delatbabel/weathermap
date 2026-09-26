@@ -93,6 +93,19 @@ public final class Preferences {
     private static final String KEY_THEME = "ui.theme";
 
     /**
+     * The Storm Glass API key, for the tide charts.
+     *
+     * <p>Kept here with everything else rather than in a file of its own. It is
+     * a credential, and a plain properties file is not where a secret belongs -
+     * but the alternatives all cost more than they are worth for this one: a
+     * keystore needs a password to unlock it, and the platform keyrings need a
+     * dependency each and are absent on a headless machine, which is exactly
+     * where the command-line tool runs. What the file does get is owner-only
+     * permissions on the way out; see {@link #saveOrThrow}.</p>
+     */
+    private static final String KEY_STORMGLASS_KEY = "tide.stormglass.apiKey";
+
+    /**
      * Window geometry and divider positions, as one line.
      *
      * <p>One key rather than six because they are only ever read and written
@@ -157,6 +170,30 @@ public final class Preferences {
         if (parent != null) Files.createDirectories(parent);
         try (OutputStream out = Files.newOutputStream(file)) {
             props.store(out, "weathermap - last selected area and GRIB data set");
+        }
+        restrictToOwner();
+    }
+
+    /**
+     * Takes group and world permissions off the file.
+     *
+     * <p>It holds an API key. A properties file is still the wrong place for a
+     * credential and this does not make it the right one, but it costs two
+     * lines and removes the case where the key is readable by every account on
+     * a shared machine.</p>
+     *
+     * <p>Best effort, and silent when it cannot be done: Windows and a FAT
+     * volume have no POSIX permissions to set, and failing to narrow them is
+     * not a reason to fail the write that has already happened.</p>
+     */
+    private void restrictToOwner() {
+        try {
+            Files.setPosixFilePermissions(file, java.util.Set.of(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
+        }
+        catch (UnsupportedOperationException | IOException | SecurityException e) {
+            LOG.log(Level.FINE, "Could not restrict permissions on " + file, e);
         }
     }
 
@@ -421,6 +458,18 @@ public final class Preferences {
 
     public void setUiLayout(UiLayout layout) {
         props.setProperty(KEY_UI_LAYOUT, layout.toString());
+    }
+
+    // ---- tides -----------------------------------------------------------
+
+    /** @return the stored Storm Glass API key, or an empty string if there is none */
+    public String stormglassApiKey() {
+        return props.getProperty(KEY_STORMGLASS_KEY, "").trim();
+    }
+
+    public void setStormglassApiKey(String key) {
+        if (key == null || key.isBlank()) props.remove(KEY_STORMGLASS_KEY);
+        else props.setProperty(KEY_STORMGLASS_KEY, key.trim());
     }
 
     public Path outputDir() {

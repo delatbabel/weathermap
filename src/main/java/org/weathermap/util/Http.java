@@ -190,6 +190,28 @@ public final class Http {
         return sendWithRetry(request, HttpResponse.BodyHandlers.ofString()).body();
     }
 
+    /**
+     * GETs a URL as text with the credential sent <b>bare</b> in the
+     * {@code Authorization} header.
+     *
+     * <p>Separate from {@link #getString(URI, String)} because Storm Glass
+     * wants the key on its own, with no {@code Bearer} prefix, and the two are
+     * one word apart: sending the prefix gets an HTTP 403 that reads as a bad
+     * key, which is the wrong thing to go and check. The same reasoning applies
+     * as for a bearer token - a header is not written to the server's access
+     * log and a query string is.</p>
+     */
+    public static String getStringAuthorized(URI uri, String authorization)
+            throws IOException, InterruptedException {
+        final HttpRequest request = HttpRequest.newBuilder(uri)
+                .header("User-Agent", USER_AGENT)
+                .header("Authorization", authorization)
+                .timeout(REQUEST_TIMEOUT)
+                .GET()
+                .build();
+        return sendWithRetry(request, HttpResponse.BodyHandlers.ofString()).body();
+    }
+
     /** POSTs a form body and reads the response as text - how Overpass is queried. */
     public static String postForm(URI uri, String body) throws IOException, InterruptedException {
         final HttpRequest request = HttpRequest.newBuilder(uri)

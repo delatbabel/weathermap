@@ -61,6 +61,7 @@ public final class HelpWindow extends JFrame {
     public static final List<Page> USER_GUIDE = List.of(
             new Page("Basic Usage", "/help/basic-usage.md"),
             new Page("Series and Profiles", "/help/series-and-profiles.md"),
+            new Page("Tide Charts", "/help/tides.md"),
             new Page("Themes", "/help/themes.md"),
             new Page("Build and Run", "/help/build-and-run.md"),
             new Page("Instagram", "/help/instagram.md"),

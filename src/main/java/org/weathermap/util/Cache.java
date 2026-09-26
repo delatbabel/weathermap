@@ -27,6 +27,11 @@ import java.util.logging.Logger;
  *   <li><b>GRIB files</b> are immutable once published: a given run, forecast
  *       hour and subregion will never change. They are cached until the disk
  *       budget evicts them, not until they expire.</li>
+ *   <li><b>Tide predictions</b> are not expensive to compute but they are
+ *       <em>rationed</em>: Storm Glass counts every request against a daily
+ *       quota. Cached for a day, which is a ceiling on requests rather than a
+ *       guess at how fast the answer changes - see
+ *       {@link org.weathermap.tide.StormglassClient#TTL}.</li>
  * </ul>
  *
  * <p>Not thread-safe against concurrent writers of the same key; the download
@@ -56,7 +61,7 @@ public final class Cache {
     /**
      * The path an entry would occupy. Does not create it.
      *
-     * @param namespace a subdirectory - {@code "osm"} or {@code "grib"}
+     * @param namespace a subdirectory - {@code "osm"}, {@code "grib"} or {@code "tide"}
      * @param key       the request this entry caches; hashed, so it may be long
      * @param extension file extension including the dot
      */
