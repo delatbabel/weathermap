@@ -58,6 +58,13 @@
   answered with 429s. A button press is a different thing — it happens once,
   when someone has decided they want it.
 - The status line now says what arrived, by kind, rather than a single total.
+- **The parsed features are cached too, not only the bytes.** The response was
+  kept for four weeks and then turned back into features from scratch every
+  time: about three seconds for 108 MB, on every press and again after every
+  restart. They are now written beside it in a compact form — 108 MB of XML
+  becomes 10 MB, and 2,900 ms of parsing becomes about 180 ms of reading. The
+  XML stays as the canonical copy, so a format or parser change throws the
+  derivation away and rebuilds it rather than being stuck with it.
 - Above about 6° it asks first. Thirteen degrees of South-East Asia came back
   as **108 MB** and a minute or two of waiting, which unannounced reads as the
   button having done nothing. The question says so, and says the answer is

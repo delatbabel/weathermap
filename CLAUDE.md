@@ -170,6 +170,13 @@ never the endpoint, since every instance serves the same database). A published
 GRIB run is immutable so it never expires; OSM has a 28-day TTL; tides have a
 24-hour one, which is a ceiling on requests rather than a guess at freshness.
 
+An Overpass response is cached **twice**: the XML as it arrived, and the
+features parsed out of it (`osm.FeatureStore`, `.features.bin` beside the
+`.osm.xml`). The second is a derivation — 108 MB of XML is 10 MB of it, and
+2,900 ms of parsing is 180 ms of reading — and is thrown away and rebuilt
+whenever it is older than the XML or written by a different `VERSION`. Bump
+that constant when the parser changes what it produces.
+
 Overpass reports a server-side timeout with **HTTP 200** and a well-formed OSM
 document containing only a `<remark>`. `OverpassClient.rejectErrorDocument`
 exists because caching one of those made an area render with no base map for

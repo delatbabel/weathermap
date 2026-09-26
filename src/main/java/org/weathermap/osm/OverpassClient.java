@@ -151,19 +151,69 @@ public final class OverpassClient implements OsmSource {
         // same OSM database, so a result cached from one is valid for all, and
         // keying on the endpoint would refetch whenever failover moved us.
         final Path entry = cache.pathFor("osm", query, ".osm.xml");
+        final Path parsed = cache.pathFor("osm", query, ".features.bin");
 
         if (cache.isFresh(entry, Cache.OSM_TTL)) {
             LOG.fine(() -> "OSM cache hit: " + entry);
+            final List<Feature> stored = readParsed(parsed, entry);
+            if (stored != null) return stored;
         }
         else {
             final String xml = queryWithFailover(query, bbox);
             Files.createDirectories(entry.getParent());
             Files.writeString(entry, xml, StandardCharsets.UTF_8);
+            // What was parsed from the previous response is not what this one
+            // says. Deleting it now rather than relying on the timestamp
+            // comparison keeps the two from ever disagreeing.
+            Files.deleteIfExists(parsed);
         }
 
-        try (var in = Files.newInputStream(entry)) {
-            return new OsmXmlParser().parse(in);
+        final long started = System.nanoTime();
+        final List<Feature> features;
+        try (var in = new java.io.BufferedInputStream(Files.newInputStream(entry), 1 << 16)) {
+            features = new OsmXmlParser().parse(in);
         }
+        LOG.fine(() -> "parsed " + features.size() + " feature(s) from " + entry
+                + " in " + (System.nanoTime() - started) / 1_000_000 + " ms");
+
+        FeatureStore.write(features, parsed);
+        return features;
+    }
+
+    /**
+     * The parsed form of a cached response, if it can be trusted.
+     *
+     * <p>Caching the bytes but not the work left three seconds of parsing on
+     * every press of <b>Load detail</b> and again after every restart, for a
+     * response that had not changed since the first time.</p>
+     *
+     * <p>It is used only when it is <em>newer</em> than the XML it came from.
+     * The refetch path deletes it, so this is a second line rather than the
+     * only one - but a cache directory is a place where files get copied
+     * about and restored from backups, and a stale derivation read as current
+     * would show the wrong map with nothing to say why.</p>
+     *
+     * @return the features, or null to parse the XML again
+     */
+    private static List<Feature> readParsed(Path parsed, Path xml) {
+        try {
+            if (!Files.isReadable(parsed)) return null;
+            if (Files.getLastModifiedTime(parsed).toInstant()
+                    .isBefore(Files.getLastModifiedTime(xml).toInstant())) {
+                LOG.fine(() -> "ignoring " + parsed + ", older than the response it came from");
+                return null;
+            }
+        }
+        catch (IOException e) {
+            return null;
+        }
+        final long started = System.nanoTime();
+        final List<Feature> features = FeatureStore.read(parsed);
+        if (features != null) {
+            LOG.fine(() -> "read " + features.size() + " feature(s) from " + parsed
+                    + " in " + (System.nanoTime() - started) / 1_000_000 + " ms");
+        }
+        return features;
     }
 
     /**
