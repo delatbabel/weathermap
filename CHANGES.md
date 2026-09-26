@@ -1,5 +1,30 @@
 # Changes
 
+## 1.1.0
+
+**An area may cross the antimeridian**
+
+- A rectangle can now run through 180°, so the Pacific can be chosen in one
+  piece instead of in two halves composited by hand afterwards. A box says it
+  crosses by having an east edge numerically west of its west edge —
+  `170,-10,-170,10` is twenty degrees of ocean, not three hundred and forty.
+- The selection map pans through the seam rather than stopping at it, and a
+  drag reads its west edge from whichever corner was further left on screen
+  rather than from whichever longitude is the smaller number. Those two answers
+  agree everywhere except here, where the second selects the whole world except
+  the part the pointer covered.
+- NOMADS and Overpass both insist on `leftlon` west of `rightlon`, so a
+  crossing area is fetched as one piece per side of the seam — two subregion
+  requests, whose fields are joined back into one before anything is drawn, and
+  one Overpass query carrying a filter for each side. An area that does not
+  cross still makes exactly the requests it always did.
+- Meridians are drawn and labelled across the seam, and 180° is labelled as
+  itself rather than as 180°W.
+- A global GRIB field decoded straight from NOMADS is no longer read inside
+  out. Its first longitude is 0 and its last 359.75, and taking the smaller and
+  larger of the pair described the quarter-degree slice on the far side of the
+  prime meridian rather than the whole world.
+
 ## 1.0.0
 
 First versioned release. The application composites NOAA GFS forecast fields

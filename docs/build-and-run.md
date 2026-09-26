@@ -21,7 +21,7 @@ The jar itself is still plain Maven, if you would rather:
 
 ```bash
 ./mvnw package                                               # jars + tests
-java -jar target/weathermap-1.0.0-jar-with-dependencies.jar
+java -jar target/weathermap-1.1.0-jar-with-dependencies.jar
 ```
 
 For installable packages — `.deb`, `.rpm`, Windows `.exe`, macOS `.dmg` — and
@@ -31,7 +31,7 @@ The command-line tool is the same jar, and runs from the plain one too, since
 it never creates a window:
 
 ```bash
-java -jar target/weathermap-1.0.0.jar --cli --help
+java -jar target/weathermap-1.1.0.jar --cli --help
 ```
 
 The desktop application started from the plain jar still opens — it falls back
@@ -49,10 +49,14 @@ application stored, against the latest published run — which is the point:
 Everything stored can still be overridden:
 
 ```bash
-java -jar target/weathermap-1.0.0.jar --cli \
+java -jar target/weathermap-1.1.0.jar --cli \
     --area "-6,53.5,0,57" --var TMP --level 2_m_above_ground \
     --hours 0,6,12-24 --out ~/maps --size 1600x1200
 ```
+
+`--area` is `W,S,E,N`. A west greater than the east means the area runs through
+180°, so `--area "170,-10,-170,10"` is twenty degrees of Pacific either side of
+the antimeridian — not the three hundred and forty the other way round.
 
 ### Profiles
 

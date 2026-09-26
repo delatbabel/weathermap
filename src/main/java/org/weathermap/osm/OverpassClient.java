@@ -230,21 +230,31 @@ public final class OverpassClient implements OsmSource {
      * ways come back as lists of node ids with no coordinates.</p>
      */
     String buildQuery(BoundingBox bbox, List<FeatureKind> kinds) {
-        final String bboxFilter = "(" + bbox.toOverpassBbox() + ")";
+        // A box that crosses the antimeridian has two halves and so contributes
+        // two filters per kind. Overpass QL is already a union, so they simply
+        // join the list - one request, one cache entry, one parse.
+        final List<String> bboxFilters = new ArrayList<>();
+        for (BoundingBox half : bbox.halves()) {
+            bboxFilters.add("(" + half.toOverpassBbox() + ")");
+        }
         final List<String> clauses = new ArrayList<>();
 
         for (FeatureKind kind : kinds) {
-            switch (kind) {
-                case COASTLINE -> clauses.add("  way[\"natural\"=\"coastline\"]" + bboxFilter + ";");
-                case BOUNDARY -> {
-                    // admin_level is filtered at render time, not here, so one
-                    // download can serve national-only and detailed styles.
-                    clauses.add("  way[\"boundary\"=\"administrative\"][\"admin_level\"~\"^[2-4]$\"]"
-                            + bboxFilter + ";");
-                }
-                case PLACE -> clauses.add(
-                        "  node[\"place\"~\"^(" + placeTypesFor(bbox) + ")$\"]"
+            for (String bboxFilter : bboxFilters) {
+                switch (kind) {
+                    case COASTLINE -> clauses.add(
+                            "  way[\"natural\"=\"coastline\"]" + bboxFilter + ";");
+                    case BOUNDARY -> {
+                        // admin_level is filtered at render time, not here, so one
+                        // download can serve national-only and detailed styles.
+                        clauses.add(
+                                "  way[\"boundary\"=\"administrative\"][\"admin_level\"~\"^[2-4]$\"]"
                                 + bboxFilter + ";");
+                    }
+                    case PLACE -> clauses.add(
+                            "  node[\"place\"~\"^(" + placeTypesFor(bbox) + ")$\"]"
+                                    + bboxFilter + ";");
+                }
             }
         }
 

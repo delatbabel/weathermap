@@ -16,6 +16,32 @@ Measured: 2m temperature over the UK, one forecast hour, is **2,359 bytes**.
 That is why `BoundingBox` threads through the whole application — the selected
 rectangle is what gets transferred, not only what gets rendered.
 
+## The rectangle may cross the antimeridian
+
+`170,-10,-170,10` is twenty degrees of Pacific, not three hundred and forty:
+an east edge numerically west of the west edge is how a box says it runs
+through 180°. There is no other way to write it with two numbers in
+-180..180, so the inverted pair is the notation rather than an error.
+
+Nothing downstream special-cases it. Longitude is measured with
+`BoundingBox.eastwardFrom`, which wraps, so both projections put the seam
+somewhere in the middle of the image and every layer — coastline, labels,
+isobars, barbs — draws across it without knowing it is there. One image, one
+`Compositor`, exactly as for anywhere else.
+
+The two places that cannot be told this are the wire protocols. Overpass's
+`bbox` filter and NOMADS's `leftlon`/`rightlon` both insist on west < east,
+so those callers ask `BoundingBox.halves()` for the box in one or two pieces:
+
+- **Overpass** puts a filter for each piece in the same union, so it stays one
+  request, one cache entry, one parse.
+- **NOMADS** makes one subregion request per piece, and `Grid.join` stitches
+  the decoded fields back into one before anything is drawn. Two requests
+  rather than one whole-band request: the band would be several times the bytes
+  for the same chart, off a service that asks to be used sparingly. The halves
+  meet at 180° and both include it, so the repeated column is dropped rather
+  than drawn twice.
+
 ## The base map is vector, not tiles
 
 Coastline, administrative boundaries and populated places are fetched from the

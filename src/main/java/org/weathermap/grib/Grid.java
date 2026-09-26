@@ -74,7 +74,7 @@ public final class Grid {
      *         where any contributing cell is missing
      */
     public float sample(double lat, double lon) {
-        final double fx = (lon - bounds.west()) / bounds.widthDegrees() * (width - 1);
+        final double fx = bounds.eastwardFrom(lon) / bounds.widthDegrees() * (width - 1);
         final double fy = (bounds.north() - lat) / bounds.heightDegrees() * (height - 1);
         if (fx < 0 || fy < 0 || fx > width - 1 || fy > height - 1) return MISSING;
 
@@ -95,6 +95,59 @@ public final class Grid {
         final double top = v00 + (v10 - v00) * tx;
         final double bottom = v01 + (v11 - v01) * tx;
         return (float) (top + (bottom - top) * ty);
+    }
+
+    /**
+     * Two halves of a field either side of the antimeridian, joined into one.
+     *
+     * <p>NOMADS cannot cut a subregion that crosses 180&deg; - {@code leftlon}
+     * must be west of {@code rightlon} - so a crossing chart is fetched as two
+     * subregions and stitched back together here, before anything downstream
+     * sees it. That matters more than it sounds: the alternative, handing the
+     * renderer two grids of the same variable, would give the legend two ranges
+     * to scale from and would break every isobar at the seam.</p>
+     *
+     * <p>The two requests abut at 180&deg; and both include that meridian, so
+     * the eastern half's leading column repeats the western half's last one; it
+     * is dropped rather than drawn twice. The result is a regular grid again,
+     * whose bounds cross the antimeridian in the same way {@link BoundingBox}
+     * does.</p>
+     *
+     * @param west the half up to 180&deg;, and {@code east} the half on from -180&deg;
+     * @throws IllegalArgumentException if the halves do not share their rows,
+     *                                  which means they are not halves of one field
+     */
+    public static Grid join(Grid west, Grid east) {
+        if (west.height != east.height
+                || Double.compare(west.bounds.north(), east.bounds.north()) != 0
+                || Double.compare(west.bounds.south(), east.bounds.south()) != 0) {
+            throw new IllegalArgumentException("cannot join " + west + " to " + east
+                    + ": they do not cover the same rows");
+        }
+
+        // The eastern half repeats whatever columns the western one already has.
+        // Which, and how many, is read off the geometry rather than assumed, so
+        // an over-fetched half joins as cleanly as an exact one.
+        final double step = east.bounds.widthDegrees() / Math.max(1, east.width - 1);
+        final double gap = BoundingBox.normaliseLon(east.bounds.west() - west.bounds.east());
+        int drop = 0;
+        while (drop < east.width - 1 && gap + drop * step <= step / 2) drop++;
+
+        final int kept = east.width - drop;
+        final int w = west.width + kept;
+        final float[] values = new float[w * west.height];
+        for (int y = 0; y < west.height; y++) {
+            System.arraycopy(west.values, y * west.width, values, y * w, west.width);
+            for (int x = 0; x < kept; x++) {
+                values[y * w + west.width + x] = east.valueAt(drop + x, y);
+            }
+        }
+
+        final BoundingBox bounds = BoundingBox.of(
+                west.bounds.south(), west.bounds.west(),
+                west.bounds.north(), east.bounds.east());
+        return new Grid(west.variable, west.level, west.validTime,
+                        bounds, w, west.height, values);
     }
 
     /** @return {@code {min, max}} over the non-missing values, for scaling the ramp. */

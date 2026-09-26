@@ -202,9 +202,10 @@ public final class BaseMapLoader {
 
     /** True when {@code loaded} already contains all of {@code view}. */
     private static boolean covers(BoundingBox loaded, BoundingBox view) {
-        return loaded != null
-                && loaded.south() <= view.south() && loaded.north() >= view.north()
-                && loaded.west() <= view.west() && loaded.east() >= view.east();
+        // BoundingBox does the comparison rather than four inequalities here,
+        // because west <= west is not the question once either box can run
+        // through the antimeridian with its east edge the smaller number.
+        return loaded != null && loaded.contains(view);
     }
 
     private static BoundingBox withMargin(BoundingBox view) {

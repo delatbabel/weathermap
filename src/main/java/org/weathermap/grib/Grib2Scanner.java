@@ -260,13 +260,16 @@ public final class Grib2Scanner implements GribReader {
         BoundingBox bounds() {
             final double south = Math.min(la1, la2);
             final double north = Math.max(la1, la2);
-            double west = lo1;
-            double east = lo2;
-            // GRIB2 longitudes run 0..360; the rest of the application uses
-            // -180..180, so anything past the meridian is shifted back.
-            if (west > 180) west -= 360;
-            if (east > 180) east -= 360;
-            return BoundingBox.of(south, Math.min(west, east), north, Math.max(west, east));
+            // GRIB2 longitudes run 0..360 and the rest of the application uses
+            // -180..180, so both are folded back into that range.
+            //
+            // First and last, not smallest and largest: lo1 is the west edge
+            // and lo2 the east one, and taking min and max of the pair turns a
+            // grid that runs through 180 - a Pacific subregion, or a whole
+            // global field, whose lo1 is 0 and lo2 359.75 - inside out, into
+            // the narrow slice on the other side of the seam.
+            return BoundingBox.of(south, BoundingBox.normaliseLon(lo1),
+                                  north, BoundingBox.normaliseEastLon(lo2));
         }
     }
 

@@ -18,8 +18,33 @@ import java.util.List;
  */
 public interface GribSource {
 
-    /** One chart that was actually fetched. */
-    record Downloaded(ChartRequest request, Path file) { }
+    /**
+     * One chart that was actually fetched, as one file or as several.
+     *
+     * <p>Several when the area crosses the antimeridian: no filter service will
+     * cut a subregion whose {@code leftlon} is east of its {@code rightlon}, so
+     * the box is fetched as one piece per side of the seam. The parts are in
+     * west-to-east order, and it is the caller's job to join the fields they
+     * decode to - see {@link Grid#join}.</p>
+     */
+    record Downloaded(ChartRequest request, List<Path> files) {
+
+        public Downloaded {
+            if (files.isEmpty()) throw new IllegalArgumentException("no file for " + request);
+            files = List.copyOf(files);
+        }
+
+        /**
+         * One part, for a source that never splits.
+         *
+         * <p>There is deliberately no accessor for "the file": reaching for one
+         * part of a chart that has two is how a Pacific chart would quietly
+         * come out as half an ocean, with nothing to say so.</p>
+         */
+        public Downloaded(ChartRequest request, Path file) {
+            this(request, List.of(file));
+        }
+    }
 
     /**
      * Downloads one file per request, each cut to {@code bbox}.

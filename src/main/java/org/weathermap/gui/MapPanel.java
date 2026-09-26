@@ -306,17 +306,26 @@ public final class MapPanel extends JPanel {
         viewMoved();
     }
 
+    /**
+     * Turns a drag into the chosen rectangle.
+     *
+     * <p>West and east come from which corner was <em>further left on screen</em>,
+     * not from which longitude is the smaller number. On a view that crosses the
+     * antimeridian those two answers differ: a drag from 170&deg;E to 170&deg;W
+     * is twenty degrees of Pacific read left to right, and taking the smaller
+     * number as west would instead select the three hundred and forty degrees
+     * the other way round - every part of the world except the part under the
+     * pointer.</p>
+     */
     private void finishSelection(Point from, Point to) {
         if (Math.abs(from.x - to.x) < 5 || Math.abs(from.y - to.y) < 5) return;
 
-        final double[] a = latLonAt(from);
-        final double[] b = latLonAt(to);
-        if (a == null || b == null) return;
+        final double[] left = latLonAt(from.x <= to.x ? from : to);
+        final double[] right = latLonAt(from.x <= to.x ? to : from);
+        if (left == null || right == null) return;
 
         try {
-            final BoundingBox bbox = BoundingBox.of(
-                    Math.min(a[0], b[0]), Math.min(a[1], b[1]),
-                    Math.max(a[0], b[0]), Math.max(a[1], b[1]));
+            final BoundingBox bbox = selectionBetween(left, right);
             selection = bbox;
             showingResult = false;
             selectionListener.accept(bbox);
@@ -325,6 +334,19 @@ public final class MapPanel extends JPanel {
             // Too small, or dragged off the edge. Ignore rather than complain -
             // a stray drag is not an error worth a dialog.
         }
+    }
+
+    /**
+     * The box between the left-hand and right-hand corners of a drag.
+     *
+     * <p>Package-private and static so the rule can be asserted without a
+     * window: it is the whole of what makes a Pacific selection possible, and
+     * it is one line that looks like an ordinary min/max until it is not.</p>
+     */
+    static BoundingBox selectionBetween(double[] left, double[] right) {
+        return BoundingBox.of(
+                Math.min(left[0], right[0]), BoundingBox.normaliseLon(left[1]),
+                Math.max(left[0], right[0]), BoundingBox.normaliseEastLon(right[1]));
     }
 
     /** @return {@code {lat, lon}} under a panel point, or null before first render */
@@ -420,28 +442,50 @@ public final class MapPanel extends JPanel {
         if (oy < 0) g.fillRect(0, getHeight() + oy, getWidth(), -oy);
     }
 
-    /** The chosen rectangle, wherever it falls in the current view. */
+    /**
+     * The chosen rectangle, wherever it falls in the current view.
+     *
+     * <p>Drawn twice, one turn of longitude apart. The view and the selection
+     * wrap independently, so a selection that lies off the right edge of the
+     * view may be the same selection that lies off its left edge - and a
+     * selection straddling the edge has to appear at both. One of the two
+     * copies is almost always off the panel entirely, and clipping is free.</p>
+     */
     private void paintSelection(Graphics2D g) {
         if (selection == null || baseProjection == null) return;
         final Point2D.Double nw = baseProjection.toPixel(selection.north(), selection.west());
         final Point2D.Double se = baseProjection.toPixel(selection.south(), selection.east());
 
-        final int x = (int) Math.round(Math.min(nw.x, se.x));
+        // The east edge is east of the west edge by definition, so a pixel x
+        // that has come out to the left of it has wrapped and belongs a whole
+        // turn further on.
+        final double turn = 360.0 / baseProjection.bounds().widthDegrees()
+                * baseProjection.imageWidth();
+        // Not <, but <=: a selection of the whole world puts both edges on the
+        // same pixel, and it is a full turn wide rather than nothing wide.
+        double right = se.x;
+        while (right <= nw.x) right += turn;
+
         final int y = (int) Math.round(Math.min(nw.y, se.y));
-        final int w = (int) Math.round(Math.abs(se.x - nw.x));
+        final int w = (int) Math.round(right - nw.x);
         final int h = (int) Math.round(Math.abs(se.y - nw.y));
         if (w <= 0 || h <= 0) return;
-
-        g.setColor(SELECTION_FILL);
-        g.fillRect(x, y, w, h);
-        g.setColor(SELECTION_EDGE);
-        g.setStroke(new BasicStroke(2f));
-        g.drawRect(x, y, w, h);
 
         g.setFont(g.getFont().deriveFont(Font.PLAIN, 11f));
         final String label = String.format("%.2f° × %.2f°",
                                            selection.widthDegrees(), selection.heightDegrees());
-        g.drawString(label, x + 4, y + 14);
+
+        for (int copy = 0; copy < 2; copy++) {
+            final int x = (int) Math.round(nw.x - copy * turn);
+            if (x + w < 0 || x > getWidth()) continue;
+
+            g.setColor(SELECTION_FILL);
+            g.fillRect(x, y, w, h);
+            g.setColor(SELECTION_EDGE);
+            g.setStroke(new BasicStroke(2f));
+            g.drawRect(x, y, w, h);
+            g.drawString(label, x + 4, y + 14);
+        }
     }
 
     /** The rubber band while a selection drag is in progress. */

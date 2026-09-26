@@ -50,10 +50,17 @@ public final class GraticuleLayer implements Layer {
             g.drawString(label(lat, 'N', 'S'), 3, (float) a.y - 2);
         }
 
+        // Walked as a distance east of the west edge rather than as a
+        // longitude counting up to the east one, because on a box that crosses
+        // the antimeridian the east edge is the smaller number and the loop
+        // would stop before it drew anything. Each line is folded back into
+        // -180..180 only to be projected and labelled.
         final double firstLon = Math.ceil(b.west() / lonStep) * lonStep;
+        final double lonSpan = b.widthDegrees();
         for (int i = 0; ; i++) {
-            final double lon = snap(firstLon + i * lonStep, lonStep);
-            if (lon > b.east()) break;
+            final double eastward = firstLon - b.west() + i * lonStep;
+            if (eastward > lonSpan) break;
+            final double lon = snap(BoundingBox.normaliseLon(firstLon + i * lonStep), lonStep);
             final Point2D.Double a = projection.toPixel(b.north(), lon);
             final Point2D.Double c = projection.toPixel(b.south(), lon);
             g.draw(new Line2D.Double(a.x, a.y, c.x, c.y));
@@ -79,8 +86,12 @@ public final class GraticuleLayer implements Layer {
         final String number = (magnitude == Math.floor(magnitude))
                 ? String.format(java.util.Locale.ROOT, "%.0f", magnitude)
                 : String.format(java.util.Locale.ROOT, "%.2f", magnitude);
-        // The equator and the prime meridian belong to neither hemisphere.
-        return value == 0 ? number + "°" : number + "°" + (value > 0 ? positive : negative);
+        // The equator and the prime meridian belong to neither hemisphere, and
+        // neither does the antimeridian - which is the same line whichever way
+        // you reach it, and is written -180 here as often as 180.
+        return (value == 0 || magnitude == 180)
+                ? number + "°"
+                : number + "°" + (value > 0 ? positive : negative);
     }
 
     @Override

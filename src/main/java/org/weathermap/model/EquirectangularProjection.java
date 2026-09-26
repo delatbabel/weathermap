@@ -12,6 +12,11 @@ import java.awt.geom.Point2D;
  * <p>The cost is the usual one: shapes stretch east-west towards the poles. For
  * the mid-latitude regions this application is aimed at that is acceptable; use
  * {@link MercatorProjection} when it is not.</p>
+ *
+ * <p>Longitude goes through {@link BoundingBox#eastwardFrom}, so a box that
+ * crosses the antimeridian projects like any other: the seam falls somewhere in
+ * the middle of the image rather than at an edge, and nothing here has to know
+ * it is there.</p>
  */
 public final class EquirectangularProjection implements MapProjection {
 
@@ -27,14 +32,15 @@ public final class EquirectangularProjection implements MapProjection {
 
     @Override
     public Point2D.Double toPixel(double lat, double lon) {
-        final double x = (lon - bounds.west()) / bounds.widthDegrees() * width;
+        final double x = bounds.eastwardFrom(lon) / bounds.widthDegrees() * width;
         final double y = (bounds.north() - lat) / bounds.heightDegrees() * height;
         return new Point2D.Double(x, y);
     }
 
     @Override
     public double[] toLatLon(double x, double y) {
-        final double lon = bounds.west() + x / width * bounds.widthDegrees();
+        final double lon = BoundingBox.normaliseLon(
+                bounds.west() + x / width * bounds.widthDegrees());
         final double lat = bounds.north() - y / height * bounds.heightDegrees();
         return new double[]{lat, lon};
     }

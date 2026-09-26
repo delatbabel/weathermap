@@ -24,6 +24,22 @@ Below about 8° of view the application fetches OpenStreetMap coastline and plac
 names for what you are looking at. Above that it draws a bundled world outline,
 which is coarse but instant and never blank.
 
+### Across the 180° meridian
+
+Panning does not stop at 180° — keep going and the map comes out the other
+side — and an area may be dragged straight through it. A Pacific box is chosen
+in one piece, not in two halves joined up afterwards.
+
+West and east are read from the drag as you made it: whichever corner was
+further **left on screen** is the west edge. So a box from 170°E to 170°W is
+the twenty degrees under the pointer.
+
+Typing the same box works too, and reads the same way round: **West** 170,
+**East** -170. That is now a valid area rather than an error, which does mean a
+transposed pair of numbers describes a very wide box instead of being refused —
+the area readout beside the selection says how wide, so a slip is visible
+before anything is downloaded.
+
 ## 2. Choose what to fetch
 
 On the right, under **GRIB data**:

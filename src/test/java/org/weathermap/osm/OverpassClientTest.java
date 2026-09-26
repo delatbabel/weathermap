@@ -60,4 +60,31 @@ class OverpassClientTest {
         assertTrue(!client.buildQuery(bbox, List.of(FeatureKind.PLACE)).contains(">;"),
                    "a places-only query needs no recursion");
     }
+
+    /**
+     * Overpass's {@code bbox} filter has no way to say "through 180", so a
+     * crossing area is asked for as two filters in the same union - one
+     * request, one cache entry, and every feature either side of the seam.
+     */
+    @Test
+    void asksForBothSidesOfTheAntimeridianInOneQuery() {
+        final String query = new OverpassClient().buildQuery(
+                BoundingBox.of(-10, 170, 10, -170), List.of(FeatureKind.COASTLINE));
+
+        assertTrue(query.contains("(-10.00000,170.00000,10.00000,180.00000)"), query);
+        assertTrue(query.contains("(-10.00000,-180.00000,10.00000,-170.00000)"), query);
+        assertEquals(2, query.split("natural", -1).length - 1,
+                     "one coastline clause per side");
+    }
+
+    /** An area that does not cross still makes exactly one clause per kind. */
+    @Test
+    void anOrdinaryAreaIsStillOneClausePerKind() {
+        final String query = new OverpassClient().buildQuery(
+                BoundingBox.of(49.5, -11, 61, 2),
+                List.of(FeatureKind.COASTLINE, FeatureKind.PLACE));
+
+        assertEquals(1, query.split("natural", -1).length - 1);
+        assertEquals(1, query.split("place", -1).length - 1);
+    }
 }

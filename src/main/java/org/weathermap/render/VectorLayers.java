@@ -33,10 +33,33 @@ public final class VectorLayers {
 
     // ---- shared helpers --------------------------------------------------
 
-    /** Builds a pixel-space path from a feature's geographic points. */
+    /**
+     * Builds a pixel-space path from a feature's geographic points.
+     *
+     * <h2>Why the unwrapping</h2>
+     *
+     * <p>Longitude is cyclic and the projection has to cut the circle
+     * somewhere: it puts the cut opposite the middle of the box, as far from
+     * the view as it can be put. A way that steps over that cut - a coastline
+     * on the far side of the world from the chart - comes back as one point at
+     * the extreme left and the next at the extreme right, and the line between
+     * them is drawn straight across the picture. A chart of the Indian Ocean
+     * grew three horizontal streaks from South American coastline the moment
+     * the projection learned to wrap.</p>
+     *
+     * <p>So each point after the first is taken in whichever turn of longitude
+     * lies nearest the point before it. The path is then continuous whatever
+     * it crosses, and a feature outside the box is drawn continuously outside
+     * it instead of being torn across the middle. This assumes x is linear in
+     * longitude, which is true of both projections here and of every cylindrical
+     * one.</p>
+     */
     static Path2D.Double pathOf(Feature feature, MapProjection projection) {
+        final double turn = 360.0 / projection.bounds().widthDegrees()
+                * projection.imageWidth();
         final Path2D.Double path = new Path2D.Double();
         boolean first = true;
+        double previousX = 0;
         for (double[] p : feature.points()) {
             final Point2D.Double pt = projection.toPixel(p[0], p[1]);
             if (first) {
@@ -44,8 +67,11 @@ public final class VectorLayers {
                 first = false;
             }
             else {
+                while (pt.x - previousX > turn / 2) pt.x -= turn;
+                while (pt.x - previousX < -turn / 2) pt.x += turn;
                 path.lineTo(pt.x, pt.y);
             }
+            previousX = pt.x;
         }
         return path;
     }

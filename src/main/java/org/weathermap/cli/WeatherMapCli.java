@@ -46,7 +46,9 @@ public final class WeatherMapCli {
             With no options, repeats the last area and GRIB selection made in the
             desktop application, using the latest published model run.
 
-              --area W,S,E,N        override the stored area
+              --area W,S,E,N        override the stored area; W greater than E
+                                    means the area runs through 180 deg, so
+                                    170,-10,-170,10 is twenty degrees of Pacific
               --model ID            gfs_0p25 | gfs_0p50 | nam | hrrr
               --var CODE[,CODE...]  NOMADS variable codes, e.g. TMP,APCP
               --level CODE[,...]    NOMADS level codes, e.g. 2_m_above_ground

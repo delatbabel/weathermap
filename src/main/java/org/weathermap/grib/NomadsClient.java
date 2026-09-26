@@ -45,6 +45,15 @@ import java.util.logging.Logger;
  * <p>Note {@code subregion=} with an empty value: it is a flag, and omitting it
  * makes the corner parameters ineligible and returns the global field.</p>
  *
+ * <h2>The antimeridian</h2>
+ *
+ * <p>{@code leftlon} must be west of {@code rightlon}, so a Pacific box that
+ * runs through 180&deg; cannot be asked for in one request. It is asked for in
+ * two - {@link BoundingBox#halves} - and the fields they decode to are put back
+ * together by {@link Grid#join} before anything is drawn. Two requests rather
+ * than one whole-band request: the band would be several times the bytes for a
+ * subregion of the same chart, off a service that asks to be used sparingly.</p>
+ *
  * <h2>Failure modes worth knowing</h2>
  *
  * <ul>
@@ -96,36 +105,51 @@ public final class NomadsClient implements GribSource {
             final int cycle = request.cycle();
             final int forecastHour = request.forecastHour();
 
-            final URI uri = buildUri(bbox, selection, yyyymmdd, cycle, forecastHour);
+            // One request per side of the antimeridian. A box that does not
+            // cross it has one half and so makes one request, which is the
+            // ordinary case and costs nothing extra.
+            final List<Path> parts = new ArrayList<>();
+            boolean rolledOff = false;
+            for (BoundingBox half : bbox.halves()) {
+                final URI uri = buildUri(half, selection, yyyymmdd, cycle, forecastHour);
 
-            // A published run is immutable, so a cache hit needs no expiry check
-            // beyond "is it there and non-empty".
-            final Path entry = cache.pathFor("grib", uri.toString(), ".grib2");
-            if (cache.isFresh(entry, null)) {
-                LOG.fine(() -> "GRIB cache hit: " + entry);
+                // A published run is immutable, so a cache hit needs no expiry
+                // check beyond "is it there and non-empty".
+                final Path entry = cache.pathFor("grib", uri.toString(), ".grib2");
+                if (cache.isFresh(entry, null)) {
+                    LOG.fine(() -> "GRIB cache hit: " + entry);
+                }
+                else {
+                    LOG.info(() -> "Downloading " + selection.model().displayName()
+                            + " " + yyyymmdd + " " + cycle + "Z f" + forecastHour
+                            + " for " + half);
+                    try {
+                        Http.download(uri, entry, listener);
+                    }
+                    catch (Http.RateLimitedException e) {
+                        throw e;                     // not this chart's fault; stop
+                    }
+                    catch (IOException e) {
+                        // A run that has aged out of the archive answers 404, and
+                        // one chart of a week ago being gone is no reason to throw
+                        // away the rest of the series. Anything else - a broken
+                        // connection, a server error - would fail every remaining
+                        // chart too, so it still stops the run.
+                        if (!hasRolledOff(e)) throw e;
+                        LOG.warning("No longer in the archive, skipping: " + request);
+                        rolledOff = true;
+                        break;
+                    }
+                }
+                parts.add(entry);
             }
-            else {
-                LOG.info(() -> "Downloading " + selection.model().displayName()
-                        + " " + yyyymmdd + " " + cycle + "Z f" + forecastHour);
-                try {
-                    Http.download(uri, entry, listener);
-                }
-                catch (Http.RateLimitedException e) {
-                    throw e;                     // not this chart's fault; stop
-                }
-                catch (IOException e) {
-                    // A run that has aged out of the archive answers 404, and
-                    // one chart of a week ago being gone is no reason to throw
-                    // away the rest of the series. Anything else - a broken
-                    // connection, a server error - would fail every remaining
-                    // chart too, so it still stops the run.
-                    if (!hasRolledOff(e)) throw e;
-                    LOG.warning("No longer in the archive, skipping: " + request);
-                    missing.add(request);
-                    continue;
-                }
+            if (rolledOff) {
+                // Half a chart is not a chart: if either side of the seam has
+                // gone, the whole request goes with it.
+                missing.add(request);
+                continue;
             }
-            out.add(new Downloaded(request, entry));
+            out.add(new Downloaded(request, parts));
         }
 
         if (!missing.isEmpty()) {
@@ -155,7 +179,10 @@ public final class NomadsClient implements GribSource {
     private static final java.time.format.DateTimeFormatter RUN_DATE =
             java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd");
 
-    /** Builds one filter request. Package-private so it can be asserted in tests. */
+    /**
+     * Builds one filter request, for a box that does not cross the
+     * antimeridian. Package-private so it can be asserted in tests.
+     */
     URI buildUri(BoundingBox bbox, GribSelection selection,
                  String yyyymmdd, int cycle, int forecastHour) {
         final GribModel model = selection.model();

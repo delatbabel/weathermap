@@ -43,7 +43,7 @@ else is derived:
 | `post-release` | Re-applies the Maven version after a release |
 
 The build version is deliberately richer than the package version. On a release
-tag it is just `1.0.0`; on a `release-*` branch it gains the commit; anywhere
+tag it is just `1.1.0`; on a `release-*` branch it gains the commit; anywhere
 else it gains the commit and the branch, so a package built from a working tree
 says so. Package *filenames* use the plain version, because a releases page
 truncates long names from the tail — exactly where the architecture suffix lives.

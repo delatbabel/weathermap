@@ -128,13 +128,13 @@ public final class MapService {
             // The request comes with the file rather than from the same index of
             // another list: a chart whose run has rolled off is skipped, so the
             // two are no longer the same length.
-            final Path file = fetched.get(i).file();
+            final List<Path> files = fetched.get(i).files();
             final ChartRequest request = fetched.get(i).request();
             p.stage("Rendering " + request + " (" + (i + 1) + " of " + fetched.size() + ")");
 
-            final List<Grid> grids = reader.read(file);
+            final List<Grid> grids = readJoined(files);
             if (grids.isEmpty()) {
-                LOG.warning("No fields decoded from " + file + "; skipping");
+                LOG.warning("No fields decoded from " + files + "; skipping");
                 continue;
             }
 
@@ -156,6 +156,55 @@ public final class MapService {
             results.add(new Result(image, primary, png, validTime));
         }
         return results;
+    }
+
+    /**
+     * Decodes a chart's parts and puts them back into one field per variable.
+     *
+     * <p>There is more than one part only when the area crosses the
+     * antimeridian, which no filter service will cut in a single request. The
+     * parts arrive west to east and are joined in that order, so the renderer
+     * is handed exactly what it would have been handed for an area that does
+     * not cross: one grid per variable and level, spanning the whole box.</p>
+     *
+     * <p>A part that will not join is a warning, not a failure. The chart then
+     * shows the side of the seam that did decode, which is a poor chart but a
+     * readable one, and the log says which field lost its other half.</p>
+     */
+    private List<Grid> readJoined(List<Path> files) throws IOException {
+        List<Grid> joined = reader.read(files.get(0));
+        for (int part = 1; part < files.size(); part++) {
+            final List<Grid> next = reader.read(files.get(part));
+            final List<Grid> merged = new ArrayList<>();
+            for (Grid west : joined) {
+                final Grid east = matching(next, west);
+                if (east == null) {
+                    LOG.warning("No eastern half of " + west + "; drawing the western one alone");
+                    merged.add(west);
+                    continue;
+                }
+                try {
+                    merged.add(Grid.join(west, east));
+                }
+                catch (IllegalArgumentException e) {
+                    LOG.log(Level.WARNING, "Could not join the halves of " + west, e);
+                    merged.add(west);
+                }
+            }
+            joined = merged;
+        }
+        return joined;
+    }
+
+    /** The field in {@code grids} that is the same field as {@code like}. */
+    private static Grid matching(List<Grid> grids, Grid like) {
+        for (Grid g : grids) {
+            if (g.variable().equals(like.variable()) && g.level().equals(like.level())
+                    && g.validTime().equals(like.validTime())) {
+                return g;
+            }
+        }
+        return null;
     }
 
     /**

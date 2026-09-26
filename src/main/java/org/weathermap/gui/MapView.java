@@ -71,29 +71,36 @@ public final class MapView {
         north = Math.min(90, north);
         south = Math.max(-90, south);
 
-        double west = centreLon - halfLon;
-        double east = centreLon + halfLon;
-        if (west < -180) {
-            east -= west + 180;
-            west = -180;
+        // Longitude wraps instead of clamping. There is no edge at 180 to stop
+        // at - the map continues - and stopping there is what used to make a
+        // Pacific area impossible to choose in one go: the view could be walked
+        // up to the antimeridian and no further, so an area spanning it had to
+        // be taken in two halves.
+        if (spanLon >= MAX_SPAN) {
+            // A whole turn written as west == east would be indistinguishable
+            // from no width at all, so the world is spelled out.
+            return boundsOf(south, -180, north, 180);
         }
-        if (east > 180) {
-            west -= east - 180;
-            east = 180;
-        }
-        west = Math.max(-180, west);
-        east = Math.min(180, east);
+        final double west = BoundingBox.normaliseLon(centreLon - halfLon);
+        final double east = BoundingBox.normaliseEastLon(centreLon + halfLon);
 
-        // A view can legitimately be narrower than a selectable box, so fall
-        // back rather than throw - MIN_SPAN is a selection rule, not a view one.
+        return boundsOf(south, west, north, east);
+    }
+
+    /**
+     * A view can legitimately be narrower than a selectable box, so this falls
+     * back rather than throws - {@code MIN_SPAN} is a selection rule, not a
+     * view one.
+     */
+    private BoundingBox boundsOf(double south, double west, double north, double east) {
         try {
             return BoundingBox.of(south, west, north, east);
         }
         catch (IllegalArgumentException e) {
             return BoundingBox.of(Math.max(-90, centreLat - 0.05),
-                                  Math.max(-180, centreLon - 0.05),
+                                  BoundingBox.normaliseLon(centreLon - 0.05),
                                   Math.min(90, centreLat + 0.05),
-                                  Math.min(180, centreLon + 0.05));
+                                  BoundingBox.normaliseEastLon(centreLon + 0.05));
         }
     }
 
@@ -110,7 +117,11 @@ public final class MapView {
         final double newSpan = clampSpan(spanLon * factor);
         final double actual = newSpan / spanLon;         // what the clamp allowed
 
-        centreLon = atLon + (centreLon - atLon) * actual;
+        // The centre is taken in whichever turn of longitude sits nearest the
+        // fixed point, or zooming just west of the antimeridian about a point
+        // just east of it would fling the map most of the way round the world.
+        final double centreNearby = atLon + BoundingBox.normaliseLon(centreLon - atLon);
+        centreLon = atLon + (centreNearby - atLon) * actual;
         centreLat = atLat + (centreLat - atLat) * actual;
         spanLon = newSpan;
         clampCentre();
@@ -123,9 +134,10 @@ public final class MapView {
         clampCentre();
     }
 
+    /** Latitude stops at the poles; longitude goes round. */
     private void clampCentre() {
         centreLat = Math.max(-90, Math.min(90, centreLat));
-        centreLon = Math.max(-180, Math.min(180, centreLon));
+        centreLon = BoundingBox.normaliseLon(centreLon);
     }
 
     private static double clampSpan(double span) {
