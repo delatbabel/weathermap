@@ -58,6 +58,21 @@
   answered with 429s. A button press is a different thing — it happens once,
   when someone has decided they want it.
 - The status line now says what arrived, by kind, rather than a single total.
+- Above about 6° it asks first. Thirteen degrees of South-East Asia came back
+  as **108 MB** and a minute or two of waiting, which unannounced reads as the
+  button having done nothing. The question says so, and says the answer is
+  kept for four weeks.
+- **Sub-pixel points are dropped when drawing.** That 108 MB is 1.2 million
+  coastline points, and across nine hundred pixels it is over a thousand
+  points per pixel column — every one of them a `lineTo` handed to the
+  rasteriser to draw on top of the last. Measured on that response, a render
+  went from 430 ms to 130 ms and the first one from 1.8 s to 0.36 s. Nothing
+  is lost that could have been seen, and the map is legible rather than a dark
+  smear where the coast is.
+- Zooming out after loading detail for a small area no longer leaves that area
+  drawn on an empty world. The bundled outline steps aside only while the view
+  is inside what was loaded; past it, both are drawn and the disagreement that
+  would be obvious close up is by then well under a pixel.
 
 **A JSON reader**
 

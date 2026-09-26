@@ -34,8 +34,20 @@ it draws a bundled world outline, which is coarse but instant and never blank.
 Only names, because a coastline query repeated on every pan is tens of megabytes
 and gets this client rate-limited. **Load detail** is the button that asks for
 the rest — the coastline and boundaries as well, exactly what a chart of this
-view would be drawn from — once, when you have decided you want it. The real
-coastline replaces the bundled outline rather than being drawn over it.
+view would be drawn from — once, when you have decided you want it.
+
+Two things about it worth knowing:
+
+- **It can be slow, and it says so first.** OSM coastline is surveyed, not drawn
+  for a screen. Thirteen degrees of South-East Asia is a hundred megabytes and a
+  minute or two of waiting, so above about 6° the button asks before it starts.
+  The answer is kept for **four weeks** in `~/.weathermap/cache/osm`, so it is a
+  one-off per area — but nothing appears until it lands. At that scale the
+  bundled outline is close to indistinguishable anyway; zoom in first if all you
+  want is place names.
+- **The real coastline replaces the bundled outline** while you are inside the
+  area you loaded, because two coastlines a kilometre apart is not a richer map.
+  Zoom out past that area and the world outline comes back underneath.
 
 ### Across the 180° meridian
 

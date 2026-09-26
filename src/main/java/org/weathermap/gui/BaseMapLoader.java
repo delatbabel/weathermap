@@ -98,12 +98,16 @@ public final class BaseMapLoader {
     /**
      * True when {@link #detail} carries the shape of the land, not only names.
      *
-     * <p>Which decides whether the bundled outline is drawn underneath it. Both
-     * at once is not a richer map, it is two coastlines a few kilometres apart:
-     * Natural Earth 1:110m is good to a kilometre or so, which at four degrees
-     * across a window is tens of pixels of visible disagreement.</p>
+     * <p>Which is half of deciding whether the bundled outline is drawn
+     * underneath it; the other half is {@link #showsBundledOutline}.</p>
      */
     private boolean detailHasShape;
+
+    /** Where the user is looking, so the outline can be put back when they leave. */
+    private BoundingBox view;
+
+    /** What {@link #features()} last decided, so a change can be announced. */
+    private boolean bundledShowing = true;
 
     private BoundingBox pending;
     private List<FeatureKind> pendingKinds = KINDS;
@@ -128,20 +132,40 @@ public final class BaseMapLoader {
     /**
      * Everything the selection map should draw.
      *
-     * <p>The bundled outline <em>or</em> the real coastline, not both - the
-     * same either/or {@link org.weathermap.MapService} makes when it composites
-     * a chart. Place names layer over the outline happily because the outline
-     * has none; a coastline does not, so when a real one has been loaded the
-     * coarse one gets out of the way.</p>
+     * <p>Place names layer over the bundled outline happily, because the
+     * outline has none. A real coastline does not: two coastlines a
+     * kilometre apart are not a richer map, and Natural Earth 1:110m is about
+     * that good, which at four degrees across a window is tens of pixels of
+     * visible disagreement.</p>
+     *
+     * <p>So the outline steps aside - but only while the view is inside the
+     * area that was loaded. Dropping it outright was worse than the problem
+     * it solved: loading detail for one harbour and then zooming out left
+     * that harbour drawn on an empty world. Which way round to go is decided
+     * by {@link #showsBundledOutline}.</p>
      */
     public List<Feature> features() {
         final List<Feature> out = new ArrayList<>();
-        if (!detailHasShape) out.addAll(WorldBaseMap.features());
+        if (showsBundledOutline()) out.addAll(WorldBaseMap.features());
         out.addAll(detail);
         return out;
     }
 
-    /** True when the map is showing real OSM geometry rather than the outline. */
+    /**
+     * Whether the coarse world outline belongs on screen.
+     *
+     * <p>It does unless real geometry has been loaded <em>and</em> covers
+     * everything currently visible. Zoomed out past the loaded area the two
+     * are both drawn, and the doubling that would be obvious close up is by
+     * then well under a pixel - the same fact that makes the outline good
+     * enough at that scale in the first place.</p>
+     */
+    public boolean showsBundledOutline() {
+        if (!detailHasShape || loadedFor == null) return true;
+        return view == null || !loadedFor.contains(view);
+    }
+
+    /** True when real OSM geometry has been loaded, wherever the view is now. */
     public boolean hasDetailedShape() { return detailHasShape; }
 
     /**
@@ -151,6 +175,14 @@ public final class BaseMapLoader {
      * anything actually needs fetching.</p>
      */
     public void viewChanged(BoundingBox view) {
+        this.view = view;
+        // Moving out of - or back into - the detailed area changes what should
+        // be drawn even when nothing is fetched, and nothing else will notice:
+        // the paths below return without loading anything.
+        if (bundledShowing != showsBundledOutline()) {
+            bundledShowing = showsBundledOutline();
+            onLoaded.accept(features());
+        }
         if (view.widthDegrees() > MAX_DETAIL_SPAN) {
             debounce.stop();
             pending = null;
@@ -223,6 +255,7 @@ public final class BaseMapLoader {
                     detail = fetched;
                     loadedFor = target;
                     detailHasShape = hasShape(fetched);
+                    bundledShowing = showsBundledOutline();
                     onStatus.accept(describe(fetched));
                     onLoaded.accept(features());
                 });

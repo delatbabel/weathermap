@@ -86,6 +86,12 @@ Both projections make x linear in longitude, and two places rely on it:
 `VectorLayers.pathOf`, which unwraps a polyline so a way on the far side of the
 world is not drawn across the picture, and `MapPanel.paintSelection`.
 
+`pathOf` also **drops points closer than `MIN_STEP_PX` to the last one kept**.
+OSM coastline is surveyed, not drawn for a screen: 13° of South-East Asia is
+1.2 M points, over a thousand per pixel column, and the selection map renders
+on the EDT on every pan. Don't remove the thinning without re-measuring — it is
+worth 3× on that data, and the map is also *more* legible for it.
+
 ### Tides are a second, smaller pipeline
 
 `tide/` does not go through `MapService`, and should not: a tide belongs to a

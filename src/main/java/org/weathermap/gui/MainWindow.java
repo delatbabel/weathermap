@@ -365,11 +365,7 @@ public final class MainWindow extends JFrame {
         final JButton loadDetail = new JButton("Load detail");
         loadDetail.setToolTipText("Fetch the coastline, boundaries and place names "
                 + "the chart would use, for the visible area, now");
-        // The chart's own kinds, so pressing this shows the geography a chart
-        // of this view would be drawn from - which is what the button has
-        // always claimed and, until now, did not do.
-        loadDetail.addActionListener(e -> baseMap.loadNow(
-                mapPanel.viewBounds(), org.weathermap.MapService.featureKindsFor(renderSpec)));
+        loadDetail.addActionListener(e -> loadDetail());
         bar.add(loadDetail);
 
         bar.add(Box.createHorizontalStrut(18));
@@ -697,6 +693,66 @@ public final class MainWindow extends JFrame {
      * fail to parse on the next run, and silently revert - which looks like the
      * setting not working rather than the name being wrong.</p>
      */
+    /**
+     * Fetches the geography a chart of this view would be drawn from.
+     *
+     * <p>The chart's own kinds, so pressing this shows what the chart would
+     * show - which is what the button has always claimed and, until recently,
+     * did not do.</p>
+     *
+     * <p>Above a few degrees it asks first. OSM coastline is surveyed rather
+     * than drawn for a screen, and thirteen degrees of South-East Asia came
+     * back as a hundred and eight megabytes: a minute or two of waiting that,
+     * unannounced, reads as the button having done nothing at all.</p>
+     */
+    private void loadDetail() {
+        final BoundingBox view = mapPanel.viewBounds();
+        final List<org.weathermap.osm.FeatureKind> kinds =
+                MapService.featureKindsFor(renderSpec);
+
+        final String warning = largeDetailWarning(view, kinds);
+        if (warning != null && JOptionPane.showConfirmDialog(this, new JLabel(warning),
+                "Load map detail?", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE) != JOptionPane.OK_OPTION) {
+            setStatus("Map detail not loaded");
+            return;
+        }
+        baseMap.loadNow(view, kinds);
+    }
+
+    /**
+     * Above this span, a coastline query is worth warning about, in degrees.
+     *
+     * <p>Six is where full-resolution coastline starts costing tens of
+     * megabytes. Below it the query is quick enough that asking would be an
+     * interruption rather than a kindness.</p>
+     */
+    static final double LARGE_DETAIL_SPAN = 6.0;
+
+    /**
+     * What to say before a large query, or null when it is small enough to
+     * just do.
+     *
+     * <p>Separate and package-private for the same reason the tide
+     * confirmation is: the words are the substance.</p>
+     */
+    static String largeDetailWarning(BoundingBox view,
+                                     List<org.weathermap.osm.FeatureKind> kinds) {
+        if (!kinds.contains(org.weathermap.osm.FeatureKind.COASTLINE)) return null;
+        final double span = Math.max(view.widthDegrees(), view.heightDegrees());
+        if (span <= LARGE_DETAIL_SPAN) return null;
+
+        return "<html><body style='width:360px'>"
+                + "<p>This view is <b>" + String.format(java.util.Locale.ROOT, "%.0f°", span)
+                + " across</b>. Full-resolution OSM coastline for an area that size "
+                + "is tens of megabytes and can take a minute or two to arrive.</p>"
+                + "<p>It is kept for four weeks afterwards, so this is a one-off "
+                + "for this area — but the map will not change until it lands.</p>"
+                + "<p>At this scale the bundled world outline is close to "
+                + "indistinguishable from it. Zoom in first if you only want "
+                + "place names.</p></body></html>";
+    }
+
     /**
      * Starts a tide chart, which begins by asking where.
      *

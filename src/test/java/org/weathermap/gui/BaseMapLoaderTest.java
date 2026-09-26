@@ -103,17 +103,77 @@ class BaseMapLoaderTest {
     @Test
     void realGeometryReplacesTheBundledOutlineRatherThanLayeringOverIt() throws Exception {
         final BaseMapLoader loader = new BaseMapLoader(new Source());
+        final BoundingBox view = BoundingBox.of(53, -4, 55, -2);
         assertFalse(loader.hasDetailedShape(), "the outline to begin with");
         final long bundled = count(loader.features(), FeatureKind.COASTLINE);
         assertTrue(bundled > 1, "the bundled world outline is many features");
 
-        awaitLoad(loader, () -> loader.loadNow(BoundingBox.of(53, -4, 55, -2),
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(view));
+        awaitLoad(loader, () -> loader.loadNow(view,
                 List.of(FeatureKind.COASTLINE, FeatureKind.PLACE)));
 
         assertTrue(loader.hasDetailedShape());
         assertEquals(1, count(loader.features(), FeatureKind.COASTLINE),
                      "only the one that was fetched");
         assertTrue(has(loader.features(), FeatureKind.PLACE));
+    }
+
+    /**
+     * Loading detail for one harbour and then zooming out must not leave that
+     * harbour drawn on an empty world. The outline steps aside only while the
+     * view is inside what was loaded.
+     */
+    @Test
+    void theOutlineComesBackWhenTheViewLeavesTheDetailedArea() throws Exception {
+        final BaseMapLoader loader = new BaseMapLoader(new Source());
+        final BoundingBox small = BoundingBox.of(53, -4, 54, -3);
+
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(small));
+        awaitLoad(loader, () -> loader.loadNow(small,
+                List.of(FeatureKind.COASTLINE, FeatureKind.PLACE)));
+
+        assertFalse(loader.showsBundledOutline(), "inside the loaded area");
+        assertEquals(1, count(loader.features(), FeatureKind.COASTLINE));
+
+        // Zoom out past it.
+        final List<Integer> pushes = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            loader.setOnLoaded(features -> pushes.add(features.size()));
+            loader.viewChanged(BoundingBox.of(40, -20, 60, 10));
+        });
+
+        assertTrue(loader.showsBundledOutline(), "the world is visible again");
+        assertTrue(count(loader.features(), FeatureKind.COASTLINE) > 1,
+                   "and so is the world outline");
+        assertEquals(1, pushes.size(), "the map has to be told, or it redraws the old list");
+
+        // And back in.
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(small));
+        assertFalse(loader.showsBundledOutline());
+        assertEquals(2, pushes.size());
+    }
+
+    /** With nowhere known to be looking, the outline stays: blank is worse. */
+    @Test
+    void theOutlineStaysWhileTheViewIsUnknown() throws Exception {
+        final BaseMapLoader loader = new BaseMapLoader(new Source());
+        awaitLoad(loader, () -> loader.loadNow(BoundingBox.of(53, -4, 55, -2),
+                List.of(FeatureKind.COASTLINE)));
+
+        assertTrue(loader.hasDetailedShape());
+        assertTrue(loader.showsBundledOutline());
+    }
+
+    @Test
+    void theOutlineIsNeverHiddenForPlaceNamesAlone() throws Exception {
+        final BaseMapLoader loader = new BaseMapLoader(new Source());
+        final BoundingBox small = BoundingBox.of(53, -4, 54, -3);
+
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(small));
+        awaitLoad(loader, () -> loader.loadNow(small, List.of(FeatureKind.PLACE)));
+
+        assertTrue(loader.showsBundledOutline(), "names layer over the outline happily");
+        assertTrue(count(loader.features(), FeatureKind.COASTLINE) > 1);
     }
 
     @Test

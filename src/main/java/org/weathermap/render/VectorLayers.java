@@ -53,28 +53,68 @@ public final class VectorLayers {
      * it instead of being torn across the middle. This assumes x is linear in
      * longitude, which is true of both projections here and of every cylindrical
      * one.</p>
+     *
+     * <h2>Why the thinning</h2>
+     *
+     * <p>OSM coastline is surveyed, not drawn for a screen. Thirteen degrees of
+     * South-East Asia is a hundred megabytes of XML and 1.2 million points, and
+     * across nine hundred pixels that is well over a thousand points per pixel
+     * column - every one of them turned into a {@code lineTo} and handed to the
+     * rasteriser to draw on top of the last. It measured at four hundred
+     * milliseconds a render, on the event thread, <em>on every pan</em>.</p>
+     *
+     * <p>So a point within {@link #MIN_STEP_PX} of the last one kept is
+     * dropped. Nothing is lost that could have been seen: the two would have
+     * landed on the same pixel. The last point of a way is always kept, or a
+     * line would stop short of where it ends.</p>
      */
     static Path2D.Double pathOf(Feature feature, MapProjection projection) {
         final double turn = 360.0 / projection.bounds().widthDegrees()
                 * projection.imageWidth();
         final Path2D.Double path = new Path2D.Double();
+        final List<double[]> points = feature.points();
+
         boolean first = true;
         double previousX = 0;
-        for (double[] p : feature.points()) {
+        double previousY = 0;
+        for (int i = 0; i < points.size(); i++) {
+            final double[] p = points.get(i);
             final Point2D.Double pt = projection.toPixel(p[0], p[1]);
             if (first) {
                 path.moveTo(pt.x, pt.y);
                 first = false;
+                previousX = pt.x;
+                previousY = pt.y;
+                continue;
             }
-            else {
-                while (pt.x - previousX > turn / 2) pt.x -= turn;
-                while (pt.x - previousX < -turn / 2) pt.x += turn;
-                path.lineTo(pt.x, pt.y);
+            while (pt.x - previousX > turn / 2) pt.x -= turn;
+            while (pt.x - previousX < -turn / 2) pt.x += turn;
+
+            // The last point always goes in; anything else that has not moved
+            // a pixel since the last one kept would draw over it.
+            final boolean last = i == points.size() - 1;
+            if (!last && Math.abs(pt.x - previousX) < MIN_STEP_PX
+                    && Math.abs(pt.y - previousY) < MIN_STEP_PX) {
+                continue;
             }
+            path.lineTo(pt.x, pt.y);
             previousX = pt.x;
+            previousY = pt.y;
         }
         return path;
     }
+
+    /**
+     * How far a point must be from the last one drawn to be worth drawing, in
+     * pixels.
+     *
+     * <p>Just under one, so that anything dropped would have been rasterised
+     * into a pixel already covered. Making it larger would start to flatten
+     * real detail - a headland at this zoom is a pixel or two - and is not
+     * where the win is: almost all of the saving is in the first pixel's
+     * worth.</p>
+     */
+    static final double MIN_STEP_PX = 0.75;
 
     static List<Feature> of(List<Feature> features, FeatureKind kind) {
         final List<Feature> out = new ArrayList<>();
