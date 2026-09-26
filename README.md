@@ -21,6 +21,9 @@ make run                                   # the desktop application
 make run ARGS="--cli --profile 'Western Approaches'"
 ```
 
+**Version 1.1.0** — [what changed](CHANGES.md), and
+[how to build and package it](docs/build-and-run.md).
+
 ## The code
 
 ![The packages of org.weathermap and how they depend on each other](docs/diagrams/code-structure.svg)

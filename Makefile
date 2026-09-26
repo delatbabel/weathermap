@@ -200,7 +200,8 @@ help:
 	@echo "  Version:"
 	@echo "    version-print     Print the full build version ($(VERSION))"
 	@echo "    version-set       Set the Maven/pom version to $(MAVEN_VERSION)"
-	@echo "    version-bump      Bump the patch version by 0.0.1 (Makefile + pom)"
+	@echo "    version-bump      Bump the patch version by 0.0.1 (Makefile + pom + docs)"
+	@echo "    version-docs      Rewrite the version quoted in the README and docs"
 	@echo "    post-release      Re-apply the Maven version after a release"
 	@echo ""
 	@echo "  Packages (output in $(TMPDIR)/):"
@@ -268,8 +269,42 @@ version-print:
 # alias kept for backwards compatibility
 version: version-print
 
-version-set:
+version-set: version-docs
 	$(MVN) versions:set -DnewVersion=$(MAVEN_VERSION) -DgenerateBackupPoms=false
+
+# The prose that quotes the version: a jar name in an example, the number a
+# release tag carries, the line in the README. VNUM is only the single source
+# of truth if bumping it actually reaches them, and before this it did not -
+# the documentation was corrected by hand and went stale in between.
+#
+# Then it checks its own work, and checks it the blunt way: every three-part
+# number in these files must be this version. Matching only the three phrasings
+# the sed knows about was tried and is worth nothing - rewording a heading
+# stops it matching the sed AND the check together, which is exactly the case
+# the check exists for. So a reworded heading fails the release instead of
+# quietly shipping last version's number.
+#
+# The price is that these files may not quote any other version. A file that
+# does - docs/image-hosting.md names two releases of rclone - does not belong
+# on this list.
+VERSIONED_DOCS:=README.md docs/build-and-run.md docs/packaging.md
+
+version-docs:
+	@sed -i -E 's/weathermap-[0-9]+\.[0-9]+\.[0-9]+/weathermap-$(VNUM)/g' $(VERSIONED_DOCS)
+	@sed -i -E 's/^\*\*Version [0-9]+\.[0-9]+\.[0-9]+\*\*/**Version $(VNUM)**/' README.md
+	@sed -i -E 's/tag it is just `[0-9]+\.[0-9]+\.[0-9]+`/tag it is just `$(VNUM)`/' \
+		docs/packaging.md
+	@stale=$$(grep -rnE '[0-9]+\.[0-9]+\.[0-9]+' $(VERSIONED_DOCS) \
+			| grep -vF '$(VNUM)' || true) ; \
+	if [ -n "$$stale" ] ; then \
+		echo "version-docs: a version was left behind, so the wording no longer" ; \
+		echo "matches what this target rewrites. Fix one or the other:" ; \
+		echo "$$stale" ; \
+		echo "(the other files have already been rewritten; git checkout them" ; \
+		echo " if you would rather start again)" ; \
+		exit 1 ; \
+	fi
+	@echo "Documentation now says $(VNUM)"
 
 # Bump the patch component of VNUM (e.g. 1.0.0 -> 1.0.1), rewriting VNUM in this
 # Makefile and setting the pom version to match so the build stays consistent.
@@ -280,7 +315,8 @@ version-bump:
 	echo "Bumping version: $(VNUM) -> $$new" ; \
 	sed -i -E "s/^VNUM:=.*/VNUM:=$$new/" Makefile ; \
 	$(MVN) -q versions:set -DnewVersion=$$new -DgenerateBackupPoms=false ; \
-	echo "Updated Makefile VNUM and pom.xml to $$new"
+	$(MAKE) --no-print-directory version-docs ; \
+	echo "Updated Makefile VNUM, pom.xml and the documentation to $$new"
 
 post-release: version-set
 
@@ -568,7 +604,7 @@ clean: clean-release
 .SECONDARY:
 
 .PHONY: FORCE help build compile test jar run cli netcdf javadoc clean clean-release \
-        version version-print version-set version-bump post-release bootstrap \
+        version version-print version-set version-bump version-docs post-release bootstrap \
         release release-linux release-linux-deb release-linux-rpm \
         release-windows release-windows-x86_64 release-windows-aarch64 release-windows-x86_32 \
         release-macos release-macos-x86_64 release-macos-aarch64 release-sha256

@@ -38,9 +38,19 @@ else is derived:
 | Target | What it does |
 |---|---|
 | `version-print` | The full build version, which includes the commit and branch away from a release |
-| `version-set` | Sets the pom version to match `VNUM` |
-| `version-bump` | Bumps the patch component in both the `Makefile` and the pom |
+| `version-set` | Sets the pom version and the documentation to match `VNUM` |
+| `version-docs` | Rewrites the version quoted in the README and in these pages |
+| `version-bump` | Bumps the patch component in the `Makefile`, the pom and the documentation |
 | `post-release` | Re-applies the Maven version after a release |
+
+`version-docs` checks its own work the blunt way: every three-part number in
+the files it rewrites must be the current version. Rewording a heading stops it
+matching both the rewrite and the check, so the release fails instead of
+shipping last version's number quietly. The price is that those files may not
+quote any other version — which is why this page and
+[Build and run](build-and-run.md) are on the list and
+[Hosting the images](image-hosting.md), which names two releases of rclone, is
+not.
 
 The build version is deliberately richer than the package version. On a release
 tag it is just `1.1.0`; on a `release-*` branch it gains the commit; anywhere
