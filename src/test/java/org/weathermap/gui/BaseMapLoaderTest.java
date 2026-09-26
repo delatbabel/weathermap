@@ -115,7 +115,8 @@ class BaseMapLoaderTest {
         assertTrue(loader.hasDetailedShape());
         assertEquals(1, count(loader.features(), FeatureKind.COASTLINE),
                      "only the one that was fetched");
-        assertTrue(has(loader.features(), FeatureKind.PLACE));
+        assertEquals(1, count(loader.features(), FeatureKind.PLACE),
+                     "and the fetched place, not the bundled gazetteer's hundreds");
     }
 
     /**
@@ -231,20 +232,48 @@ class BaseMapLoaderTest {
         assertTrue(sent.contains(view));
     }
 
-    /** Dropping the margin cannot rescue a view that is itself too wide. */
+    /**
+     * Above the ceiling nothing is asked of Overpass - it would not answer -
+     * and the bundled world map is used instead. Which is what the chart has
+     * always done for the same area: refusing left the button doing nothing
+     * on exactly the wide areas a saved profile recalls, while <b>Download
+     * and composite</b> quietly drew a complete chart of the same place.
+     */
     @Test
-    void aViewBeyondTheLimitIsStillRefused() throws Exception {
+    void aViewBeyondTheLimitFallsBackToTheBundleRatherThanRefusing() throws Exception {
         final Boxes source = new Boxes();
         final BaseMapLoader loader = new BaseMapLoader(source);
         final String[] status = new String[1];
+        final List<Integer> pushes = new ArrayList<>();
 
         SwingUtilities.invokeAndWait(() -> {
             loader.setOnStatus(message -> status[0] = message);
+            loader.setOnLoaded(features -> pushes.add(features.size()));
             loader.loadNow(BoundingBox.of(0, 0, 25, 25), List.of(FeatureKind.COASTLINE));
         });
 
-        assertEquals(List.of(), source.asked);
-        assertTrue(status[0].contains("25°"), status[0]);
+        assertEquals(List.of(), source.asked, "Overpass is not asked what it cannot answer");
+        // The chart's own wording, because it is the chart's own behaviour.
+        assertTrue(status[0].contains("using the bundled world map"), status[0]);
+        assertEquals(1, pushes.size(), "and the map is told, or nothing appears to happen");
+        assertTrue(loader.showsBundledOutline());
+    }
+
+    /** And whatever was loaded for somewhere else is dropped, not left over. */
+    @Test
+    void fallingBackToTheBundleDropsDetailFromElsewhere() throws Exception {
+        final BaseMapLoader loader = new BaseMapLoader(new Source());
+        final BoundingBox small = BoundingBox.of(53, -4, 54, -3);
+
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(small));
+        awaitLoad(loader, () -> loader.loadNow(small, List.of(FeatureKind.COASTLINE)));
+        assertTrue(loader.hasDetailedShape());
+
+        SwingUtilities.invokeAndWait(() ->
+                loader.loadNow(BoundingBox.of(0, 0, 25, 25), List.of(FeatureKind.COASTLINE)));
+
+        assertFalse(loader.hasDetailedShape());
+        assertTrue(loader.showsBundledOutline());
     }
 
     /**
@@ -269,7 +298,7 @@ class BaseMapLoaderTest {
     }
 
     @Test
-    void anAreaTooLargeForOverpassIsRefusedWithTheSpanInTheMessage() throws Exception {
+    void nothingIsAskedOfAServiceThatWouldRefuse() throws Exception {
         final Source source = new Source();
         final BaseMapLoader loader = new BaseMapLoader(source);
         final String[] status = new String[1];
@@ -279,9 +308,45 @@ class BaseMapLoaderTest {
             loader.loadNow(BoundingBox.of(0, 0, 40, 40), List.of(FeatureKind.COASTLINE));
         });
 
-        assertEquals(List.of(), source.asked, "nothing asked of a service that would refuse");
-        assertTrue(status[0].contains("40°"), status[0]);
+        assertEquals(List.of(), source.asked);
+        assertTrue(status[0].contains("using the bundled world map"), status[0]);
         assertFalse(loader.hasDetailedShape());
+    }
+
+    // ---- the names the chart puts on ----------------------------------------
+
+    /**
+     * The selection map had no names at all above eight degrees - no seas, no
+     * countries, no cities - while a chart of the same area had all three
+     * from the same bundle. The map someone chooses an area on was emptier
+     * than the thing it is for.
+     */
+    @Test
+    void theBundledNamesAreThereFromTheStart() {
+        final List<Feature> features = new BaseMapLoader(new Source()).features();
+
+        assertTrue(has(features, FeatureKind.COASTLINE), "the outline");
+        assertTrue(has(features, FeatureKind.MARINE), "the seas");
+        assertTrue(has(features, FeatureKind.COUNTRY), "the countries");
+        assertTrue(has(features, FeatureKind.PLACE), "and the cities");
+    }
+
+    /**
+     * But bundled cities give way to OSM ones. Both sets at once puts two
+     * dots on some of them and ranks them by two different meanings of
+     * "important".
+     */
+    @Test
+    void osmPlacesReplaceTheBundledOnesRatherThanJoiningThem() throws Exception {
+        final BaseMapLoader loader = new BaseMapLoader(new Source());
+        final long bundled = count(loader.features(), FeatureKind.PLACE);
+        assertTrue(bundled > 100, "the bundled gazetteer is many cities");
+
+        awaitLoad(loader, () -> loader.loadNow(BoundingBox.of(53, -4, 54, -3),
+                List.of(FeatureKind.PLACE)));
+
+        assertEquals(1, count(loader.features(), FeatureKind.PLACE),
+                     "only the one that was fetched");
     }
 
     @Test

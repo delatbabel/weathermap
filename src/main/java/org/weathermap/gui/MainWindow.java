@@ -757,6 +757,10 @@ public final class MainWindow extends JFrame {
     static String largeDetailWarning(BoundingBox view,
                                      List<org.weathermap.osm.FeatureKind> kinds) {
         if (!kinds.contains(org.weathermap.osm.FeatureKind.COASTLINE)) return null;
+        // Nothing is downloaded above the Overpass ceiling - the bundled world
+        // map is used instead - so warning about a long wait there would be
+        // warning about something that is not going to happen.
+        if (org.weathermap.osm.OverpassClient.isTooLarge(view)) return null;
         final double span = Math.max(view.widthDegrees(), view.heightDegrees());
         if (span <= LARGE_DETAIL_SPAN) return null;
 

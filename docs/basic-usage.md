@@ -29,9 +29,13 @@ limit worth understanding before you start clicking around the coast — see
 
 Below about 8° of view the application fetches OpenStreetMap **place names** for
 what you are looking at, on its own, a moment after you stop moving. Above that
-it draws a bundled world outline, which is coarse but instant and never blank —
-though **Load detail** still works by hand up to 20°, which is as wide as
-Overpass will answer at all.
+it draws a bundled world outline with the bundled gazetteer's sea, country and
+city names over it — coarse but instant, never blank, and the same thing a
+chart of that area is drawn from.
+
+**Load detail** still works by hand up to 20°, which is as wide as Overpass
+will answer at all. Past that it says so and uses the bundle, which is what
+the chart does too.
 
 Only names, because a coastline query repeated on every pan is tens of megabytes
 and gets this client rate-limited. **Load detail** is the button that asks for

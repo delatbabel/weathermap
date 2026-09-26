@@ -156,6 +156,12 @@ degrade rather than abort:
   one-off and fetches whatever `MapService.featureKindsFor` says the chart
   needs. When real coastline arrives the bundled outline is dropped rather
   than drawn under it.
+- **The selection map must show what a chart of the same area would show.**
+  That means `BaseMapLoader.features()` mirrors `MapService.fetchFeatures`:
+  the bundled outline *plus* the gazetteer's marine and country names, plus
+  its cities where OSM has supplied none. Above `MAX_SERVABLE_SPAN` both fall
+  back to the bundle. Every bug reported against **Load detail** so far has
+  been the two drifting apart.
 - A GRIB variable that is absent is reported through `Progress.stage` rather
   than thrown, because an absent field renders identically to a flat one.
 

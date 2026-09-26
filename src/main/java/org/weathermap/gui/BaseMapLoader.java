@@ -6,6 +6,7 @@ import org.weathermap.osm.FeatureKind;
 import org.weathermap.osm.OsmSource;
 import org.weathermap.osm.OverpassClient;
 import org.weathermap.osm.WorldBaseMap;
+import org.weathermap.osm.WorldGazetteer;
 
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -147,8 +148,30 @@ public final class BaseMapLoader {
     public List<Feature> features() {
         final List<Feature> out = new ArrayList<>();
         if (showsBundledOutline()) out.addAll(WorldBaseMap.features());
+
+        // The same names the chart puts on, from the same bundle. Without
+        // these the selection map had no names at all above eight degrees -
+        // no seas, no countries, no cities - while a chart of the same area
+        // had all three, so the map someone chooses an area on was emptier
+        // than the thing it is for.
+        out.addAll(WorldGazetteer.of(FeatureKind.MARINE));
+        out.addAll(WorldGazetteer.of(FeatureKind.COUNTRY));
+
+        // Bundled cities only where OSM has supplied none. Mixing the two
+        // puts two dots on some of them and ranks them by two different
+        // meanings of "important" - the same reason MapService picks one set
+        // or the other rather than both.
+        if (!hasOsmPlaces()) out.addAll(WorldGazetteer.of(FeatureKind.PLACE));
+
         out.addAll(detail);
         return out;
+    }
+
+    private boolean hasOsmPlaces() {
+        for (Feature f : detail) {
+            if (f.kind() == FeatureKind.PLACE) return true;
+        }
+        return false;
     }
 
     /**
@@ -238,16 +261,46 @@ public final class BaseMapLoader {
         if (OverpassClient.isTooLarge(target)) target = view;
 
         if (OverpassClient.isTooLarge(target)) {
-            onStatus.accept(String.format(
-                    "Area spans %.0f° - zoom in below %.0f° to load map detail",
-                    Math.max(view.widthDegrees(), view.heightDegrees()),
-                    OverpassClient.MAX_SERVABLE_SPAN));
+            useBundledMap(view);
             return;
         }
         pending = target;
         pendingKinds = List.copyOf(kinds);
         debounce.stop();
         fetchNow();
+    }
+
+    /**
+     * Falls back to the bundled world map, which is what the chart does.
+     *
+     * <p>Above twenty degrees Overpass will not answer at all, and this used
+     * to refuse - leaving the button doing nothing, with nothing in the log,
+     * on exactly the wide areas a saved profile recalls. Meanwhile
+     * <b>Download and composite</b> quietly fell back to the bundle and drew
+     * a complete chart, so the two disagreed about the same area and the map
+     * was the poorer of them.</p>
+     *
+     * <p>Now it does the same thing, and says so in the same words. Whatever
+     * detail was loaded for somewhere else is dropped: the request was for
+     * detail <em>here</em>, and here the bundle is the answer.</p>
+     */
+    private void useBundledMap(BoundingBox view) {
+        LOG.info(() -> String.format(
+                "Load detail: %.1f deg is wider than the %.0f deg Overpass will serve; "
+                + "using the bundled world map",
+                Math.max(view.widthDegrees(), view.heightDegrees()),
+                OverpassClient.MAX_SERVABLE_SPAN));
+
+        detail = List.of();
+        loadedFor = null;
+        detailHasShape = false;
+        bundledShowing = true;
+        pending = null;
+        debounce.stop();
+        onStatus.accept(String.format(
+                "Area wider than %.0f° - using the bundled world map",
+                OverpassClient.MAX_SERVABLE_SPAN));
+        onLoaded.accept(features());
     }
 
     private void fetchNow() {

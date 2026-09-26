@@ -65,6 +65,20 @@
   becomes 10 MB, and 2,900 ms of parsing becomes about 180 ms of reading. The
   XML stays as the canonical copy, so a format or parser change throws the
   derivation away and rebuilds it rather than being stuck with it.
+- **The selection map now carries the names the chart carries.** Above 8° it
+  had none at all — no seas, no countries, no cities — while a chart of the
+  same area had all three from the same bundled gazetteer. The map you choose
+  an area on was emptier than the thing it is for. Bundled cities still give
+  way to OSM ones where those have been loaded, because both sets at once
+  puts two dots on some of them.
+- **Above 20° it falls back to the bundled world map instead of refusing.**
+  Overpass will not answer an area that wide, so the button did nothing —
+  no detail, and, on that path, nothing in the log either — on exactly the
+  wide areas a saved profile recalls. Meanwhile **Download and composite**
+  quietly fell back to the bundle and drew a complete chart of the same
+  place, so the two disagreed and the map was the poorer of them. It now does
+  the same thing, in the same words, and drops any detail loaded for
+  somewhere else.
 - **Zoom out, press it again, and it now actually asks.** The size check was
   on the view while the query went out 70% wider — the margin fetched around
   it so a later nudge needs no refetch — so any view past about 12° passed
