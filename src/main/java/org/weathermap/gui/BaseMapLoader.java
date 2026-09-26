@@ -186,8 +186,14 @@ public final class BaseMapLoader {
         if (view.widthDegrees() > MAX_DETAIL_SPAN) {
             debounce.stop();
             pending = null;
-            onStatus.accept(String.format(
-                    "World outline - zoom in below %.0f° for place names", MAX_DETAIL_SPAN));
+            // Which of the two ceilings applies matters to the reader. Between
+            // them, nothing loads by itself but the button still works, and
+            // saying only "zoom in below 8°" reads as though it does not.
+            onStatus.accept(OverpassClient.isTooLarge(view)
+                    ? String.format("World outline - zoom in below %.0f° to load map detail",
+                                    OverpassClient.MAX_SERVABLE_SPAN)
+                    : String.format("World outline - zoom in below %.0f° for place names, "
+                                    + "or press Load detail for this area", MAX_DETAIL_SPAN));
             return;
         }
         if (covers(loadedFor, view)) return;          // already in hand
@@ -220,17 +226,25 @@ public final class BaseMapLoader {
             onStatus.accept("No map layers are switched on - nothing to load");
             return;
         }
-        // The chart's own ceiling, not the automatic path's more cautious one:
-        // above this Overpass will not serve the query at all, and below it an
-        // explicit request is a reasonable thing to make.
-        if (OverpassClient.isTooLarge(view)) {
+
+        // The margin is the first thing to go. It exists so that a small pan
+        // afterwards needs no refetch, which is worth having and is not worth
+        // failing the whole request for - and adding 35% to each side of a
+        // fifteen degree view asks for twenty-five and a half, which Overpass
+        // will not serve. Checking the view and then sending the margined box
+        // is what let that through: the guard has to be on the box that is
+        // actually asked for.
+        BoundingBox target = withMargin(view);
+        if (OverpassClient.isTooLarge(target)) target = view;
+
+        if (OverpassClient.isTooLarge(target)) {
             onStatus.accept(String.format(
                     "Area spans %.0f° - zoom in below %.0f° to load map detail",
                     Math.max(view.widthDegrees(), view.heightDegrees()),
                     OverpassClient.MAX_SERVABLE_SPAN));
             return;
         }
-        pending = withMargin(view);
+        pending = target;
         pendingKinds = List.copyOf(kinds);
         debounce.stop();
         fetchNow();
@@ -243,6 +257,9 @@ public final class BaseMapLoader {
         pending = null;
 
         final long mine = ++generation;
+        LOG.info(() -> String.format(
+                "Load detail: %.1f x %.1f deg, %s", target.widthDegrees(),
+                target.heightDegrees(), kinds));
         onStatus.accept("Loading map detail from " + source.description() + "…");
 
         worker.submit(() -> {
@@ -256,6 +273,7 @@ public final class BaseMapLoader {
                     loadedFor = target;
                     detailHasShape = hasShape(fetched);
                     bundledShowing = showsBundledOutline();
+                    LOG.info(() -> describe(fetched));
                     onStatus.accept(describe(fetched));
                     onLoaded.accept(features());
                 });
@@ -271,6 +289,7 @@ public final class BaseMapLoader {
                     // outline is still on screen, so this is a note, not a
                     // failure - saying so keeps the user from waiting for
                     // something that is not coming.
+                    LOG.warning("Load detail failed: " + shortReason(e));
                     onStatus.accept("Map detail unavailable: " + shortReason(e)
                             + " - showing the world outline");
                 });

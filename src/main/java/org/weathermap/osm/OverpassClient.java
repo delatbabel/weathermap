@@ -154,7 +154,10 @@ public final class OverpassClient implements OsmSource {
         final Path parsed = cache.pathFor("osm", query, ".features.bin");
 
         if (cache.isFresh(entry, Cache.OSM_TTL)) {
-            LOG.fine(() -> "OSM cache hit: " + entry);
+            // At INFO, not FINE. A fetch logs "Querying Overpass at..." and a
+            // cache hit logged nothing, so being served instantly from disk
+            // looked exactly like the button having done nothing at all.
+            LOG.info(() -> "OSM cache hit for " + bbox + " (" + kinds + ")");
             final List<Feature> stored = readParsed(parsed, entry);
             if (stored != null) return stored;
         }

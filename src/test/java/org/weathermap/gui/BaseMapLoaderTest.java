@@ -176,6 +176,98 @@ class BaseMapLoaderTest {
         assertTrue(count(loader.features(), FeatureKind.COASTLINE) > 1);
     }
 
+    /** What was asked for, rather than what the caller passed in. */
+    private static final class Boxes implements OsmSource {
+        final List<BoundingBox> asked = Collections.synchronizedList(new ArrayList<>());
+
+        @Override
+        public List<Feature> fetch(BoundingBox bbox, List<FeatureKind> kinds) {
+            asked.add(bbox);
+            return List.of(new Feature(FeatureKind.COASTLINE,
+                    List.of(new double[]{bbox.south(), bbox.west()},
+                            new double[]{bbox.north(), bbox.east()}),
+                    Map.of("natural", "coastline")));
+        }
+
+        @Override
+        public String description() { return "a test source"; }
+    }
+
+    /**
+     * The margin is asked for on top of the view, so the guard has to be on
+     * the box that actually goes out.
+     *
+     * <p>It was on the view. A fifteen degree view passed the twenty degree
+     * check and then sent a query for twenty-five and a half, which Overpass
+     * will not serve - so zoom out, press Load detail, and nothing happens
+     * that anyone can see.</p>
+     */
+    @Test
+    void theMarginIsDroppedRatherThanSendingAQueryTooLargeToServe() throws Exception {
+        final Boxes source = new Boxes();
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final BoundingBox view = BoundingBox.of(5, 100, 20, 115);        // 15 degrees
+
+        awaitLoad(loader, () -> loader.loadNow(view, List.of(FeatureKind.COASTLINE)));
+
+        assertEquals(1, source.asked.size());
+        final BoundingBox sent = source.asked.get(0);
+        assertEquals(view, sent, "the view itself, with the margin given up");
+        assertFalse(org.weathermap.osm.OverpassClient.isTooLarge(sent),
+                    "and therefore something Overpass will answer");
+    }
+
+    /** A small view still gets its margin, so a nudge afterwards needs no refetch. */
+    @Test
+    void aSmallViewIsStillFetchedWithRoomAroundIt() throws Exception {
+        final Boxes source = new Boxes();
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final BoundingBox view = BoundingBox.of(53, -4, 54, -3);
+
+        awaitLoad(loader, () -> loader.loadNow(view, List.of(FeatureKind.COASTLINE)));
+
+        final BoundingBox sent = source.asked.get(0);
+        assertTrue(sent.widthDegrees() > view.widthDegrees(), "margined: " + sent);
+        assertTrue(sent.contains(view));
+    }
+
+    /** Dropping the margin cannot rescue a view that is itself too wide. */
+    @Test
+    void aViewBeyondTheLimitIsStillRefused() throws Exception {
+        final Boxes source = new Boxes();
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final String[] status = new String[1];
+
+        SwingUtilities.invokeAndWait(() -> {
+            loader.setOnStatus(message -> status[0] = message);
+            loader.loadNow(BoundingBox.of(0, 0, 25, 25), List.of(FeatureKind.COASTLINE));
+        });
+
+        assertEquals(List.of(), source.asked);
+        assertTrue(status[0].contains("25°"), status[0]);
+    }
+
+    /**
+     * The sequence that was reported: zoom in, load, zoom out, load. The
+     * second press has to reach the service, and for the wider area.
+     */
+    @Test
+    void loadingAgainAfterZoomingOutFetchesTheWiderArea() throws Exception {
+        final Boxes source = new Boxes();
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final BoundingBox small = BoundingBox.of(10, 106.5, 11, 107.5);
+        final BoundingBox large = BoundingBox.of(5, 100, 20, 115);
+
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(small));
+        awaitLoad(loader, () -> loader.loadNow(small, List.of(FeatureKind.COASTLINE)));
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(large));
+        awaitLoad(loader, () -> loader.loadNow(large, List.of(FeatureKind.COASTLINE)));
+
+        assertEquals(2, source.asked.size(), "the second press has to go out too");
+        assertTrue(source.asked.get(1).contains(large),
+                   "and cover where we are now: " + source.asked.get(1));
+    }
+
     @Test
     void anAreaTooLargeForOverpassIsRefusedWithTheSpanInTheMessage() throws Exception {
         final Source source = new Source();
@@ -237,10 +329,27 @@ class BaseMapLoaderTest {
 
         SwingUtilities.invokeAndWait(() -> {
             loader.setOnStatus(message -> status[0] = message);
-            loader.viewChanged(BoundingBox.of(0, 0, 20, 20));
+            loader.viewChanged(BoundingBox.of(0, 0, 15, 15));
         });
 
         assertEquals(List.of(), source.asked);
         assertTrue(status[0].contains("World outline"), status[0]);
+        // Between the two ceilings nothing loads by itself but the button
+        // still works, and saying only "zoom in" reads as though it does not.
+        assertTrue(status[0].contains("Load detail"), status[0]);
+    }
+
+    @Test
+    void panningWiderThanOverpassWillServeSaysSoInstead() throws Exception {
+        final BaseMapLoader loader = new BaseMapLoader(new Source());
+        final String[] status = new String[1];
+
+        SwingUtilities.invokeAndWait(() -> {
+            loader.setOnStatus(message -> status[0] = message);
+            loader.viewChanged(BoundingBox.of(0, 0, 40, 40));
+        });
+
+        assertTrue(status[0].contains("20°"), status[0]);
+        assertFalse(status[0].contains("Load detail"), status[0]);
     }
 }

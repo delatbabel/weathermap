@@ -65,6 +65,19 @@
   becomes 10 MB, and 2,900 ms of parsing becomes about 180 ms of reading. The
   XML stays as the canonical copy, so a format or parser change throws the
   derivation away and rebuilds it rather than being stuck with it.
+- **Zoom out, press it again, and it now actually asks.** The size check was
+  on the view while the query went out 70% wider — the margin fetched around
+  it so a later nudge needs no refetch — so any view past about 12° passed
+  the 20° check and then sent Overpass something it will not serve. The
+  margin is now the first thing given up, and the check is on the box that
+  actually goes out.
+- A cache hit is logged at INFO. It was logged at FINE while a fetch logged
+  at INFO, so being served instantly from disk looked exactly like the button
+  having done nothing. Load detail now says in the log what it asked for and
+  what came back, whichever way it was answered.
+- Between 8° and 20° the status no longer says only "zoom in below 8° for
+  place names". Nothing loads by itself up there, but the button works, and
+  the old wording read as though it did not.
 - Above about 6° it asks first. Thirteen degrees of South-East Asia came back
   as **108 MB** and a minute or two of waiting, which unannounced reads as the
   button having done nothing. The question says so, and says the answer is
