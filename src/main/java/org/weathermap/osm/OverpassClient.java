@@ -114,6 +114,9 @@ public final class OverpassClient implements OsmSource {
      */
     private static final long MAX_QUERY_SIZE = 64L * 1024 * 1024;
 
+    /** Where the parsed form of a response is kept, beside the response. */
+    static final String PARSED_SUFFIX = ".features.bin";
+
     private final List<URI> endpoints;
     private final Cache cache;
 
@@ -151,15 +154,15 @@ public final class OverpassClient implements OsmSource {
         // same OSM database, so a result cached from one is valid for all, and
         // keying on the endpoint would refetch whenever failover moved us.
         final Path entry = cache.pathFor("osm", query, ".osm.xml");
-        final Path parsed = cache.pathFor("osm", query, ".features.bin");
+        final Path parsed = cache.pathFor("osm", query, PARSED_SUFFIX);
 
         if (cache.isFresh(entry, Cache.OSM_TTL)) {
             // At INFO, not FINE. A fetch logs "Querying Overpass at..." and a
             // cache hit logged nothing, so being served instantly from disk
             // looked exactly like the button having done nothing at all.
             LOG.info(() -> "OSM cache hit for " + bbox + " (" + kinds + ")");
-            final List<Feature> stored = readParsed(parsed, entry);
-            if (stored != null) return stored;
+            final FeatureStore.Extract stored = readParsed(parsed, entry);
+            if (stored != null) return stored.features();
         }
         else {
             final String xml = queryWithFailover(query, bbox);
@@ -179,7 +182,8 @@ public final class OverpassClient implements OsmSource {
         LOG.fine(() -> "parsed " + features.size() + " feature(s) from " + entry
                 + " in " + (System.nanoTime() - started) / 1_000_000 + " ms");
 
-        FeatureStore.write(features, parsed);
+        FeatureStore.write(new FeatureStore.Extract(
+                new FeatureStore.Header(bbox, kinds, placeTypesFor(bbox)), features), parsed);
         return features;
     }
 
@@ -198,7 +202,7 @@ public final class OverpassClient implements OsmSource {
      *
      * @return the features, or null to parse the XML again
      */
-    private static List<Feature> readParsed(Path parsed, Path xml) {
+    private static FeatureStore.Extract readParsed(Path parsed, Path xml) {
         try {
             if (!Files.isReadable(parsed)) return null;
             if (Files.getLastModifiedTime(parsed).toInstant()
@@ -211,12 +215,68 @@ public final class OverpassClient implements OsmSource {
             return null;
         }
         final long started = System.nanoTime();
-        final List<Feature> features = FeatureStore.read(parsed);
-        if (features != null) {
-            LOG.fine(() -> "read " + features.size() + " feature(s) from " + parsed
+        final FeatureStore.Extract extract = FeatureStore.read(parsed);
+        if (extract != null) {
+            LOG.fine(() -> "read " + extract.features().size() + " feature(s) from " + parsed
                     + " in " + (System.nanoTime() - started) / 1_000_000 + " ms");
         }
-        return features;
+        return extract;
+    }
+
+    /**
+     * Features already on disk that cover this area, without asking anyone.
+     *
+     * <p>The ordinary cache is keyed on the exact request, which is a hash of
+     * a rectangle derived from the window size. That is right for "have I sent
+     * this query before" and useless for "have I already got this ground": a
+     * window one pixel different on the next run produces a different
+     * rectangle, a different key and a complete miss, so restarting the
+     * application threw away everything it had downloaded.</p>
+     *
+     * <p>So the parsed extracts are searched by what they say they hold. Any
+     * that covers the area, carries the kinds wanted and was asked at least as
+     * fine a place query will do - see {@link FeatureStore.Header#answers}.
+     * The smallest of those is preferred: they all answer the question, and
+     * the smallest is the least to read and the closest to what was asked
+     * for.</p>
+     *
+     * @return the features, or null when nothing on disk covers it
+     */
+    @Override
+    public Cached cachedCovering(BoundingBox area, List<FeatureKind> kinds) {
+        if (kinds.isEmpty()) return null;
+        final Path dir = cache.pathFor("osm", "any", "").getParent();
+        if (dir == null || !Files.isDirectory(dir)) return null;
+
+        final String placeTypes = placeTypesFor(area);
+        Path best = null;
+        double bestArea = Double.POSITIVE_INFINITY;
+
+        try (var entries = Files.list(dir)) {
+            for (Path entry : entries.filter(f -> f.getFileName().toString()
+                    .endsWith(PARSED_SUFFIX)).toList()) {
+                if (!cache.isFresh(entry, Cache.OSM_TTL)) continue;
+                final FeatureStore.Header header = FeatureStore.readHeader(entry);
+                if (header == null || !header.answers(area, kinds, placeTypes)) continue;
+
+                final double size = header.area().widthDegrees() * header.area().heightDegrees();
+                if (size < bestArea) {
+                    bestArea = size;
+                    best = entry;
+                }
+            }
+        }
+        catch (IOException e) {
+            LOG.log(java.util.logging.Level.FINE, "Could not search the OSM cache", e);
+            return null;
+        }
+        if (best == null) return null;
+
+        final FeatureStore.Extract extract = FeatureStore.read(best);
+        if (extract == null) return null;
+        LOG.info(() -> "Reusing cached map detail for " + extract.area() + " ("
+                + extract.features().size() + " features) - nothing downloaded");
+        return new Cached(extract.area(), extract.features());
     }
 
     /**

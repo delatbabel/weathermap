@@ -271,6 +271,50 @@ public final class BaseMapLoader {
     }
 
     /**
+     * Takes a set of features as the detail on screen.
+     *
+     * @param covered the ground they actually cover, which is the area a
+     *                reused cache entry holds rather than the area asked for
+     */
+    private void apply(List<Feature> features, BoundingBox covered, String said) {
+        detail = features;
+        loadedFor = covered;
+        detailHasShape = hasShape(features);
+        bundledShowing = showsBundledOutline();
+        LOG.info(() -> said);
+        onStatus.accept(said);
+        onLoaded.accept(features());
+    }
+
+    /**
+     * Shows detail already on disk for this view, if there is any.
+     *
+     * <p>Called once at startup. Nothing is downloaded and nothing is asked
+     * of Overpass - this only puts back what a previous session already
+     * fetched and paid for, which otherwise sat on disk unreachable because
+     * the key that would have found it is derived from the window size.</p>
+     *
+     * <p>Gives way to anything loaded since: it runs on a worker and a user
+     * who presses the button while it is reading has asked for something more
+     * specific.</p>
+     */
+    public void restoreFromCache(BoundingBox view, List<FeatureKind> kinds) {
+        if (kinds.isEmpty()) return;
+        this.view = view;
+        final long mine = ++generation;
+
+        worker.submit(() -> {
+            final OsmSource.Cached held = source.cachedCovering(view, kinds);
+            if (held == null || held.features().isEmpty()) return;
+            SwingUtilities.invokeLater(() -> {
+                if (mine != generation || loadedFor != null) return;
+                apply(held.features(), held.area(),
+                      describe(held.features()) + " from the cache");
+            });
+        });
+    }
+
+    /**
      * Falls back to the bundled world map, which is what the chart does.
      *
      * <p>Above twenty degrees Overpass will not answer at all, and this used
@@ -317,18 +361,27 @@ public final class BaseMapLoader {
 
         worker.submit(() -> {
             try {
+                // Whatever is already on disk for this ground, before asking
+                // anyone for it again. The ordinary cache is keyed on the exact
+                // request, which a restart never reproduces: the rectangle
+                // comes from the window size, and a pixel of difference is a
+                // different key and a complete miss.
+                final OsmSource.Cached held = source.cachedCovering(target, kinds);
+                if (held != null) {
+                    SwingUtilities.invokeLater(() -> {
+                        if (mine != generation) return;
+                        apply(held.features(), held.area(),
+                              describe(held.features()) + " from the cache");
+                    });
+                    return;
+                }
+
                 final List<Feature> fetched = source.fetch(target, kinds);
                 SwingUtilities.invokeLater(() -> {
                     // A later view change has already superseded this request;
                     // dropping it keeps the map consistent with the viewport.
                     if (mine != generation) return;
-                    detail = fetched;
-                    loadedFor = target;
-                    detailHasShape = hasShape(fetched);
-                    bundledShowing = showsBundledOutline();
-                    LOG.info(() -> describe(fetched));
-                    onStatus.accept(describe(fetched));
-                    onLoaded.accept(features());
+                    apply(fetched, target, describe(fetched));
                 });
             }
             catch (InterruptedException e) {

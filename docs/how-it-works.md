@@ -152,6 +152,30 @@ canonical, and anything wrong with the derivation — a different format
 version, a short file, one older than the response it came from — throws it
 away and rebuilds it rather than being trusted.
 
+### Two different questions
+
+The cache key is a hash of the request, which answers *"have I sent this exact
+query before?"*. That is the right question for a repeated download and the
+wrong one for a restart: the rectangle in the query is derived from the window
+size, so a window one pixel different produces a different key and a complete
+miss. A session could download a hundred megabytes, quit, come back, and find
+none of it.
+
+So each parsed extract carries a short header — the area it covers, the
+feature kinds in it, and how fine the `place=` query behind it was — and the
+second question, *"have I already got this ground?"*, is answered by reading
+those. Any extract that covers the area, holds the kinds wanted, and was asked
+at least as fine a place query will do; the smallest such is preferred.
+
+The place-query part matters. Overpass is asked for fewer `place=` values as
+the area grows, so a wide extract genuinely holds fewer names than a narrow
+one — handing one back for a close-in request would quietly lose every
+village.
+
+This is what makes **Load detail** free the second time and what lets the
+application put back, at startup, whatever a previous session already paid
+for.
+
 ### The budget
 
 Nothing in there cannot be fetched again, so the cache is bounded by size

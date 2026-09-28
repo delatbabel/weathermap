@@ -148,6 +148,10 @@ public final class MainWindow extends JFrame {
         bindSeriesKeys();
         // Whatever last session left behind, before this one adds to it.
         trimCache();
+        // And whatever it already downloaded for where we are looking. Paid
+        // for once; there is no reason to make the user press a button, or
+        // Overpass answer again, to see it.
+        baseMap.restoreFromCache(area, MapService.featureKindsFor(renderSpec));
         setJMenuBar(buildMenuBar());
         setContentPane(buildContent());
         restoreLayout(preferences.uiLayout());

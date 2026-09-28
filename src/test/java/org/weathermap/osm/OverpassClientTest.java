@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OverpassClientTest {
@@ -187,8 +189,11 @@ class OverpassClientTest {
             // Backdate the parsed form behind the response, and put something
             // recognisably different in it.
             final Path parsed = onlyFile(dir, ".features.bin");
-            FeatureStore.write(List.of(new Feature(FeatureKind.PLACE,
-                    List.of(new double[]{0, 0}), java.util.Map.of("name", "Stale"))), parsed);
+            FeatureStore.write(new FeatureStore.Extract(
+                    new FeatureStore.Header(BoundingBox.of(10, 106, 11, 108),
+                                            List.of(FeatureKind.PLACE), "city|town|village"),
+                    List.of(new Feature(FeatureKind.PLACE, List.of(new double[]{0, 0}),
+                                        java.util.Map.of("name", "Stale")))), parsed);
             Files.setLastModifiedTime(parsed, java.nio.file.attribute.FileTime.from(
                     Files.getLastModifiedTime(onlyFile(dir, ".osm.xml")).toInstant()
                             .minusSeconds(60)));
@@ -208,5 +213,121 @@ class OverpassClientTest {
             return walk.filter(f -> f.getFileName().toString().endsWith(suffix))
                     .findFirst().orElseThrow(() -> new AssertionError("no " + suffix + " under " + dir));
         }
+    }
+
+    // ---- finding it again after a restart ------------------------------------
+
+    /**
+     * The reported case: load detail, quit, come back, and the download is
+     * still there. The ordinary cache key cannot do this - it is a hash of a
+     * rectangle derived from the window size, and a window one pixel
+     * different produces a different key and a complete miss.
+     */
+    @Test
+    void findsAnEarlierDownloadThatCoversTheSameGround(@TempDir Path dir) throws Exception {
+        final var hits = new java.util.concurrent.atomic.AtomicInteger();
+        final var server = serving(TWO_PLACES, hits);
+        try {
+            final Cache cache = new Cache(dir);
+            final OverpassClient client = new OverpassClient(
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/"), cache);
+            final List<FeatureKind> kinds = List.of(FeatureKind.PLACE);
+
+            client.fetch(BoundingBox.of(10, 106, 11, 108), kinds);
+            assertEquals(1, hits.get());
+
+            // A new client, as if the application had been restarted, asking
+            // about a view a hair different from last time.
+            final OverpassClient after = new OverpassClient(
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/"), cache);
+            final OsmSource.Cached held =
+                    after.cachedCovering(BoundingBox.of(10.01, 106.02, 10.99, 107.97), kinds);
+
+            assertNotNull(held, "nothing found for ground already downloaded");
+            assertEquals(2, held.features().size());
+            assertEquals(1, hits.get(), "and nothing asked of the server");
+            assertTrue(held.area().contains(BoundingBox.of(10.01, 106.02, 10.99, 107.97)),
+                       "the area reported is the one actually held");
+        }
+        finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void doesNotOfferAnExtractThatFallsShortOfTheArea(@TempDir Path dir) throws Exception {
+        final var hits = new java.util.concurrent.atomic.AtomicInteger();
+        final var server = serving(TWO_PLACES, hits);
+        try {
+            final Cache cache = new Cache(dir);
+            final OverpassClient client = new OverpassClient(
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/"), cache);
+            client.fetch(BoundingBox.of(10, 106, 11, 108), List.of(FeatureKind.PLACE));
+
+            assertNull(client.cachedCovering(BoundingBox.of(9, 105, 12, 109),
+                                             List.of(FeatureKind.PLACE)),
+                       "a wider view is not covered by a narrower download");
+        }
+        finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void doesNotOfferAnExtractMissingAKindThatWasAskedFor(@TempDir Path dir) throws Exception {
+        final var hits = new java.util.concurrent.atomic.AtomicInteger();
+        final var server = serving(TWO_PLACES, hits);
+        try {
+            final Cache cache = new Cache(dir);
+            final OverpassClient client = new OverpassClient(
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/"), cache);
+            final BoundingBox area = BoundingBox.of(10, 106, 11, 108);
+            client.fetch(area, List.of(FeatureKind.PLACE));
+
+            assertNull(client.cachedCovering(area,
+                               List.of(FeatureKind.PLACE, FeatureKind.COASTLINE)),
+                       "places alone cannot answer a request that wants a coastline");
+        }
+        finally {
+            server.stop(0);
+        }
+    }
+
+    /**
+     * And not one asked at a coarser place query. Overpass is asked for fewer
+     * place values as the area grows, so a wide extract genuinely holds fewer
+     * names - handing it back close in would quietly lose every village.
+     */
+    @Test
+    void doesNotOfferAnExtractAskedAtACoarserDetail(@TempDir Path dir) throws Exception {
+        final var hits = new java.util.concurrent.atomic.AtomicInteger();
+        final var server = serving(TWO_PLACES, hits);
+        try {
+            final Cache cache = new Cache(dir);
+            final OverpassClient client = new OverpassClient(
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/"), cache);
+
+            // Fifteen degrees asks for cities only.
+            final BoundingBox wide = BoundingBox.of(0, 100, 15, 115);
+            assertEquals("city", OverpassClient.placeTypesFor(wide));
+            client.fetch(wide, List.of(FeatureKind.PLACE));
+
+            // Half a degree inside it wants villages and hamlets as well.
+            final BoundingBox close = BoundingBox.of(5, 105, 5.5, 105.5);
+            assertEquals("city|town|village|hamlet", OverpassClient.placeTypesFor(close));
+            assertNull(client.cachedCovering(close, List.of(FeatureKind.PLACE)));
+        }
+        finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void anEmptyCacheOffersNothingRatherThanFailing(@TempDir Path dir) {
+        final OverpassClient client = new OverpassClient(
+                URI.create("http://127.0.0.1:1/"), new Cache(dir));
+        assertNull(client.cachedCovering(BoundingBox.of(10, 106, 11, 108),
+                                         List.of(FeatureKind.PLACE)));
+        assertNull(client.cachedCovering(BoundingBox.of(10, 106, 11, 108), List.of()));
     }
 }

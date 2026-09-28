@@ -417,4 +417,123 @@ class BaseMapLoaderTest {
         assertTrue(status[0].contains("20°"), status[0]);
         assertFalse(status[0].contains("Load detail"), status[0]);
     }
+
+    // ---- what is already on disk --------------------------------------------
+
+    /** A source that has something stored and records whether it was asked. */
+    private static final class Stored implements OsmSource {
+        final List<BoundingBox> fetched = Collections.synchronizedList(new ArrayList<>());
+        BoundingBox held;
+
+        Stored(BoundingBox held) { this.held = held; }
+
+        @Override
+        public Cached cachedCovering(BoundingBox bbox, List<FeatureKind> kinds) {
+            if (held == null || !held.contains(bbox)) return null;
+            return new Cached(held, List.of(
+                    new Feature(FeatureKind.COASTLINE,
+                            List.of(new double[]{held.south(), held.west()},
+                                    new double[]{held.north(), held.east()}),
+                            Map.of("natural", "coastline"))));
+        }
+
+        @Override
+        public List<Feature> fetch(BoundingBox bbox, List<FeatureKind> kinds) {
+            fetched.add(bbox);
+            return List.of(new Feature(FeatureKind.COASTLINE,
+                    List.of(new double[]{bbox.south(), bbox.west()},
+                            new double[]{bbox.north(), bbox.east()}),
+                    Map.of("natural", "coastline")));
+        }
+
+        @Override
+        public String description() { return "a test source"; }
+    }
+
+    /**
+     * The reported case: restart, and the detail a previous session paid for
+     * is on the map without anyone pressing anything.
+     */
+    @Test
+    void detailAlreadyOnDiskIsShownAtStartup() throws Exception {
+        final Stored source = new Stored(BoundingBox.of(50, -8, 58, 2));
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final BoundingBox view = BoundingBox.of(53, -4, 54, -3);
+
+        awaitLoad(loader, () ->
+                loader.restoreFromCache(view, List.of(FeatureKind.COASTLINE)));
+
+        assertTrue(loader.hasDetailedShape(), "the stored detail is on the map");
+        assertEquals(List.of(), source.fetched, "and nothing was downloaded");
+        assertFalse(loader.showsBundledOutline(), "the outline stands aside for it");
+    }
+
+    @Test
+    void startupIsSilentWhenThereIsNothingStored() throws Exception {
+        final Stored source = new Stored(null);
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final boolean[] told = {false};
+
+        SwingUtilities.invokeAndWait(() -> {
+            loader.setOnLoaded(f -> told[0] = true);
+            loader.restoreFromCache(BoundingBox.of(53, -4, 54, -3),
+                                    List.of(FeatureKind.COASTLINE));
+        });
+        Thread.sleep(300);
+        SwingUtilities.invokeAndWait(() -> { });
+
+        assertFalse(told[0], "nothing to say, so nothing said");
+        assertEquals(List.of(), source.fetched);
+        assertTrue(loader.showsBundledOutline());
+    }
+
+    /**
+     * And pressing the button over ground already held costs nothing either.
+     * The ordinary cache is keyed on the exact request, which a restart never
+     * reproduces.
+     */
+    @Test
+    void loadDetailReusesWhatIsAlreadyHeldRatherThanFetching() throws Exception {
+        final Stored source = new Stored(BoundingBox.of(50, -8, 58, 2));
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final BoundingBox view = BoundingBox.of(53, -4, 54, -3);
+
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(view));
+        final String status = awaitLoad(loader, () ->
+                loader.loadNow(view, List.of(FeatureKind.COASTLINE)));
+
+        assertEquals(List.of(), source.fetched, "nothing downloaded");
+        assertTrue(status.contains("cache"), status);
+        assertTrue(loader.hasDetailedShape());
+    }
+
+    /** The area recorded is the one actually held, not the one asked for. */
+    @Test
+    void reusingAWiderExtractRecordsTheWiderArea() throws Exception {
+        final BoundingBox wide = BoundingBox.of(50, -8, 58, 2);
+        final Stored source = new Stored(wide);
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final BoundingBox view = BoundingBox.of(53, -4, 54, -3);
+
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(view));
+        awaitLoad(loader, () -> loader.loadNow(view, List.of(FeatureKind.COASTLINE)));
+
+        // Panning within what is held must not put the coarse outline back.
+        SwingUtilities.invokeAndWait(() ->
+                loader.viewChanged(BoundingBox.of(51, -7, 52, -6)));
+        assertFalse(loader.showsBundledOutline(),
+                    "still inside the ground that was reused");
+    }
+
+    @Test
+    void whatIsHeldIsNotUsedWhenItDoesNotCoverTheView() throws Exception {
+        final Stored source = new Stored(BoundingBox.of(50, -8, 51, -7));
+        final BaseMapLoader loader = new BaseMapLoader(source);
+        final BoundingBox view = BoundingBox.of(53, -4, 54, -3);
+
+        SwingUtilities.invokeAndWait(() -> loader.viewChanged(view));
+        awaitLoad(loader, () -> loader.loadNow(view, List.of(FeatureKind.COASTLINE)));
+
+        assertEquals(1, source.fetched.size(), "so it had to be downloaded");
+    }
 }

@@ -54,6 +54,11 @@ Two things about it worth knowing:
   form, so the second look at an area is quick rather than merely quicker.
   The cache is bounded — **File → Preferences → Cache limit**, 2 GB by
   default — and the oldest downloads go when it is passed.
+- **It is not downloaded twice.** Detail already held for the area on screen
+  is reused rather than fetched again, including across a restart — and on
+  startup it is put back on the map without your having to press anything.
+  An extract wider than the view answers for it, so panning about inside
+  somewhere you have already loaded costs nothing.
 - **The real coastline replaces the bundled outline** while you are inside the
   area you loaded, because two coastlines a kilometre apart is not a richer map.
   Zoom out past that area and the world outline comes back underneath.

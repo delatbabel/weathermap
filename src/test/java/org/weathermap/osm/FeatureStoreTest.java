@@ -2,6 +2,7 @@ package org.weathermap.osm;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.weathermap.model.BoundingBox;
 
 import java.io.DataOutputStream;
 import java.nio.file.Files;
@@ -24,6 +25,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class FeatureStoreTest {
 
+    private static final BoundingBox AREA = BoundingBox.of(-10, 100, 20, 120);
+
+    private static FeatureStore.Extract extract(List<Feature> features) {
+        return new FeatureStore.Extract(
+                new FeatureStore.Header(AREA,
+                        List.of(FeatureKind.COASTLINE, FeatureKind.PLACE, FeatureKind.BOUNDARY),
+                        "city|town"),
+                features);
+    }
+
     private static final List<Feature> SAMPLE = List.of(
             new Feature(FeatureKind.COASTLINE,
                     List.of(new double[]{10.123456, 107.654321},
@@ -41,9 +52,9 @@ class FeatureStoreTest {
     @Test
     void writesAndReadsBackEverythingThatMatters(@TempDir Path dir) {
         final Path file = dir.resolve("features.bin");
-        assertTrue(FeatureStore.write(SAMPLE, file));
+        assertTrue(FeatureStore.write(extract(SAMPLE), file));
 
-        final List<Feature> back = FeatureStore.read(file);
+        final List<Feature> back = FeatureStore.read(file).features();
         assertEquals(SAMPLE.size(), back.size());
         for (int i = 0; i < SAMPLE.size(); i++) {
             assertEquals(SAMPLE.get(i).kind(), back.get(i).kind(), "kind " + i);
@@ -60,8 +71,8 @@ class FeatureStoreTest {
     @Test
     void keepsCoordinatesToATenthOfAMetre(@TempDir Path dir) {
         final Path file = dir.resolve("features.bin");
-        FeatureStore.write(SAMPLE, file);
-        final List<Feature> back = FeatureStore.read(file);
+        FeatureStore.write(extract(SAMPLE), file);
+        final List<Feature> back = FeatureStore.read(file).features();
 
         double worst = 0;
         for (int i = 0; i < SAMPLE.size(); i++) {
@@ -84,26 +95,26 @@ class FeatureStoreTest {
                     Map.of("natural", "coastline")));
         }
         final Path file = dir.resolve("many.bin");
-        FeatureStore.write(many, file);
+        FeatureStore.write(extract(many), file);
 
         // Two points is sixteen bytes; the tags must not be costing more than
         // the geometry they describe.
         assertTrue(Files.size(file) < 2000 * 40,
                    "2000 identically tagged ways came to " + Files.size(file) + " bytes");
-        assertEquals(2000, FeatureStore.read(file).size());
+        assertEquals(2000, FeatureStore.read(file).features().size());
     }
 
     @Test
     void anEmptyListRoundTrips(@TempDir Path dir) {
         final Path file = dir.resolve("empty.bin");
-        assertTrue(FeatureStore.write(List.of(), file));
-        assertEquals(List.of(), FeatureStore.read(file));
+        assertTrue(FeatureStore.write(extract(List.of()), file));
+        assertEquals(List.of(), FeatureStore.read(file).features());
     }
 
     @Test
     void leavesNoPartFileBehind(@TempDir Path dir) throws Exception {
         final Path file = dir.resolve("features.bin");
-        FeatureStore.write(SAMPLE, file);
+        FeatureStore.write(extract(SAMPLE), file);
         try (var entries = Files.list(dir)) {
             assertEquals(List.of("features.bin"),
                          entries.map(f -> f.getFileName().toString()).sorted().toList());
@@ -139,7 +150,7 @@ class FeatureStoreTest {
     @Test
     void aTruncatedFileIsRefused(@TempDir Path dir) throws Exception {
         final Path file = dir.resolve("features.bin");
-        FeatureStore.write(SAMPLE, file);
+        FeatureStore.write(extract(SAMPLE), file);
 
         final byte[] whole = Files.readAllBytes(file);
         for (int keep : new int[]{4, 8, 20, whole.length / 2, whole.length - 1}) {
@@ -156,8 +167,6 @@ class FeatureStoreTest {
         try (DataOutputStream out = new DataOutputStream(Files.newOutputStream(file))) {
             out.write(new byte[]{'W', 'M', 'F', 'C'});
             out.writeInt(999);
-            out.writeInt(0);
-            out.writeInt(0);
         }
         assertNull(FeatureStore.read(file));
     }
@@ -167,12 +176,14 @@ class FeatureStoreTest {
         final Path file = dir.resolve("future.bin");
         try (DataOutputStream out = new DataOutputStream(Files.newOutputStream(file))) {
             out.write(new byte[]{'W', 'M', 'F', 'C'});
-            out.writeInt(1);
-            out.writeInt(0);              // no strings
-            out.writeInt(1);              // one feature
+            out.writeInt(2);
+            out.writeInt(-10_000_000);    // the area
+            out.writeInt(100_000_000);
+            out.writeInt(20_000_000);
+            out.writeInt(120_000_000);
+            out.writeByte(1);
             out.writeByte(120);           // of a kind from the future
-            out.writeShort(0);
-            out.writeInt(0);
+            out.writeUTF("");
         }
         assertNull(FeatureStore.read(file));
     }
@@ -183,6 +194,6 @@ class FeatureStoreTest {
         // A file where the directory would have to be.
         final Path blocked = dir.resolve("blocked");
         Files.writeString(blocked, "not a directory");
-        assertFalse(FeatureStore.write(SAMPLE, blocked.resolve("features.bin")));
+        assertFalse(FeatureStore.write(extract(SAMPLE), blocked.resolve("features.bin")));
     }
 }

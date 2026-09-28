@@ -183,6 +183,17 @@ features parsed out of it (`osm.FeatureStore`, `.features.bin` beside the
 whenever it is older than the XML or written by a different `VERSION`. Bump
 that constant when the parser changes what it produces.
 
+**The cache answers two different questions and they need different keys.**
+`Cache.pathFor` hashes the request, which answers "have I sent this query
+before" — useless across a restart, because the rectangle in the query comes
+from the window size and one pixel of difference is a total miss. So each
+extract carries a `FeatureStore.Header` (area, kinds, place-query detail) and
+`OverpassClient.cachedCovering` scans those to answer "have I already got this
+ground". Use it, not `fetch`, when the question is the second one.
+`Header.answers` must keep checking the place-query detail: Overpass returns
+fewer `place=` values for a wide box, so a wide extract reused close in loses
+every village.
+
 The cache is **bounded by size, not policy** — `Preferences.cacheBudgetBytes`,
 2 GB by default — and `Cache.evictInBackground` is called at startup, after a
 download and after a Load detail. Eviction is oldest-*fetched* first, not LRU:
