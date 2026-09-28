@@ -20,7 +20,7 @@ SHELL:=/bin/bash
 # =======================================================================
 
 # The numeric version — the single source of truth. Bump this for a release.
-VNUM:=1.1.0
+VNUM:=1.1.1
 # major.minor part
 V_MAJ_MIN:=$(shell echo "$(VNUM)" | cut -f1,2 -d'.')
 # four-part form required by the Windows .exe version resource

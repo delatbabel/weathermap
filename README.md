@@ -21,7 +21,7 @@ make run                                   # the desktop application
 make run ARGS="--cli --profile 'Western Approaches'"
 ```
 
-**Version 1.1.0** — [what changed](CHANGES.md), and
+**Version 1.1.1** — [what changed](CHANGES.md), and
 [how to build and package it](docs/build-and-run.md).
 
 ## The code

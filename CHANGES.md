@@ -1,5 +1,37 @@
 # Changes
 
+## 1.1.1
+
+**Map detail survives a restart**
+
+- **It comes back on its own, and is not downloaded twice.** The cache key
+  is a hash of the request, and the request carries a rectangle derived
+  from the window size — so a window one pixel different on the next run was
+  a different key and a complete miss, and a session could download a hundred
+  megabytes, quit, and find none of it. Each parsed extract now carries a
+  header saying what ground it covers, which kinds are in it and how fine its
+  place query was, and that is what gets searched. Anything covering the view
+  with at least as much detail answers for it.
+- So **Load detail no longer downloads what is already held**, and at startup
+  whatever a previous session paid for is put back on the map without anyone
+  pressing anything. An extract wider than the view answers for it, so panning
+  inside an area already loaded costs nothing.
+- Two things had to line up for that to work, and neither did at first. The
+  cache is asked about the **view**, not the margined box fetched around it —
+  asking about the margin only matched when the new window happened to be no
+  larger than the old one, which is a coin flip. And the `place=` query now
+  follows the view too: deciding it from the margined box asked Overpass for
+  cities and towns while the renderer went on drawing villages that had never
+  been fetched, and left every stored extract too coarse to answer for the
+  view it had been fetched for.
+- Existing `.features.bin` files predate the header and are rejected and
+  rebuilt, as a version bump always does here. The first **Load detail** per
+  area after upgrading fetches once more; every one after that is free.
+- The `place=` query following the view also closes a gap that predates all
+  of this: the selection map had been asking Overpass for fewer place types
+  than it went on to draw, so village names were missing from it at the very
+  zooms where it thins to show them.
+
 ## 1.1.0
 
 **Tide charts**
@@ -65,29 +97,6 @@
   becomes 10 MB, and 2,900 ms of parsing becomes about 180 ms of reading. The
   XML stays as the canonical copy, so a format or parser change throws the
   derivation away and rebuilds it rather than being stuck with it.
-- **Map detail survives a restart, and comes back on its own.** The cache
-  key is a hash of the request, and the request carries a rectangle derived
-  from the window size — so a window one pixel different on the next run was
-  a different key and a complete miss, and a session could download a hundred
-  megabytes, quit, and find none of it. Each parsed extract now carries a
-  header saying what ground it covers, which kinds are in it and how fine its
-  place query was, and that is what gets searched. Anything covering the view
-  with at least as much detail answers for it.
-- So **Load detail no longer downloads what is already held**, and at startup
-  whatever a previous session paid for is put back on the map without anyone
-  pressing anything. An extract wider than the view answers for it, so panning
-  inside an area already loaded costs nothing.
-- Two things had to line up for that to work, and neither did at first. The
-  cache is asked about the **view**, not the margined box fetched around it —
-  asking about the margin only matched when the new window happened to be no
-  larger than the old one, which is a coin flip. And the `place=` query now
-  follows the view too: deciding it from the margined box asked Overpass for
-  cities and towns while the renderer went on drawing villages that had never
-  been fetched, and left every stored extract too coarse to answer for the
-  view it had been fetched for.
-- Existing `.features.bin` files predate the header and are rejected and
-  rebuilt, as a version bump always does here. The first **Load detail** per
-  area after upgrading fetches once more; every one after that is free.
 - **The selection map now carries the names the chart carries.** Above 8° it
   had none at all — no seas, no countries, no cities — while a chart of the
   same area had all three from the same bundled gazetteer. The map you choose
