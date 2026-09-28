@@ -148,10 +148,6 @@ public final class MainWindow extends JFrame {
         bindSeriesKeys();
         // Whatever last session left behind, before this one adds to it.
         trimCache();
-        // And whatever it already downloaded for where we are looking. Paid
-        // for once; there is no reason to make the user press a button, or
-        // Overpass answer again, to see it.
-        baseMap.restoreFromCache(area, MapService.featureKindsFor(renderSpec));
         setJMenuBar(buildMenuBar());
         setContentPane(buildContent());
         restoreLayout(preferences.uiLayout());
@@ -1381,7 +1377,33 @@ public final class MainWindow extends JFrame {
             // the window is built themes only what is created afterwards, which
             // shows up as a correctly themed dialog over a Metal window.
             Themes.install(new Preferences().theme());
-            new MainWindow().setVisible(true);
+            final MainWindow window = new MainWindow();
+            window.setVisible(true);
+            // After it is on screen, because the view is not known until the
+            // map panel has a size, and the view is the rectangle the cache
+            // has to be asked about.
+            SwingUtilities.invokeLater(window::restoreCachedDetail);
         });
+    }
+
+    /**
+     * Puts back whatever a previous session already downloaded for the area
+     * on screen.
+     *
+     * <p>Nothing is fetched and Overpass is not asked; this only reaches for
+     * what is already on disk and otherwise unreachable, because the cache
+     * key that would find it is a hash of a request built from the window
+     * size and no two runs produce quite the same one.</p>
+     *
+     * <p>Asks about the <b>view</b> and not the stored selection. The
+     * selection is usually the smaller of the two, and a smaller area implies
+     * a finer place query, so an extract fetched for the view gets refused as
+     * too coarse to answer for the selection inside it - which is why this
+     * appeared to do nothing at all.</p>
+     */
+    private void restoreCachedDetail() {
+        final BoundingBox view = mapPanel.viewBounds();
+        if (view == null) return;
+        baseMap.restoreFromCache(view, MapService.featureKindsFor(renderSpec));
     }
 }

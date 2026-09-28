@@ -77,6 +77,14 @@
   whatever a previous session paid for is put back on the map without anyone
   pressing anything. An extract wider than the view answers for it, so panning
   inside an area already loaded costs nothing.
+- Two things had to line up for that to work, and neither did at first. The
+  cache is asked about the **view**, not the margined box fetched around it —
+  asking about the margin only matched when the new window happened to be no
+  larger than the old one, which is a coin flip. And the `place=` query now
+  follows the view too: deciding it from the margined box asked Overpass for
+  cities and towns while the renderer went on drawing villages that had never
+  been fetched, and left every stored extract too coarse to answer for the
+  view it had been fetched for.
 - Existing `.features.bin` files predate the header and are rejected and
   rebuilt, as a version bump always does here. The first **Load detail** per
   area after upgrading fetches once more; every one after that is free.

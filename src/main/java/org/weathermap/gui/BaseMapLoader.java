@@ -111,6 +111,19 @@ public final class BaseMapLoader {
     private boolean bundledShowing = true;
 
     private BoundingBox pending;
+
+    /**
+     * The view the pending request is for, as against the box being asked
+     * for, which is that view plus a margin.
+     *
+     * <p>Both are needed and they are not interchangeable. The margin is what
+     * gets <em>downloaded</em>, so that a small pan afterwards needs no
+     * refetch. The view is what has to be <em>covered</em>, and asking the
+     * cache about the margined box instead meant a hit only when the window
+     * happened to be no larger than it was last time - a coin flip, which is
+     * why this looked like it was not working at all.</p>
+     */
+    private BoundingBox pendingView;
     private List<FeatureKind> pendingKinds = KINDS;
     private long generation;
 
@@ -222,6 +235,7 @@ public final class BaseMapLoader {
         if (covers(loadedFor, view)) return;          // already in hand
 
         pending = withMargin(view);
+        pendingView = view;
         pendingKinds = KINDS;
         debounce.restart();
         onStatus.accept("Detail will load when you stop moving…");
@@ -265,6 +279,7 @@ public final class BaseMapLoader {
             return;
         }
         pending = target;
+        pendingView = view;
         pendingKinds = List.copyOf(kinds);
         debounce.stop();
         fetchNow();
@@ -297,6 +312,13 @@ public final class BaseMapLoader {
      * <p>Gives way to anything loaded since: it runs on a worker and a user
      * who presses the button while it is reading has asked for something more
      * specific.</p>
+     *
+     * <p><b>Must be given the view, not the selection.</b> They are different
+     * rectangles and the selection is usually the smaller, which implies a
+     * <em>finer</em> place query than the view it sits in - so an extract
+     * fetched for the view is refused as too coarse to answer for the
+     * selection inside it, and the restore silently never happens. That is
+     * exactly what it did.</p>
      */
     public void restoreFromCache(BoundingBox view, List<FeatureKind> kinds) {
         if (kinds.isEmpty()) return;
@@ -329,6 +351,7 @@ public final class BaseMapLoader {
      * detail <em>here</em>, and here the bundle is the answer.</p>
      */
     private void useBundledMap(BoundingBox view) {
+        pendingView = null;
         LOG.info(() -> String.format(
                 "Load detail: %.1f deg is wider than the %.0f deg Overpass will serve; "
                 + "using the bundled world map",
@@ -349,9 +372,11 @@ public final class BaseMapLoader {
 
     private void fetchNow() {
         final BoundingBox target = pending;
+        final BoundingBox needed = pendingView == null ? pending : pendingView;
         final List<FeatureKind> kinds = pendingKinds;
         if (target == null) return;
         pending = null;
+        pendingView = null;
 
         final long mine = ++generation;
         LOG.info(() -> String.format(
@@ -366,7 +391,11 @@ public final class BaseMapLoader {
                 // request, which a restart never reproduces: the rectangle
                 // comes from the window size, and a pixel of difference is a
                 // different key and a complete miss.
-                final OsmSource.Cached held = source.cachedCovering(target, kinds);
+                // Asked about the view, not the margined box: what has to be
+                // covered is what will be drawn, and a stored extract carries
+                // its own margin so it comfortably contains a view a little
+                // different from the one it was fetched for.
+                final OsmSource.Cached held = source.cachedCovering(needed, kinds);
                 if (held != null) {
                     SwingUtilities.invokeLater(() -> {
                         if (mine != generation) return;
@@ -376,7 +405,12 @@ public final class BaseMapLoader {
                     return;
                 }
 
-                final List<Feature> fetched = source.fetch(target, kinds);
+                // The margin decides what is downloaded; the view decides how
+                // fine it is. Letting the margin decide both asked for cities
+                // and towns while the renderer drew villages nobody had
+                // fetched - and made the stored extract too coarse to answer
+                // for the very view it was fetched for.
+                final List<Feature> fetched = source.fetch(target, needed, kinds);
                 SwingUtilities.invokeLater(() -> {
                     // A later view change has already superseded this request;
                     // dropping it keeps the map consistent with the viewport.

@@ -45,6 +45,23 @@ public interface OsmSource {
         return null;
     }
 
+    /**
+     * As {@link #fetch(BoundingBox, List)}, but with the two boxes separated.
+     *
+     * <p>They are not the same question and conflating them loses data.
+     * {@code bbox} is the ground to download - the selection map fetches a
+     * margin around the view so a small pan needs no refetch. {@code drawnAs}
+     * is the area whose span decides <em>how fine</em> the query is, and that
+     * has to be the view: Overpass is asked for fewer {@code place=} values
+     * as the box grows, so deciding from the margined box asked for cities
+     * and towns while the renderer went on drawing villages that had never
+     * been fetched.</p>
+     */
+    default List<Feature> fetch(BoundingBox bbox, BoundingBox drawnAs, List<FeatureKind> kinds)
+            throws IOException, InterruptedException {
+        return fetch(bbox, kinds);
+    }
+
     List<Feature> fetch(BoundingBox bbox, List<FeatureKind> kinds)
             throws IOException, InterruptedException;
 

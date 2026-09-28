@@ -194,6 +194,20 @@ ground". Use it, not `fetch`, when the question is the second one.
 fewer `place=` values for a wide box, so a wide extract reused close in loses
 every village.
 
+Two rectangles are in play whenever `BaseMapLoader` fetches and they are not
+interchangeable — getting them the wrong way round is what made this feature
+appear not to work at all:
+
+| | |
+|---|---|
+| the **margined box** | what gets *downloaded*, so a small pan needs no refetch |
+| the **view** | what must be *covered*, and what decides how fine the `place=` query is |
+
+So `OsmSource.fetch(bbox, drawnAs, kinds)` takes both, and `cachedCovering` is
+asked about the view. Deciding the place detail from the margin under-fetches
+against what the renderer draws; asking coverage about the margin matches only
+when the window has not grown.
+
 The cache is **bounded by size, not policy** — `Preferences.cacheBudgetBytes`,
 2 GB by default — and `Cache.evictInBackground` is called at startup, after a
 download and after a Load detail. Eviction is oldest-*fetched* first, not LRU:

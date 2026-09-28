@@ -330,4 +330,72 @@ class OverpassClientTest {
                                          List.of(FeatureKind.PLACE)));
         assertNull(client.cachedCovering(BoundingBox.of(10, 106, 11, 108), List.of()));
     }
+
+    /**
+     * The margin decides what is downloaded; the view decides how fine it is.
+     *
+     * <p>Letting the margined box decide both asked Overpass for cities and
+     * towns while the renderer went on drawing villages that had never been
+     * fetched - and made the stored extract too coarse to answer for the very
+     * view it had been fetched for, so nothing was ever reused.</p>
+     */
+    @Test
+    void thePlaceQueryFollowsTheViewAndNotTheMarginAroundIt(@TempDir Path dir) throws Exception {
+        final var hits = new java.util.concurrent.atomic.AtomicInteger();
+        final var server = serving(TWO_PLACES, hits);
+        try {
+            final Cache cache = new Cache(dir);
+            final OverpassClient client = new OverpassClient(
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/"), cache);
+
+            final BoundingBox view = BoundingBox.of(10, 106.5, 11.25, 107.75);   // 1.25 deg
+            final BoundingBox downloaded = view.expanded(0.4375);                // + margin
+            assertEquals("city|town|village", OverpassClient.placeTypesFor(view));
+            assertEquals("city|town", OverpassClient.placeTypesFor(downloaded),
+                         "which is what the margin would have asked for");
+
+            client.fetch(downloaded, view, List.of(FeatureKind.PLACE));
+
+            final FeatureStore.Header header = FeatureStore.readHeader(onlyFile(dir, ".features.bin"));
+            assertEquals("city|town|village", header.placeTypes(), "the view's detail, not the margin's");
+            assertEquals(downloaded, header.area(), "over the ground the margin covers");
+
+            // And so it answers for that view, which is the whole point.
+            assertNotNull(client.cachedCovering(view, List.of(FeatureKind.PLACE)));
+        }
+        finally {
+            server.stop(0);
+        }
+    }
+
+    /**
+     * A restart with a slightly <em>larger</em> window. The margined box grows
+     * with it, so asking the cache about that box missed - a coin flip on
+     * which way the window had moved. The question has to be about the view.
+     */
+    @Test
+    void aSlightlyLargerViewIsStillCoveredByTheMarginFetchedForTheOldOne(@TempDir Path dir)
+            throws Exception {
+        final var hits = new java.util.concurrent.atomic.AtomicInteger();
+        final var server = serving(TWO_PLACES, hits);
+        try {
+            final Cache cache = new Cache(dir);
+            final OverpassClient client = new OverpassClient(
+                    URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/"), cache);
+            final List<FeatureKind> kinds = List.of(FeatureKind.PLACE);
+
+            final BoundingBox before = BoundingBox.of(10.13889, 106.375, 10.86111, 107.625);
+            client.fetch(before.expanded(0.4375), before, kinds);
+            assertEquals(1, hits.get());
+
+            // One pixel taller on the next run, in the direction that used to miss.
+            final BoundingBox after = BoundingBox.of(10.13860, 106.375, 10.86140, 107.625);
+            assertNotNull(client.cachedCovering(after, kinds),
+                          "a hair larger is still well inside the margin");
+            assertEquals(1, hits.get());
+        }
+        finally {
+            server.stop(0);
+        }
+    }
 }

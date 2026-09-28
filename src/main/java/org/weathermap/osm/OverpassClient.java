@@ -146,9 +146,16 @@ public final class OverpassClient implements OsmSource {
     @Override
     public List<Feature> fetch(BoundingBox bbox, List<FeatureKind> kinds)
             throws IOException, InterruptedException {
+        return fetch(bbox, bbox, kinds);
+    }
+
+    @Override
+    public List<Feature> fetch(BoundingBox bbox, BoundingBox drawnAs, List<FeatureKind> kinds)
+            throws IOException, InterruptedException {
         if (kinds.isEmpty()) return List.of();
 
-        final String query = buildQuery(bbox, kinds);
+        final String placeTypes = placeTypesFor(drawnAs);
+        final String query = buildQuery(bbox, placeTypes, kinds);
 
         // Keyed on the query alone, not the endpoint: every instance serves the
         // same OSM database, so a result cached from one is valid for all, and
@@ -183,7 +190,7 @@ public final class OverpassClient implements OsmSource {
                 + " in " + (System.nanoTime() - started) / 1_000_000 + " ms");
 
         FeatureStore.write(new FeatureStore.Extract(
-                new FeatureStore.Header(bbox, kinds, placeTypesFor(bbox)), features), parsed);
+                new FeatureStore.Header(bbox, kinds, placeTypes), features), parsed);
         return features;
     }
 
@@ -343,6 +350,10 @@ public final class OverpassClient implements OsmSource {
      * ways come back as lists of node ids with no coordinates.</p>
      */
     String buildQuery(BoundingBox bbox, List<FeatureKind> kinds) {
+        return buildQuery(bbox, placeTypesFor(bbox), kinds);
+    }
+
+    String buildQuery(BoundingBox bbox, String placeTypes, List<FeatureKind> kinds) {
         // A box that crosses the antimeridian has two halves and so contributes
         // two filters per kind. Overpass QL is already a union, so they simply
         // join the list - one request, one cache entry, one parse.
@@ -365,7 +376,7 @@ public final class OverpassClient implements OsmSource {
                                 + bboxFilter + ";");
                     }
                     case PLACE -> clauses.add(
-                            "  node[\"place\"~\"^(" + placeTypesFor(bbox) + ")$\"]"
+                            "  node[\"place\"~\"^(" + placeTypes + ")$\"]"
                                     + bboxFilter + ";");
                 }
             }
